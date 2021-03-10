@@ -1,6 +1,6 @@
 # Summer: compartmental disease modelling in Python
 
-test badge
+[![Automated Tests](https://github.com/monash-emu/summer/actions/workflows/tests.yml/badge.svg)](https://github.com/monash-emu/summer/actions/workflows/tests.yml)
 
 Summer is a compartmental disease modelling framework, written in Python. It provides a high-level API to build and run models. Features include:
 
