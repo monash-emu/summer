@@ -3,6 +3,7 @@ set -e
 SCRIPT_DIR=$(dirname $0)
 DOCS_DIR=`realpath $SCRIPT_DIR/..`
 
+
 echo "Building summer examples"
 pushd $SCRIPT_DIR
     python build_examples.py

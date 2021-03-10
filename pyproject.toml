@@ -25,6 +25,7 @@ sphinx-rtd-theme = "^0.5.1"
 recommonmark = "^0.7.1"
 sphinxcontrib-napoleon = "^0.7"
 watchdog = {extras = ["watchmedo"], version = "^2.0.2"}
+awscli = "^1.19.24"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

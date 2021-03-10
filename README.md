@@ -15,10 +15,10 @@ Summer is a compartmental disease modelling framework, written in Python. It pro
 
 **[Documentation here](http://summerepi.com/)**
 
-# Installation and Quickstart
+## Installation and Quickstart
 
 This project is tested with Python 3.6.
-Install the "summerepi" package from PyPI
+Install the `summerepi` package from PyPI
 
 ```bash
 pip install summerepi
@@ -40,7 +40,7 @@ import summer
 # ...
 ```
 
-# Development
+## Development
 
 [Poetry](https://python-poetry.org/) is used for packaging and dependency management.
 You will need to install poetry to work on this codebase.
@@ -69,7 +69,7 @@ pytest -vv
 black .
 ```
 
-# Documentation
+## Documentation
 
 Sphinx is used to automatically build reference documentation for this library.
 The documentation is automatically built and deployed to [summerepi.com](http://summerepi.com/) whenever code is pushed to `master`.
@@ -84,7 +84,9 @@ To build and deploy
 To work on docs locally
 
 ```bash
-./docs/scripts/watch.sh
+# ./docs/scripts/watch.sh # FIXME - endless recursion
+./docs/scripts/build.sh
 # In a separate terminal
 ./docs/scripts/serve.sh
+# Visit http://localhost:8000/
 ```
