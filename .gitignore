@@ -1,0 +1,20 @@
+# Python
+**/*.pyc
+.pytest_cache/
+.venv/
+
+# Package publishing
+dist/
+
+# Doc publishing
+_build/
+docs/examples
+
+# IDE stuff
+.idea
+.spyderworkspace
+.vscode
+*.ipynb
+
+# Images
+*.png
