@@ -1,6 +1,17 @@
 [tool.poetry]
 name = "summerepi"
-version = "1.0.0"
+version = "1.0.1"
+readme = "README.md"
+license = "BSD-2-Clause"
+homepage = "http://summerepi.com/"
+documentation = "http://summerepi.com/"
+repository = "https://github.com/monash-emu/summer"
+keywords = [
+    "epidemiology",
+    "disease",
+    "compartmental",
+    "infectious",
+]
 description = "Summer is a compartmental disease modelling framework, written in Python. It provides a high-level API to build and run models."
 authors = ["James Trauer <james.trauer@monash.edu>", "Matthew Segal <mattdsegal@gmail.com>"]
 packages = [

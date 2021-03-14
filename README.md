@@ -13,7 +13,9 @@ Summer is a compartmental disease modelling framework, written in Python. It pro
   - Heterogeneous mixing between strata
   - Multiple disease strains
 
-**[Documentation here](http://summerepi.com/)**
+**[Documentation here](http://summerepi.com/)** with [code examples](http://summerepi.com/examples).
+
+[Available on PyPi](https://pypi.org/project/summerepi/) as `summerepi`.
 
 ## Installation and Quickstart
 
@@ -55,8 +57,8 @@ poetry install
 # Get a virtualenv for running other stuff
 poetry shell
 
-# Publish to PyPI
-poetry publish
+# Publish to PyPI - use your PyPI credentials
+poetry publish --build
 
 # Add a new package
 poetry add
@@ -68,6 +70,10 @@ pytest -vv
 # Format Python code
 black .
 ```
+
+## Releases
+
+- 1.0.X: Initial release
 
 ## Documentation
 
