@@ -1,8 +1,2 @@
-- entry flows
-- transition flows
 - function flows
-- exit flows
 - derived outputs tracking
-- total deaths tracking
-- ensure it's actually random?
-- check model outputs

@@ -8,20 +8,45 @@ from summer import CompartmentalModel
 RANDOM_SEED = 1337
 
 
-def test_z():
+TRANSITION_PARAMS = [
+    # pop, rtol, recovery_rate
+    (1e2, 0.8, 0.02),
+    # if we increase population, we should expect tighter %error (law of large numbers)
+    (1e4, 0.1, 0.02),
+    (1e7, 0.01, 0.02),
+]
+
+
+@pytest.mark.parametrize("pop, rtol, recovery_rate", TRANSITION_PARAMS)
+def test_stochastic_transition_flows(pop, rtol, recovery_rate):
+    """
+    Check that transition flows produce outputs that tend towards mean as pop increases.
+    """
     model = CompartmentalModel(
         times=[0, 10], compartments=["S", "I", "R"], infectious_compartments=["I"]
     )
-    model.set_initial_population(distribution={"S": 990, "I": 10})
-    model.add_crude_birth_flow("births", 0.02, "S")
-    model.add_universal_death_flows("deaths", 0.01)
-    model.add_infection_frequency_flow("infection", 2, "S", "I")
-    model.add_death_flow("infect_death", 0.4, "I")
-    model.add_fractional_flow("recovery", 0.2, "I", "R")
+    s_pop = 0.10 * pop
+    i_pop = 0.90 * pop
+    model.set_initial_population(distribution={"S": s_pop, "I": i_pop})
+    model.add_fractional_flow("recovery", recovery_rate, "I", "R")
     model.run_stochastic(RANDOM_SEED)
-    import numpy as np
 
-    print("\n", model.outputs)
+    # No change to susceptible compartments
+    assert_array_equal(model.outputs[:, 0], s_pop)
+
+    # Calculate recoveries using mean recovery rate
+    mean_i = np.zeros_like(model.times)
+    mean_r = np.zeros_like(model.times)
+    mean_i[0] = i_pop
+    for i in range(1, len(model.times)):
+        recovered = mean_i[i - 1] * recovery_rate
+        mean_i[i] = mean_i[i - 1] - recovered
+        mean_r[i] = mean_r[i - 1] + recovered
+
+    # All I and R compartment sizes are are within the error range
+    # of the mean of the multinomial dist that determines transition.
+    assert_allclose(model.outputs[:, 1], mean_i, rtol=rtol)
+    assert_allclose(model.outputs[:, 2], mean_r, rtol=rtol)
 
 
 EXIT_PARAMS = [
@@ -59,7 +84,7 @@ def test_stochastic_exit_flows(pop, rtol, deathrate):
         mean_s[i] = mean_s[i - 1] - deathrate * mean_s[i - 1]
         mean_i[i] = mean_i[i - 1] - deathrate * mean_i[i - 1]
 
-    # All susceptible compartment sizes are are within the error range
+    # All S and I compartment sizes are are within the error range
     # of the mean of the multinomial dist that determines exit.
     assert_allclose(model.outputs[:, 0], mean_s, rtol=rtol)
     assert_allclose(model.outputs[:, 1], mean_i, rtol=rtol)
@@ -98,6 +123,6 @@ def test_stochastic_entry_flows(pop, rtol, birthrate):
     for i in range(1, len(model.times)):
         mean_s[i] = mean_s[i - 1] + birthrate * (i_pop + mean_s[i - 1])
 
-    # All susceptible compartment sizes are are within the error range
+    # All S compartment sizes are are within the error range
     # of the mean of the poisson dist that determines entry.
     assert_allclose(model.outputs[:, 0], mean_s, rtol=rtol)

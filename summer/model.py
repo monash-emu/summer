@@ -703,12 +703,15 @@ class CompartmentalModel:
         Runs the model over the provided time span, calculating the outputs and the derived outputs.
         Uses an stochastic interpretation of flow rates.
         """
+        # Ensure we're not using a birth replacement flow
+        msg = "Cannot use a ReplacementBirthFlow with stochastic mode."
+        assert not any([type(f) is flows.ReplacementBirthFlow for f in self._flows]), msg
+
         self._prepare_to_run()
         self.outputs = np.zeros((len(self.times), len(self.initial_population)))
         self.outputs[0] = self.initial_population
 
-        rng = np.random.default_rng(seed=seed)
-
+        # Create a matrix that maps flows to the source and destination compartments.
         flow_map = np.zeros((len(self.initial_population), len(self._flows) + 1))
         for flow_idx, flow in enumerate(self._flows):
             if flow.source:
@@ -716,6 +719,8 @@ class CompartmentalModel:
             if flow.dest:
                 flow_map[flow.dest.idx][flow_idx] = 1
 
+        # Calculate compartment sizes for each time step.
+        rng = np.random.default_rng(seed=seed)
         for time_idx, time in enumerate(self.times):
             if time_idx == 0:
                 continue
@@ -773,14 +778,14 @@ class CompartmentalModel:
 
             # Sample the exit flows for each compartment using a multinomial.
             # So that we know how many people exited the compartment for each flow.
-            flows = np.zeros_like(p_flow)
+            sampled_flows = np.zeros_like(p_flow)
             for c_idx, comp in enumerate(comp_vals):
                 comp_flow_prs = p_flow[:, c_idx]
-                flows[:, c_idx] = rng.multinomial(comp, comp_flow_prs)
+                sampled_flows[:, c_idx] = rng.multinomial(comp, comp_flow_prs)
 
             # Map exit flows to their destinations and subtract exit flows from the sources.
             # This will give us an array of changes in compartment sizes.
-            comp_changes = np.matmul(flow_map, flows).sum(axis=1)
+            comp_changes = np.matmul(flow_map, sampled_flows).sum(axis=1)
 
             # Figure out changes in compartment sizes due to entry flows.
             # Sample entry flows using Poisson distribution
