@@ -8,13 +8,13 @@ dist/
 
 # Doc publishing
 _build/
-docs/examples
 
 # IDE stuff
 .idea
+.ipynb_checkpoints/
 .spyderworkspace
 .vscode
-*.ipynb
+*.secret.*
 
 # Images
 *.png

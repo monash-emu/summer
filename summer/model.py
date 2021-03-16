@@ -24,7 +24,7 @@ FlowRateFunction = Callable[[List[Compartment], np.ndarray, np.ndarray, float], 
 
 class CompartmentalModel:
     """
-    A compartmental disease model.
+    A compartmental disease model
 
     This model defines a set of compartments which each contain a population.
     Disease dynamics are defined by a set of flows which link the compartments together.
