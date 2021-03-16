@@ -13,6 +13,8 @@ It provides a high-level API to build and run models. Features include:
    - Heterogeneous mixing between strata
    - Multiple disease strains
 
+The source code for this library is available [on GitHub](https://github.com/monash-emu/summer).
+
 Contents
 --------
 

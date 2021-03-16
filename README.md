@@ -26,10 +26,9 @@ Install the `summerepi` package from PyPI
 pip install summerepi
 ```
 
-Then you can use the library to build and run models. See here for some examples:
+Then you can use the library to build and run models. See [here](http://summerepi.com/examples) for some code examples.
 
-- [SIR model](http://summerepi.com/examples/sir-model.html)
-- [SEIR model](http://summerepi.com/examples/seir-model.html)
+## Performance Note
 
 You will find a significant performance improvement in the ODE solver if you set `OMP_NUM_THREADS` before importing `summer` or `numpy`.
 
