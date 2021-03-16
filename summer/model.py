@@ -698,7 +698,7 @@ class CompartmentalModel:
         # Calculate any requested derived outputs, based on the calculated compartment sizes.
         self.derived_outputs = self._calculate_derived_outputs()
 
-    def run_stochastic(self):
+    def run_stochastic(self, seed: Optional[int] = None):
         """
         Runs the model over the provided time span, calculating the outputs and the derived outputs.
         Uses an stochastic interpretation of flow rates.
@@ -707,7 +707,7 @@ class CompartmentalModel:
         self.outputs = np.zeros((len(self.times), len(self.initial_population)))
         self.outputs[0] = self.initial_population
 
-        rng = np.random.default_rng()
+        rng = np.random.default_rng(seed=seed)
 
         flow_map = np.zeros((len(self.initial_population), len(self._flows) + 1))
         for flow_idx, flow in enumerate(self._flows):
@@ -785,7 +785,7 @@ class CompartmentalModel:
             # Figure out changes in compartment sizes due to entry flows.
             # Sample entry flows using Poisson distribution
             lambdas = entry_flow_rates * self.timestep
-            comp_changes_entry = np.random.poisson(lam=lambdas)
+            comp_changes_entry = rng.poisson(lam=lambdas)
 
             # Find final compartment sizes at this timestep.
             new_comp_vals = comp_vals.copy() + comp_changes + comp_changes_entry
