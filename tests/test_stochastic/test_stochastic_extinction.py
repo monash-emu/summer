@@ -5,19 +5,20 @@ from scipy.stats import binom
 
 from summer import CompartmentalModel
 
+TRIALS = 1000
+ERROR_RATE = 1e-5  # we expect this test to fail 1/100000 times
+
 
 DEATH_EXTINCTION_PARAMS = [
-    # num trials, infect death rate, contact rate
-    (1000, 0.5, 2),
-    (1000, 0.2, 2),
-    (1000, 0.1, 1),
-    (1000, 0.9, 3),
-    (100, 0.9, 1),
+    # infect death rate, contact rate
+    (0.5, 2),
+    (0.1, 1),
+    (0.9, 3),
 ]
 
 
-@pytest.mark.parametrize("trials, death_rate, contact_rate", DEATH_EXTINCTION_PARAMS)
-def test_stochastic_death_exitinction(trials, death_rate, contact_rate):
+@pytest.mark.parametrize("death_rate, contact_rate", DEATH_EXTINCTION_PARAMS)
+def test_stochastic_death_exitinction(death_rate, contact_rate):
     """
     A smokey test to make sure the disease goes extinct around the right amount,
     because the infectious person dies before they can infect someone else.
@@ -45,18 +46,19 @@ def test_stochastic_death_exitinction(trials, death_rate, contact_rate):
     So then we expect a ~6% chance of exctinction (infected person dies, no one infected) (40% * 14%)
 
     Given this there is a > 0.999999 chance that we see at least 25
-    disease exctinctions in 1000 runs.
+    disease exctinctions in 1000 runs (using binomial calculation)
     """
-    test_error_rate = 1e-5  # we expect this test to fail 1/100000 times
     pr_death = 1 - np.exp(-death_rate)
     pr_infected = 1 - np.exp(-contact_rate / 1000)
     pr_noone_infected = binom.pmf(0, 1000, pr_infected)
     pr_extinction = pr_death * pr_noone_infected
-    expected_extinctions = _find_num_successes(pr_extinction, trials, test_error_rate)
+    expected_extinctions = _find_num_successes(pr_extinction, TRIALS, ERROR_RATE)
     count_extinctions = 0
-    for _ in range(trials):
+    for _ in range(TRIALS):
         model = CompartmentalModel(
-            times=[0, 1], compartments=["S", "I", "R"], infectious_compartments=["I"]
+            times=[0, 1],
+            compartments=["S", "I", "R"],
+            infectious_compartments=["I"],
         )
         model.set_initial_population(distribution={"S": 999, "I": 1})
         model.add_death_flow("infect_death", death_rate, "I")
@@ -70,35 +72,76 @@ def test_stochastic_death_exitinction(trials, death_rate, contact_rate):
 
 
 RECOVERY_EXTINCTION_PARAMS = [
-    # num trials, recovery rate, contact rate
-    (1000, 0.5, 2),
-    (1000, 0.2, 2),
-    (1000, 0.1, 1),
-    (1000, 0.9, 3),
-    (100, 0.9, 1),
+    # recovery rate, contact rate
+    (0.5, 2),
+    (0.2, 2),
+    (0.1, 1),
 ]
 
 
-@pytest.mark.parametrize("trials, recovery_rate, contact_rate", RECOVERY_EXTINCTION_PARAMS)
-def test_stochastic_recovery_exitinction(trials, recovery_rate, contact_rate):
+@pytest.mark.parametrize("recovery_rate, contact_rate", RECOVERY_EXTINCTION_PARAMS)
+def test_stochastic_recovery_exitinction(recovery_rate, contact_rate):
     """
     A smokey test to make sure the disease goes extinct sometimes,
     because the infectious person recovers before they can infect someone else.
 
     Calculations similar to test_stochastic_death_exitinction
     """
-    test_error_rate = 1e-5  # we expect this test to fail 1/100000 times
-    pr_death = 1 - np.exp(-recovery_rate)
+    pr_recovery = 1 - np.exp(-recovery_rate)
     pr_infected = 1 - np.exp(-contact_rate / 1000)
     pr_noone_infected = binom.pmf(0, 1000, pr_infected)
-    pr_extinction = pr_death * pr_noone_infected
-    expected_extinctions = _find_num_successes(pr_extinction, trials, test_error_rate)
+    pr_extinction = pr_recovery * pr_noone_infected
+    expected_extinctions = _find_num_successes(pr_extinction, TRIALS, ERROR_RATE)
     count_extinctions = 0
-    for _ in range(trials):
+    for _ in range(TRIALS):
         model = CompartmentalModel(
-            times=[0, 1], compartments=["S", "I", "R"], infectious_compartments=["I"]
+            times=[0, 1],
+            compartments=["S", "I", "R"],
+            infectious_compartments=["I"],
         )
         model.set_initial_population(distribution={"S": 999, "I": 1})
+        model.add_fractional_flow("recovery", recovery_rate, "I", "R")
+        model.add_infection_frequency_flow("infection", contact_rate, "S", "I")
+        model.run_stochastic()
+        is_extinct = model.outputs[1, 1] == 0
+        if is_extinct:
+            count_extinctions += 1
+
+    assert count_extinctions >= expected_extinctions
+
+
+DEATH_OR_RECOVERY_EXTINCTION_PARAMS = [
+    # infect death rate, recovery rate, contact rate
+    (0.2, 0.3, 2),
+    (0.1, 0.1, 2),
+    (0.01, 0.09, 1),
+]
+
+
+@pytest.mark.parametrize(
+    "death_rate, recovery_rate, contact_rate", DEATH_OR_RECOVERY_EXTINCTION_PARAMS
+)
+def test_stochastic_exitinction(death_rate, recovery_rate, contact_rate):
+    """
+    A smokey test to make sure the disease goes extinct sometimes,
+    because the infectious person recovers before they can infect someone else.
+
+    Calculations similar to test_stochastic_death_exitinction
+    """
+    pr_death_or_recovery = 1 - np.exp(-1 * (death_rate + recovery_rate))
+    pr_infected = 1 - np.exp(-contact_rate / 1000)
+    pr_noone_infected = binom.pmf(0, 1000, pr_infected)
+    pr_extinction = pr_death_or_recovery * pr_noone_infected
+    expected_extinctions = _find_num_successes(pr_extinction, TRIALS, ERROR_RATE)
+    count_extinctions = 0
+    for _ in range(TRIALS):
+        model = CompartmentalModel(
+            times=[0, 1],
+            compartments=["S", "I", "R"],
+            infectious_compartments=["I"],
+        )
+        model.set_initial_population(distribution={"S": 999, "I": 1})
+        model.add_death_flow("infect_death", death_rate, "I")
         model.add_fractional_flow("recovery", recovery_rate, "I", "R")
         model.add_infection_frequency_flow("infection", contact_rate, "S", "I")
         model.run_stochastic()
