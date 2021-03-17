@@ -762,14 +762,6 @@ class CompartmentalModel:
             (i, f) for i, f in enumerate(self._flows) if not isinstance(f, flows.FunctionFlow)
         ]
 
-        # Prepare to track flow rates for derived outputs
-        # We track the times and values of the request flows while integrating, and then
-        # interpolate the results to get our flow-based derived outputs.
-        # An ordered list of the times that have been tracked.
-        self._flow_tracker_times = []
-        # An ordered list of values for each flow, these will contain an array of flow rates for each timestep.
-        self._flow_tracker_values = []
-
         """
         Pre-run calculations to help determine force of infection multiplier at runtime.
 
@@ -875,10 +867,6 @@ class CompartmentalModel:
         # Prepare total deaths for tracking deaths.
         self._total_deaths = 0
 
-        # Prepare derived output flow tracking for this timestep.
-        self._flow_tracker_times.append(time)
-        self._flow_tracker_values.append(np.zeros(len(self._flows)))
-
         # Find the effective infectious population for the force of infection calculations.
         mixing_matrix = self._get_mixing_matrix(time)
 
@@ -946,9 +934,8 @@ class CompartmentalModel:
         zero_mask = comp_vals < 0
         comp_vals[zero_mask] = 0
         self._prepare_time_step(time, comp_vals)
-        flow_tracker_idx = len(self._flow_tracker_times) - 1
-        # Track each flow's flow-rates at this point in time for derived outputs and function flows.
-        flow_rates = self._flow_tracker_values[flow_tracker_idx]
+        # Track each flow's flow-rates at this point in time for function flows.
+        flow_rates = np.zeros(len(self._flows))
         # Track the net flow rates between compartments for the ODE solver.
         net_flow_rates = np.zeros(len(comp_vals))
 
@@ -967,18 +954,12 @@ class CompartmentalModel:
 
         if self._iter_function_flows:
             # Evaluate the function flows.
-            original_flow_rates = flow_rates.copy()
             for flow_idx, flow in self._iter_function_flows:
                 net_flow = flow.get_net_flow(
-                    self.compartments, compartment_values, self._flows, original_flow_rates, time
+                    self.compartments, compartment_values, self._flows, flow_rates, time
                 )
-                flow_rates[flow_idx] = net_flow
                 net_flow_rates[flow.source.idx] -= net_flow
                 net_flow_rates[flow.dest.idx] += net_flow
-
-        # Normalise flow rates using timestep for derived outputs.
-        for i in range(len(flow_rates)):
-            flow_rates[i] *= self.timestep
 
         return net_flow_rates
 
@@ -1040,8 +1021,34 @@ class CompartmentalModel:
 
         derived_outputs = {}
         outputs_to_delete_after = []
+
+        # Recalculate all flows and store in `flow_values` so that we can fulfill flow requests.
+        flow_values = np.zeros((len(self.times), len(self._flows)))
+        for time_idx, time in enumerate(self.times):
+            compartment_values = self.outputs[time_idx]
+            flow_rates = flow_values[time_idx]
+
+            # Find the flow rate for each flow.
+            for flow_idx, flow in self._iter_non_function_flows:
+                # Evaluate all the flows that are not function flows.
+                net_flow = flow.get_net_flow(compartment_values, time)
+                flow_rates[flow_idx] = net_flow * self.timestep
+
+            if self._iter_function_flows:
+                # Evaluate the function flows.
+                original_flow_rates = flow_rates.copy()
+                for flow_idx, flow in self._iter_function_flows:
+                    net_flow = flow.get_net_flow(
+                        self.compartments,
+                        compartment_values,
+                        self._flows,
+                        original_flow_rates,
+                        time,
+                    )
+                    flow_rates[flow_idx] = net_flow * self.timestep
+
         # Convert tracked flow values into a matrix where the 1st dimension is flow type, 2nd is time
-        self._flow_tracker_values = np.array(self._flow_tracker_values).T
+        flow_values = np.array(flow_values).T
 
         # Calculate all the outputs in the correct order so that each output has its dependencies fulfilled.
         for name in networkx.topological_sort(graph):
@@ -1055,7 +1062,7 @@ class CompartmentalModel:
 
             if request_type == self._FLOW_REQUEST:
                 # User wants to track a set of flow rates over time.
-                values = np.zeros(len(self._flow_tracker_times))
+                this_flow_values = np.zeros(len(self.times))
                 for flow_idx, flow in enumerate(self._flows):
                     is_matching_flow = (
                         flow.name == request["flow_name"]
@@ -1063,29 +1070,21 @@ class CompartmentalModel:
                         and ((not flow.dest) or flow.dest.has_strata(request["dest_strata"]))
                     )
                     if is_matching_flow:
-                        values += self._flow_tracker_values[flow_idx]
-
-                # Build a function to produce interpolated results
-                solved_func = interp1d(self._flow_tracker_times, values)
-                # Populate output array with interpolated results
-                num_times = len(self.times)
-                interpolated_output = np.zeros(self.times.shape)
-                for time_idx in range(num_times):
-                    interpolated_output[time_idx] = solved_func(self.times[time_idx])
+                        this_flow_values += flow_values[flow_idx]
 
                 use_raw_results = request["raw_results"]
                 if use_raw_results:
                     # Use interpolated flow rates wiuth no post-processing.
-                    output = interpolated_output
+                    output = this_flow_values
                 else:
                     # Set the "flow rate" at time `t` to be an estimate of the flow rate
                     # that is calculated at time `t-1`. By convention, flows are zero at t=0.
                     # This is done so that we can estimate the number of people moving between compartments
                     # using tracked flow rates.
                     ignore_first_timestep_output = np.zeros(self.times.shape)
-                    ignore_first_timestep_output[1:] = interpolated_output[1:]
+                    ignore_first_timestep_output[1:] = this_flow_values[1:]
                     offset_output = np.zeros(self.times.shape)
-                    offset_output[1:] = interpolated_output[:-1]
+                    offset_output[1:] = this_flow_values[:-1]
                     output = (offset_output + ignore_first_timestep_output) / 2
 
             elif request_type == self._COMPARTMENT_REQUEST:

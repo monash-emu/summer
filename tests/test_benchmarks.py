@@ -29,14 +29,14 @@ def test_benchmark_rk4_ode_solver(benchmark):
     benchmark(run_rk4_solver_test_model)
 
 
-def _get_test_model():
+def _get_test_model(timestep=1):
     comps = ["S", "EE", "LE", "EA", "LA", "R"]
     infectious_comps = ["LE", "EA", "LA"]
     model = CompartmentalModel(
         times=[0, 150],
         compartments=comps,
         infectious_compartments=infectious_comps,
-        timestep=0.1,
+        timestep=timestep,
     )
     model.set_initial_population({"S": int(20e6), "LA": 100})
 

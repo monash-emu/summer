@@ -132,7 +132,7 @@ def test_flow_derived_outputs():
     # Good match for linear
     assert_allclose(dos["importation_land"], np.array([0.0, 1.5, 4.5, 7.5, 10.5, 13.5]))
     # So-so match for quadratic
-    assert_allclose(dos["importation_air"], np.array([0.0, 0.6, 2.6, 6.8, 13.0, 20.7]), rtol=0.1)
+    assert_allclose(dos["importation_air"], np.array([0.0, 0.5, 2.5, 6.5, 12.5, 20.5]), rtol=0.1)
 
 
 def test_functional_derived_outputs():
