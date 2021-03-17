@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1615955070021,
+  "lastUpdate": 1615959103292,
   "repoUrl": "https://github.com/monash-emu/summer",
   "entries": {
     "Benchmark": [
@@ -76,6 +76,44 @@ window.BENCHMARK_DATA = {
             "unit": "iter/sec",
             "range": "stddev: 0.0207594268240258",
             "extra": "mean: 10.248818406333337 sec\nrounds: 3"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "mattdsegal@gmail.com",
+            "name": "Matthew Segal",
+            "username": "MattSegal"
+          },
+          "committer": {
+            "email": "mattdsegal@gmail.com",
+            "name": "Matthew Segal",
+            "username": "MattSegal"
+          },
+          "distinct": true,
+          "id": "9b314bba763309caf622528d921f1beee7908f2a",
+          "message": "Improve derived output calculation accuracy and speed",
+          "timestamp": "2021-03-17T16:28:11+11:00",
+          "tree_id": "33767852f8ebfecddc9b78967b0a34964c2c3382",
+          "url": "https://github.com/monash-emu/summer/commit/9b314bba763309caf622528d921f1beee7908f2a"
+        },
+        "date": 1615959101330,
+        "tool": "pytest",
+        "benches": [
+          {
+            "name": "tests/test_benchmarks.py::test_benchmark_default_ode_solver",
+            "value": 0.09978696269783331,
+            "unit": "iter/sec",
+            "range": "stddev: 0.08059273195380616",
+            "extra": "mean: 10.021349212001951 sec\nrounds: 3"
+          },
+          {
+            "name": "tests/test_benchmarks.py::test_benchmark_rk4_ode_solver",
+            "value": 0.137950839269707,
+            "unit": "iter/sec",
+            "range": "stddev: 0.02601041768597324",
+            "extra": "mean: 7.248959160334683 sec\nrounds: 3"
           }
         ]
       }
