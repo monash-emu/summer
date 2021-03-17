@@ -4,6 +4,9 @@ import pytest
 from summer import CompartmentalModel, Multiply, Overwrite, Stratification
 
 
+RANDOM_SEED = 1337
+
+
 @pytest.mark.benchmark
 def test_benchmark_default_ode_solver(benchmark):
     """
@@ -27,6 +30,15 @@ def test_benchmark_rk4_ode_solver(benchmark):
         model.run("rk4", {"step_size": 0.1})
 
     benchmark(run_rk4_solver_test_model)
+
+
+@pytest.mark.benchmark
+def test_benchmark_stochastic_solver(benchmark):
+    def run_stochastic_solver_test_model():
+        model = _get_test_model(timestep=0.1)
+        model.run_stochastic(RANDOM_SEED)
+
+    benchmark(run_stochastic_solver_test_model)
 
 
 def _get_test_model(timestep=1):

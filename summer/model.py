@@ -707,6 +707,10 @@ class CompartmentalModel:
         msg = "Cannot use a ReplacementBirthFlow with stochastic mode."
         assert not any([type(f) is flows.ReplacementBirthFlow for f in self._flows]), msg
 
+        # TODO: Handle function flows
+        msg = "Cannot use a FunctionFlow with stochastic mode."
+        assert not any([type(f) is flows.FunctionFlow for f in self._flows]), msg
+
         self._prepare_to_run()
         self.outputs = np.zeros((len(self.times), len(self.initial_population)))
         self.outputs[0] = self.initial_population
@@ -732,11 +736,6 @@ class CompartmentalModel:
             zero_mask = comp_vals < 0
             comp_vals[zero_mask] = 0
             self._prepare_time_step(time, comp_vals)
-
-            # TODO: Flow rate tracker for derived outputs
-            # TODO: Handle function flows
-            # TODO: Calculate derived outputs
-            # TODO: Track total deaths
 
             entry_flow_rates = np.zeros_like(comp_vals)
             flow_rates = np.zeros((len(self._flows), len(comp_vals)))
@@ -776,8 +775,8 @@ class CompartmentalModel:
             #  - each element is a probability of a person leaving via a given flow
             p_flow = np.vstack((p_leave * prop_flow, p_stay))
 
-            # Sample the exit flows for each compartment using a multinomial.
-            # So that we know how many people exited the compartment for each flow.
+            # Sample the transition and exit flows for each compartment using a multinomial.
+            # So that we know how many people left the compartment for each flow.
             sampled_flows = np.zeros_like(p_flow)
             for c_idx, comp in enumerate(comp_vals):
                 comp_flow_prs = p_flow[:, c_idx]
