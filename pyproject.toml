@@ -39,6 +39,8 @@ awscli = "^1.19.24"
 jupyter = "^1.0.0"
 nbsphinx = "^0.8.2"
 sphinx-autobuild = "^2021.3.14"
+pytest-parallel = "^0.1.0"
+pytest-benchmark = "^3.2.3"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

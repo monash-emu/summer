@@ -68,6 +68,7 @@ class CompartmentalModel:
         assert num_steps >= 1, "Time step should be less than time period."
         assert num_steps % 1 == 0, "Time step should be a factor of time period"
         self.times = np.linspace(start_t, end_t, num=int(num_steps))
+        self.timestep = timestep
 
         msg = "Infectious compartments must be a subset of compartments"
         assert all(n in compartments for n in infectious_compartments), msg
@@ -974,6 +975,10 @@ class CompartmentalModel:
                 flow_rates[flow_idx] = net_flow
                 net_flow_rates[flow.source.idx] -= net_flow
                 net_flow_rates[flow.dest.idx] += net_flow
+
+        # Normalise flow rates using timestep for derived outputs.
+        for i in range(len(flow_rates)):
+            flow_rates[i] *= self.timestep
 
         return net_flow_rates
 

@@ -23,4 +23,4 @@ jobs:
       - name: Install Python dependencies
         run: poetry install
       - name: Run tests
-        run: poetry run pytest -vv
+        run: poetry run pytest --workers 2 -W ignore -vv -m "not benchmark"

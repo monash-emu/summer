@@ -1,0 +1,34 @@
+
+name: Performance benchmark
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  benchmark:
+    name: Performance regression check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.6.13
+      - name: Setup Poetry package manager
+        uses: abatilo/actions-poetry@v2.0.0
+        with:
+          poetry-version: 1.1.4
+      - name: Install Python dependencies
+        run: poetry install
+      - name: Run benchmark tests
+        run: poetry run pytest -W ignore -vv -m benchmark --benchmark-json benchmark.json --benchmark-min-rounds 3
+      - name: Store benchmark result
+        uses: rhysd/github-action-benchmark@v1
+        with:
+          tool: "pytest"
+          output-file-path: benchmark.json
+          github-token: ${{ secrets.PAGES_GITHUB_TOKEN }}
+          gh-pages-branch: benchmark-page
+          benchmark-data-dir-path: "."
+          auto-push: true
