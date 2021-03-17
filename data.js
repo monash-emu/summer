@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1615959103292,
+  "lastUpdate": 1615959508238,
   "repoUrl": "https://github.com/monash-emu/summer",
   "entries": {
     "Benchmark": [
@@ -114,6 +114,44 @@ window.BENCHMARK_DATA = {
             "unit": "iter/sec",
             "range": "stddev: 0.02601041768597324",
             "extra": "mean: 7.248959160334683 sec\nrounds: 3"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "mattdsegal@gmail.com",
+            "name": "Matthew Segal",
+            "username": "MattSegal"
+          },
+          "committer": {
+            "email": "mattdsegal@gmail.com",
+            "name": "Matthew Segal",
+            "username": "MattSegal"
+          },
+          "distinct": true,
+          "id": "ed164bcd826483584acc5bab2bd59282cfa4cbc0",
+          "message": "Remove calcs from example docs",
+          "timestamp": "2021-03-17T16:34:32+11:00",
+          "tree_id": "a41eeb690bd37617784f0c1ac5ff47b53944ae9e",
+          "url": "https://github.com/monash-emu/summer/commit/ed164bcd826483584acc5bab2bd59282cfa4cbc0"
+        },
+        "date": 1615959506425,
+        "tool": "pytest",
+        "benches": [
+          {
+            "name": "tests/test_benchmarks.py::test_benchmark_default_ode_solver",
+            "value": 0.07613804379574472,
+            "unit": "iter/sec",
+            "range": "stddev: 0.1678486427059742",
+            "extra": "mean: 13.13403851933334 sec\nrounds: 3"
+          },
+          {
+            "name": "tests/test_benchmarks.py::test_benchmark_rk4_ode_solver",
+            "value": 0.10406834417426425,
+            "unit": "iter/sec",
+            "range": "stddev: 0.039025337697739554",
+            "extra": "mean: 9.609069961999998 sec\nrounds: 3"
           }
         ]
       }
