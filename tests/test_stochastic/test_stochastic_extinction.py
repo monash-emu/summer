@@ -1,6 +1,5 @@
-import pytest
-
 import numpy as np
+import pytest
 from scipy.stats import binom
 
 from summer import CompartmentalModel
