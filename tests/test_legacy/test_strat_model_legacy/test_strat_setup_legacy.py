@@ -1,17 +1,12 @@
 """
 Test setup of the stratified model
 """
-import pytest
 import numpy as np
+import pytest
 from numpy.testing import assert_array_equal
 
+from summer.legacy.constants import BirthApproach, Compartment, Flow, IntegrationType
 from summer.legacy.model import StratifiedModel
-from summer.legacy.constants import (
-    Compartment,
-    Flow,
-    BirthApproach,
-    IntegrationType,
-)
 
 
 @pytest.mark.skip

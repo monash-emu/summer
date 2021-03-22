@@ -1,9 +1,9 @@
 import numpy as np
 
-from summer.legacy.flow.base import BaseEntryFlow
 from summer.legacy.compartment import Compartment
-from summer.legacy.stratification import Stratification
 from summer.legacy.constants import FlowAdjustment
+from summer.legacy.flow.base import BaseEntryFlow
+from summer.legacy.stratification import Stratification
 
 
 class EntryFlow(BaseEntryFlow):

@@ -3,9 +3,9 @@ Test the "extra flows" feature - where we add more flows after stratifying the m
 """
 import numpy as np
 
+from summer.legacy.constants import BirthApproach, Flow
 from summer.legacy.flow import InfectionFrequencyFlow
 from summer.legacy.model import StratifiedModel
-from summer.legacy.constants import Flow, BirthApproach
 
 
 def test_add_extra_flows__before_strat_then_stratify():

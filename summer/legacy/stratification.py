@@ -1,9 +1,9 @@
-from typing import List, Tuple, Dict
+from typing import Dict, List, Tuple
 
 import numpy as np
 
-from summer.legacy.constants import FlowAdjustment
 from summer.legacy.compartment import Compartment
+from summer.legacy.constants import FlowAdjustment
 
 STRAIN_STRATA_NAME = "strain"
 AGE_STRATA_NAME = "age"

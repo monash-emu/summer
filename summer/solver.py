@@ -7,7 +7,6 @@ import numpy as np
 from scipy.integrate import odeint, solve_ivp
 from scipy.interpolate import interp1d
 
-
 OdeFunction = Callable[[np.ndarray, float], np.ndarray]
 
 

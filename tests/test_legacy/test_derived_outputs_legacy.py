@@ -1,8 +1,8 @@
 import numpy as np
 from numpy.testing import assert_array_equal
 
+from summer.legacy.constants import BirthApproach, Flow
 from summer.legacy.model import StratifiedModel
-from summer.legacy.constants import Flow, BirthApproach
 from summer.legacy.model.derived_outputs import (
     DerivedOutputCalculator,
     InfectionDeathFlowOutput,

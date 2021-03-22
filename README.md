@@ -19,7 +19,6 @@ Some helpful links:
 - [Available on PyPi](https://pypi.org/project/summerepi/) as `summerepi`.
 - [Performance benchmarks](https://monash-emu.github.io/summer/)
 
-
 ## Installation and Quickstart
 
 This project is tested with Python 3.6.
@@ -71,6 +70,7 @@ pytest -vv
 
 # Format Python code
 black .
+isort . --profile black
 ```
 
 ## Releases

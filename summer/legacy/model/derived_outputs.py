@@ -1,4 +1,4 @@
-from typing import List, Dict, Callable
+from typing import Callable, Dict, List
 
 import numpy as np
 from numpy.lib.function_base import append

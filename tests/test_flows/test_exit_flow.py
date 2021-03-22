@@ -1,6 +1,7 @@
 import pytest
-from summer.flows import BaseExitFlow
+
 from summer import Compartment, Stratification, adjust
+from summer.flows import BaseExitFlow
 
 
 class ExitFlow(BaseExitFlow):

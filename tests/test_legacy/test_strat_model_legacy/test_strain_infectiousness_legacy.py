@@ -16,11 +16,10 @@ Force of infection:
 - people infected by a particular strain get that strain
 """
 import numpy as np
-from numpy.testing import assert_array_equal, assert_allclose
+from numpy.testing import assert_allclose, assert_array_equal
 
-from summer.legacy.model import StratifiedModel
 from summer.legacy.constants import BirthApproach, Flow
-
+from summer.legacy.model import StratifiedModel
 
 MODEL_KWARGS = {
     "times": np.array([0.0, 1, 2, 3, 4, 5]),

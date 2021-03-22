@@ -5,7 +5,7 @@ Results modelled in Excel using the Euler method using a 1e-6 timestep. Some res
 import numpy as np
 from numpy.testing import assert_allclose
 
-from summer import CompartmentalModel, AgeStratification
+from summer import AgeStratification, CompartmentalModel
 
 
 def test_model__with_static_dynamics__expect_no_change():

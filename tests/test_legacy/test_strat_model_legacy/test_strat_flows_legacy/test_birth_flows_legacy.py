@@ -1,9 +1,9 @@
 import numpy as np
 
-from summer.legacy.flow import CrudeBirthFlow, ReplacementBirthFlow
 from summer.legacy.compartment import Compartment
-from summer.legacy.stratification import Stratification
 from summer.legacy.constants import FlowAdjustment
+from summer.legacy.flow import CrudeBirthFlow, ReplacementBirthFlow
+from summer.legacy.stratification import Stratification
 
 
 def test_crude_birth_flow_get_net_flow():

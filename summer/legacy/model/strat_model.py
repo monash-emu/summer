@@ -1,18 +1,14 @@
 import copy
 import itertools
-from typing import List, Dict, Callable, Optional, Union
+from typing import Callable, Dict, List, Optional, Union
 
 import numpy as np
 
-from summer.legacy.constants import (
-    Flow,
-    BirthApproach,
-    IntegrationType,
-)
+from summer.legacy.compartment import Compartment
+from summer.legacy.constants import BirthApproach, Flow, IntegrationType
+from summer.legacy.flow import AgeingFlow
 from summer.legacy.model.epi_model import EpiModel
 from summer.legacy.model.utils.validation import validate_stratify
-from summer.legacy.compartment import Compartment
-from summer.legacy.flow import AgeingFlow
 from summer.legacy.stratification import (
     Stratification,
     get_stratified_compartment_names,

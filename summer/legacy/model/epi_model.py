@@ -1,30 +1,25 @@
 import logging
-from typing import List, Dict
 from functools import lru_cache
+from typing import Dict, List
 
 import numpy as np
 
-from summer.legacy.constants import (
-    Flow,
-    BirthApproach,
-    IntegrationType,
-)
 from summer.legacy.compartment import Compartment
+from summer.legacy.constants import BirthApproach, Flow, IntegrationType
 from summer.legacy.flow import (
     CrudeBirthFlow,
+    ImportFlow,
+    InfectionDeathFlow,
     InfectionDensityFlow,
     InfectionFrequencyFlow,
     ReplacementBirthFlow,
     StandardFlow,
-    InfectionDeathFlow,
     UniversalDeathFlow,
-    ImportFlow,
 )
 
+from .derived_outputs import DerivedOutputCalculator
 from .utils.solver import solve_ode
 from .utils.validation import validate_model
-from .derived_outputs import DerivedOutputCalculator
-
 
 logger = logging.getLogger(__name__)
 

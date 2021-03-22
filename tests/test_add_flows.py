@@ -2,9 +2,8 @@
 Basic test of all the flows that CompartmentalModel provides, with no stratifications.
 Ensure that the model produces the correct flow rates when run.
 """
-import pytest
-
 import numpy as np
+import pytest
 from numpy.testing import assert_array_equal
 
 from summer.model import CompartmentalModel

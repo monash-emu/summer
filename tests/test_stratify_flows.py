@@ -5,15 +5,17 @@ connected to the right compartments, with the right adjustments applied.
 """
 import pytest
 
-from summer import (
-    CompartmentalModel,
-    Stratification,
-    StrainStratification,
-    AgeStratification,
-    Compartment as C,
-)
+from summer import AgeStratification
+from summer import Compartment as C
+from summer import CompartmentalModel, StrainStratification, Stratification
 from summer.adjust import Multiply, Overwrite
-from summer.flows import ImportFlow, DeathFlow, CrudeBirthFlow, SojournFlow, InfectionFrequencyFlow
+from summer.flows import (
+    CrudeBirthFlow,
+    DeathFlow,
+    ImportFlow,
+    InfectionFrequencyFlow,
+    SojournFlow,
+)
 
 
 def test_stratify_entry_flows__with_no_explicit_adjustments():

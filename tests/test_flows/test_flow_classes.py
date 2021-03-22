@@ -1,17 +1,17 @@
-import pytest
 import numpy as np
+import pytest
 
-from summer import adjust, Compartment
+from summer import Compartment, adjust
 from summer.flows import (
     CrudeBirthFlow,
-    ReplacementBirthFlow,
-    ImportFlow,
     DeathFlow,
     FractionalFlow,
     FunctionFlow,
-    SojournFlow,
+    ImportFlow,
     InfectionDensityFlow,
     InfectionFrequencyFlow,
+    ReplacementBirthFlow,
+    SojournFlow,
 )
 
 

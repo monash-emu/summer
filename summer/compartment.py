@@ -1,7 +1,7 @@
 """
 This module contains a class used to represent compartments.
 """
-from typing import Optional, Dict
+from typing import Dict, Optional
 
 
 class Compartment:

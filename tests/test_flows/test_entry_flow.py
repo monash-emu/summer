@@ -1,6 +1,7 @@
 import pytest
+
+from summer import AgeStratification, Compartment, Stratification, adjust
 from summer.flows import BaseEntryFlow
-from summer import Compartment, AgeStratification, Stratification, adjust
 
 
 class EntryFlow(BaseEntryFlow):

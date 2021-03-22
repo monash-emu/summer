@@ -1,8 +1,9 @@
-import numpy
-from scipy.integrate import quad
-from summer.legacy.model import order_dict_by_keys, add_zero_to_age_breakpoints
 from copy import copy
 
+import numpy
+from scipy.integrate import quad
+
+from summer.legacy.model import add_zero_to_age_breakpoints, order_dict_by_keys
 
 """
 pallettes of functions that may be useful for creating parameter values to submit to the SUMMER module

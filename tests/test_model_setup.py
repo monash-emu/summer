@@ -1,8 +1,8 @@
-import pytest
 import numpy as np
+import pytest
 from numpy.testing import assert_array_equal
 
-from summer import CompartmentalModel, Compartment
+from summer import Compartment, CompartmentalModel
 
 
 def test_create_model():

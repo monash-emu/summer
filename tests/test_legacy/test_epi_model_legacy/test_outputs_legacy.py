@@ -3,17 +3,12 @@ End-to-end tests for the EpiModel and StratifiedModel - a disease agnostic compa
 
 We expect the StratifiedModel and EpiModel to work the same in these basic cases.
 """
-import pytest
 import numpy as np
-from numpy.testing import assert_array_equal, assert_allclose
+import pytest
+from numpy.testing import assert_allclose, assert_array_equal
 
+from summer.legacy.constants import BirthApproach, Compartment, Flow, IntegrationType
 from summer.legacy.model import EpiModel, StratifiedModel
-from summer.legacy.constants import (
-    Compartment,
-    Flow,
-    BirthApproach,
-    IntegrationType,
-)
 
 
 def _get_integration_times(start_year: int, end_year: int, time_step: int):

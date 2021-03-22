@@ -2,9 +2,9 @@
 Test applying a Stratification to a CompartmentalModel via stratify_with  updates compartments correctly.
 """
 import numpy as np
-from numpy.testing import assert_array_equal, assert_allclose
+from numpy.testing import assert_allclose, assert_array_equal
 
-from summer import Stratification, CompartmentalModel, Compartment
+from summer import Compartment, CompartmentalModel, Stratification
 
 
 def test_stratify__single__validate_compartments():

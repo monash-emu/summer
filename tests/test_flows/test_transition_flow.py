@@ -1,4 +1,4 @@
-from summer import adjust, Compartment, Stratification
+from summer import Compartment, Stratification, adjust
 from summer.flows import BaseTransitionFlow
 
 

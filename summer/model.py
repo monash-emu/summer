@@ -1,21 +1,21 @@
 """
 This module contains the main disease modelling class.
 """
-import logging
 import copy
-from typing import Tuple, List, Dict, Callable, Optional
+import logging
 from functools import lru_cache
+from typing import Callable, Dict, List, Optional, Tuple
 
 import networkx
 import numpy as np
-from scipy.interpolate import interp1d
 from numba import jit
+from scipy.interpolate import interp1d
 
 import summer.flows as flows
-from summer.compartment import Compartment
-from summer.stratification import Stratification
-from summer.solver import solve_ode, SolverType
 from summer.adjust import FlowParam
+from summer.compartment import Compartment
+from summer.solver import SolverType, solve_ode
+from summer.stratification import Stratification
 
 logger = logging.getLogger()
 

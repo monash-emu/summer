@@ -1,7 +1,7 @@
-import pytest
 import numpy as np
+import pytest
 
-from summer import CompartmentalModel, Stratification, Multiply, Overwrite
+from summer import CompartmentalModel, Multiply, Overwrite, Stratification
 
 
 @pytest.mark.benchmark

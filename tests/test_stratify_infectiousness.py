@@ -3,15 +3,10 @@ Ensure infectiousness adjustments are applied correctly in stratification.
 See See https://parasiteecology.wordpress.com/2013/10/17/density-dependent-vs-frequency-dependent-disease-transmission/
 """
 import numpy as np
-from numpy.testing import assert_array_equal, assert_allclose
+from numpy.testing import assert_allclose, assert_array_equal
 
-from summer import (
-    CompartmentalModel,
-    Stratification,
-    StrainStratification,
-    Compartment as C,
-    adjust,
-)
+from summer import Compartment as C
+from summer import CompartmentalModel, StrainStratification, Stratification, adjust
 
 
 def test_strat_infectiousness__with_adjustments():

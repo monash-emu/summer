@@ -16,15 +16,10 @@ Force of infection:
 - people infected by a particular strain get that strain
 """
 import numpy as np
-from numpy.testing import assert_array_equal, assert_allclose
+from numpy.testing import assert_allclose, assert_array_equal
 
-from summer import (
-    CompartmentalModel,
-    Stratification,
-    StrainStratification,
-    Compartment as C,
-    adjust,
-)
+from summer import Compartment as C
+from summer import CompartmentalModel, StrainStratification, Stratification, adjust
 
 
 def test_model__with_two_symmetric_stratifications():

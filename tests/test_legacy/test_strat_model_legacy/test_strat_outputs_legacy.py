@@ -4,11 +4,8 @@ End-to-end tests for the StratifiedModel - a disease agnostic compartmental mode
 import numpy as np
 from numpy.testing import assert_allclose
 
+from summer.legacy.constants import BirthApproach, IntegrationType
 from summer.legacy.model import StratifiedModel
-from summer.legacy.constants import (
-    BirthApproach,
-    IntegrationType,
-)
 
 
 def test_strat_model__with_age__expect_ageing():

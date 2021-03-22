@@ -1,7 +1,7 @@
 import pytest
 
-from summer.adjust import Overwrite, Multiply
 from summer import Compartment
+from summer.adjust import Multiply, Overwrite
 from summer.flows import BaseEntryFlow
 
 

@@ -1,10 +1,10 @@
 from abc import ABC, abstractmethod
-from typing import List, Tuple, Dict, Callable
+from typing import Callable, Dict, List, Tuple
 
 import numpy as np
 
-from summer.legacy.stratification import Stratification
 from summer.legacy.constants import FlowAdjustment
+from summer.legacy.stratification import Stratification
 
 
 class BaseFlow(ABC):

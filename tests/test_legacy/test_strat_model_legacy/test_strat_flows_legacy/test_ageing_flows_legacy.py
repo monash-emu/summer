@@ -1,7 +1,7 @@
 import numpy as np
 
-from summer.legacy.flow import AgeingFlow
 from summer.legacy.compartment import Compartment
+from summer.legacy.flow import AgeingFlow
 from summer.legacy.stratification import Stratification
 
 

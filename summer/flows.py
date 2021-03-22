@@ -3,14 +3,14 @@ This module contains the classes which are used to calculate inter-compartmental
 As a user of the framework you should not have to use these classes directly.
 """
 from abc import ABC, abstractmethod
-from typing import List, Dict, Callable
+from typing import Callable, Dict, List
 
 import numpy as np
 from numba import jit
 
 from summer.adjust import BaseAdjustment, FlowParam, Multiply, Overwrite
-from summer.stratification import Stratification
 from summer.compartment import Compartment
+from summer.stratification import Stratification
 
 
 class BaseFlow(ABC):

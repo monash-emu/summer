@@ -4,16 +4,10 @@ Validation performed using Cerberus: https://docs.python-cerberus.org/en/stable/
 """
 from typing import List
 
-from cerberus import Validator
 import numpy as np
+from cerberus import Validator
 
-
-from summer.legacy.constants import (
-    Compartment,
-    Flow,
-    BirthApproach,
-    IntegrationType,
-)
+from summer.legacy.constants import BirthApproach, Compartment, Flow, IntegrationType
 
 
 def validate_stratify(

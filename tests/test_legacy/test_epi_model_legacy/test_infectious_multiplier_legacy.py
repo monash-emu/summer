@@ -2,9 +2,10 @@
 Ensure that the EpiModel model produces the correct infectious multipliers
 """
 import numpy as np
-from summer.legacy.model import EpiModel
-from summer.legacy.constants import Flow, BirthApproach
+
 from summer.legacy.compartment import Compartment
+from summer.legacy.constants import BirthApproach, Flow
+from summer.legacy.model import EpiModel
 
 MODEL_KWARGS = {
     "times": np.array([0.0, 1, 2, 3, 4, 5]),

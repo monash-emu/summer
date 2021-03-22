@@ -3,10 +3,10 @@ Ensure that the StratifiedModel model produces the correct infectious multiplier
 See https://parasiteecology.wordpress.com/2013/10/17/density-dependent-vs-frequency-dependent-disease-transmission/
 """
 import numpy as np
-from numpy.testing import assert_array_equal, assert_allclose
+from numpy.testing import assert_allclose, assert_array_equal
 
-from summer.legacy.model import StratifiedModel
 from summer.legacy.constants import BirthApproach
+from summer.legacy.model import StratifiedModel
 
 MODEL_KWARGS = {
     "times": np.array([0.0, 1, 2, 3, 4, 5]),

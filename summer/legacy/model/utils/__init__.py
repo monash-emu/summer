@@ -1,4 +1,4 @@
-from typing import List, Tuple, Dict, Callable
+from typing import Callable, Dict, List, Tuple
 
 import numpy as np
 
@@ -19,4 +19,4 @@ from .stratification_funcs import (
     create_sloping_step_function,
     create_time_variant_multiplicative_function,
 )
-from .validation import validate_stratify, validate_model
+from .validation import validate_model, validate_stratify

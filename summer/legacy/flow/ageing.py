@@ -1,7 +1,7 @@
-from typing import List, Tuple, Dict, Callable
+from typing import Callable, Dict, List, Tuple
 
-from summer.legacy.constants import Flow as FlowType
 from summer.legacy.compartment import Compartment
+from summer.legacy.constants import Flow as FlowType
 from summer.legacy.stratification import Stratification
 
 from .standard import StandardFlow

@@ -1,8 +1,8 @@
 from unittest import mock
 
-from summer.legacy.flow.base import BaseTransitionFlow, BaseEntryFlow, BaseExitFlow
 from summer.legacy.compartment import Compartment
 from summer.legacy.constants import FlowAdjustment
+from summer.legacy.flow.base import BaseEntryFlow, BaseExitFlow, BaseTransitionFlow
 
 source = Compartment("source")
 dest = Compartment("dest")

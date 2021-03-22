@@ -1,17 +1,11 @@
 """
 Ensure that the EpiModel model produces the correct flow rates and outputs when run.
 """
+import numpy as np
 import pytest
 
-import numpy as np
-
+from summer.legacy.constants import BirthApproach, Compartment, Flow, IntegrationType
 from summer.legacy.model import EpiModel, StratifiedModel
-from summer.legacy.constants import (
-    Compartment,
-    Flow,
-    BirthApproach,
-    IntegrationType,
-)
 
 MODEL_KWARGS = {
     "times": np.array([0.0, 1, 2, 3, 4, 5]),

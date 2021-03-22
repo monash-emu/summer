@@ -1,13 +1,12 @@
 """
 This module presents classes which are used to define stratifications, which can be applied to the model.
 """
-from typing import List, Dict, Callable, Union, Optional
+from typing import Callable, Dict, List, Optional, Union
 
 import numpy as np
 
-from summer.compartment import Compartment
 from summer.adjust import Multiply, Overwrite
-
+from summer.compartment import Compartment
 
 Adjustment = Union[Multiply, Overwrite]
 MixingMatrix = Union[np.ndarray, Callable[[float], np.ndarray]]

@@ -3,18 +3,13 @@ Test that basic setup of the EpiModel and StratifiedModel works.
 """
 from copy import deepcopy
 
-import pytest
 import numpy as np
+import pytest
 
-from summer.legacy.model.utils.validation import ValidationException
-from summer.legacy.model import EpiModel, StratifiedModel
-from summer.legacy.constants import (
-    Compartment,
-    Flow,
-    BirthApproach,
-    IntegrationType,
-)
 from summer.legacy import flow
+from summer.legacy.constants import BirthApproach, Compartment, Flow, IntegrationType
+from summer.legacy.model import EpiModel, StratifiedModel
+from summer.legacy.model.utils.validation import ValidationException
 
 
 @pytest.mark.parametrize("ModelClass", [EpiModel, StratifiedModel])

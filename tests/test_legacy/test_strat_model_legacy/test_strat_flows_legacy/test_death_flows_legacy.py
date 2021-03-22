@@ -1,11 +1,10 @@
+import numpy as np
 import pytest
 
-import numpy as np
-
-from summer.legacy.flow import InfectionDeathFlow, UniversalDeathFlow
 from summer.legacy.compartment import Compartment
-from summer.legacy.stratification import Stratification
 from summer.legacy.constants import FlowAdjustment
+from summer.legacy.flow import InfectionDeathFlow, UniversalDeathFlow
+from summer.legacy.stratification import Stratification
 
 
 @pytest.mark.parametrize("FlowClass", [InfectionDeathFlow, UniversalDeathFlow])

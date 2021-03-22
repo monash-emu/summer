@@ -1,16 +1,15 @@
-import pytest
 import numpy as np
-
-from summer.solver import (
-    solve_ode,
-    solve_with_euler,
-    solve_with_rk4,
-    solve_with_odeint,
-    solve_with_ivp,
-    SolverType,
-)
+import pytest
 from numpy.testing import assert_allclose, assert_array_equal
 
+from summer.solver import (
+    SolverType,
+    solve_ode,
+    solve_with_euler,
+    solve_with_ivp,
+    solve_with_odeint,
+    solve_with_rk4,
+)
 
 SOLVERS = (
     (solve_with_euler, {"step_size": 0.001}, SolverType.EULER),

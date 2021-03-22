@@ -1,8 +1,8 @@
+from .ageing import AgeingFlow
+from .base import BaseEntryFlow, BaseExitFlow, BaseTransitionFlow
 from .crude_birth import CrudeBirthFlow
-from .infection import InfectionDensityFlow, InfectionFrequencyFlow, BaseInfectionFlow
+from .death import BaseDeathFlow, InfectionDeathFlow, UniversalDeathFlow
+from .importation import ImportFlow
+from .infection import BaseInfectionFlow, InfectionDensityFlow, InfectionFrequencyFlow
 from .replace_birth import ReplacementBirthFlow
 from .standard import StandardFlow
-from .death import InfectionDeathFlow, UniversalDeathFlow, BaseDeathFlow
-from .ageing import AgeingFlow
-from .importation import ImportFlow
-from .base import BaseTransitionFlow, BaseExitFlow, BaseEntryFlow

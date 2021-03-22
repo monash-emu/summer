@@ -1,19 +1,19 @@
 """
 Unit tests for the Stratification model.
 """
-import pytest
 import numpy as np
+import pytest
 from numpy.testing import assert_array_equal
 
 from summer import (
-    Stratification,
     AgeStratification,
-    StrainStratification,
     Compartment,
     Multiply,
     Overwrite,
+    StrainStratification,
+    Stratification,
 )
-from summer.flows import BaseExitFlow, BaseEntryFlow, BaseTransitionFlow
+from summer.flows import BaseEntryFlow, BaseExitFlow, BaseTransitionFlow
 
 
 class TransitionFlow(BaseTransitionFlow):
