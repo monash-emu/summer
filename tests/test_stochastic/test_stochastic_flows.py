@@ -1,8 +1,6 @@
 import numpy as np
 import pytest
 from numpy.testing import assert_allclose, assert_array_equal
-from scipy.stats import binom
-
 from summer import CompartmentalModel
 
 RANDOM_SEED = 1337
@@ -13,7 +11,7 @@ TRANSITION_PARAMS = [
     (1e2, 0.8, 0.02),
     # if we increase population, we should expect tighter %error (law of large numbers)
     (1e4, 0.1, 0.02),
-    (1e7, 0.01, 0.02),
+    (1e7, 0.011, 0.02),
 ]
 
 
@@ -51,10 +49,10 @@ def test_stochastic_transition_flows(pop, rtol, recovery_rate):
 
 EXIT_PARAMS = [
     # pop, rtol, deathrate
-    (1e2, 0.07, 0.02),
+    (1e3, 0.2, 0.02),
     # if we increase population, we should expect tighter %error (law of large numbers)
-    (1e4, 0.02, 0.02),
-    (1e7, 0.002, 0.02),
+    (1e4, 0.04, 0.02),
+    (1e7, 0.003, 0.02),
 ]
 
 
@@ -92,10 +90,10 @@ def test_stochastic_exit_flows(pop, rtol, deathrate):
 
 ENTRY_PARAMS = [
     # pop, rtol, birthrate
-    (1e2, 0.05, 0.02),
+    (1e2, 0.1, 0.02),
     # if we increase population, we should expect tighter %error (law of large numbers)
-    (1e4, 0.01, 0.02),
-    (1e7, 0.0003, 0.02),
+    (1e4, 0.02, 0.02),
+    (1e7, 0.0004, 0.02),
 ]
 
 
