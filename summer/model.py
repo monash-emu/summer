@@ -777,7 +777,7 @@ class CompartmentalModel:
 
         Returns:
             - comp_rates: Rate of change of compartments
-            -
+            - flow_rates: Contribution of each flow to compartment rate of change
 
         """
         self._prepare_time_step(time, comp_vals)
