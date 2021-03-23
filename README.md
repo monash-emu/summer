@@ -92,9 +92,5 @@ To build and deploy
 To work on docs locally
 
 ```bash
-# ./docs/scripts/watch.sh # FIXME - endless recursion
-./docs/scripts/build.sh
-# In a separate terminal
-./docs/scripts/serve.sh
-# Visit http://localhost:8000/
+./docs/scripts/watch.sh
 ```
