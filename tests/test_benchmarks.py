@@ -1,6 +1,5 @@
 import numpy as np
 import pytest
-
 from summer import CompartmentalModel, Multiply, Overwrite, Stratification
 
 RANDOM_SEED = 1337
@@ -26,7 +25,7 @@ def test_benchmark_default_ode_solver(benchmark):
 def test_benchmark_rk4_ode_solver(benchmark):
     def run_rk4_solver_test_model():
         model = _get_test_model()
-        model.run("rk4", {"step_size": 0.1})
+        model.run("rk4", step_size=0.1)
 
     benchmark(run_rk4_solver_test_model)
 
