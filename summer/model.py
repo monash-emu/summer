@@ -768,16 +768,20 @@ class CompartmentalModel:
             # Calculate final compartment sizes at this timestep.
             self.outputs[time_idx] = comp_vals + transition_changes + entry_changes
 
-    def _get_rates(self, comp_vals: np.ndarray, time: float):
+    def _get_rates(self, comp_vals: np.ndarray, time: float) -> Tuple[np.ndarray, np.ndarray]:
         """
-        Calculates flow rates for a given state and time, including:
+        Calculates inter-compartmental flow rates for a given state and time, including:
             - entry: flows of people into the system
             - exit: flows of people leaving of the system, and;
             - transition: flows of people between compartments
 
+        Args:
+            comp_vals: The current state of the model compartments (ie. number of people)
+            time: The current time
+
         Returns:
-            - comp_rates: Rate of change of compartments
-            - flow_rates: Contribution of each flow to compartment rate of change
+            comp_rates: Rate of change of compartments
+            flow_rates: Contribution of each flow to compartment rate of change
 
         """
         self._prepare_time_step(time, comp_vals)
@@ -828,7 +832,7 @@ class CompartmentalModel:
                 if adj and callable(adj.param):
                     funcs.add(adj.param)
 
-        # Cache return values to prevent re-computation. This will a little leak memory, which is fine.
+        # Cache return values to prevent re-computation. This will a little leak memory, which is (mostly) fine.
         funcs_cached = {}
         for func in funcs:
             # Floating point return type is 8 bytes, meaning 2**17 values is ~1MB of memory.
@@ -843,6 +847,7 @@ class CompartmentalModel:
                     adj.param = funcs_cached[adj.param]
 
         # Optimize flow adjustments
+        # TODO: Delete this it probably doesn't help.
         for f in self._flows:
             f.optimize_adjustments()
 
