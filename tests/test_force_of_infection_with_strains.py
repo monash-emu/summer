@@ -167,7 +167,7 @@ def test_strain__with_infectious_multipliers():
     assert model._get_infection_frequency_multiplier(susceptible, infectious_c) == 10 * 2 / 1000
 
     # Get infection flow rates
-    flow_rates = model._get_flow_rates(model.initial_population, 0)
+    flow_rates = model._get_compartment_rates(model.initial_population, 0)
     sus_pop = 900
     flow_to_a = sus_pop * contact_rate * (70 * 0.5 / 1000)
     flow_to_b = sus_pop * contact_rate * (20 * 3 / 1000)
@@ -241,7 +241,7 @@ def test_strain__with_flow_adjustments():
     assert model._get_infection_frequency_multiplier(susceptible, infectious_c) == 10 / 1000
 
     # Get infection flow rates
-    flow_rates = model._get_flow_rates(model.initial_population, 0)
+    flow_rates = model._get_compartment_rates(model.initial_population, 0)
     sus_pop = 900
     flow_to_a = sus_pop * contact_rate * (70 * 0.5 / 1000)
     flow_to_b = sus_pop * contact_rate * (20 * 3 / 1000)
@@ -408,5 +408,5 @@ def test_strain__with_infectious_multipliers_and_heterogeneous_mixing():
             0.0,
         ]
     )
-    flow_rates = model._get_flow_rates(model.initial_population, 0)
+    flow_rates = model._get_compartment_rates(model.initial_population, 0)
     assert_allclose(expected_flow_rates, flow_rates, verbose=True)

@@ -666,7 +666,7 @@ class CompartmentalModel:
     Running the model
     """
 
-    def run_stochastic(self, seed: Optional[int]):
+    def run_stochastic(self, seed: Optional[int] = None):
         """
         Runs the model over the provided time span, calculating the outputs and the derived outputs.
         Uses an stochastic interpretation of flow rates.
@@ -972,7 +972,7 @@ class CompartmentalModel:
 
     def _prepare_time_step(self, time: float, compartment_values: np.ndarray):
         """
-        Pre-timestep setup. This should be run before `_get_flow_rates`.
+        Pre-timestep setup. This should be run before `_get_compartment_rates`.
         Here we set up any stateful updates that need to happen before we get the flow rates.
         """
         # Prepare total deaths for tracking deaths.
