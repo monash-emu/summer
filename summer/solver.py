@@ -19,6 +19,7 @@ class SolverType:
     SOLVE_IVP = "solve_ivp"
     EULER = "euler"
     RUNGE_KUTTA = "rk4"
+    STOCHASTIC = "stochastic"
 
 
 def solve_ode(
