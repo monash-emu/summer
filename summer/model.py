@@ -8,6 +8,7 @@ from typing import Callable, Dict, List, Optional, Tuple
 
 import networkx
 import numpy as np
+from numba import jit
 
 import summer.flows as flows
 from summer.adjust import FlowParam
@@ -18,6 +19,8 @@ from summer.stratification import Stratification
 logger = logging.getLogger()
 
 FlowRateFunction = Callable[[List[Compartment], np.ndarray, np.ndarray, float], np.ndarray]
+
+NO_DESTINATION = 1
 
 
 class CompartmentalModel:
@@ -712,19 +715,26 @@ class CompartmentalModel:
         assert not any([type(f) is flows.FunctionFlow for f in self._flows]), msg
 
         self._prepare_to_run()
-        self.outputs = np.zeros((len(self.times), len(self.initial_population)))
+        self.outputs = np.zeros((len(self.times), len(self.initial_population)), dtype=np.int)
         self.outputs[0] = self.initial_population
 
-        # Create a matrix that maps flows to the source and destination compartments.
-        flow_map = np.zeros((len(self.initial_population), len(self._flows) + 1))
+        # Create an list that maps flows to the source and destination compartments.
+        flow_map = []
         for flow_idx, flow in enumerate(self._flows):
-            if flow.source:
-                flow_map[flow.source.idx][flow_idx] = -1
+            if not flow.source:
+                # This is used for transition and exit flows.
+                # Entry flows and handled separately.
+                continue
+
+            flow_map_el = [flow_idx, flow.source.idx, NO_DESTINATION]
+            flow_map.append(flow_map_el)
             if flow.dest:
-                flow_map[flow.dest.idx][flow_idx] = 1
+                flow_map_el[2] = flow.dest.idx
+
+        # Convert to a matrix because Numba likes matrices.
+        flow_map = np.array(flow_map, dtype=np.int)
 
         # Calculate compartment sizes for each time step.
-        rng = np.random.default_rng(seed=seed)
         for time_idx, time in enumerate(self.times):
             if time_idx == 0:
                 continue
@@ -773,26 +783,28 @@ class CompartmentalModel:
             #  - F is the number of flows
             #  - C is the number of compartments
             #  - each element is a probability of a person leaving via a given flow
-            p_flow = np.vstack((p_leave * prop_flow, p_stay))
+            flow_probs = np.vstack((p_leave * prop_flow, p_stay))
 
             # Sample the transition and exit flows for each compartment using a multinomial.
             # So that we know how many people left the compartment for each flow.
-            sampled_flows = np.zeros_like(p_flow)
-            for c_idx, comp in enumerate(comp_vals):
-                comp_flow_prs = p_flow[:, c_idx]
-                sampled_flows[:, c_idx] = rng.multinomial(comp, comp_flow_prs)
+            sampled_flows = np.zeros_like(flow_probs, dtype=np.int)
+            _sample_flows_multinomial(seed, sampled_flows, comp_vals, flow_probs)
 
             # Map exit flows to their destinations and subtract exit flows from the sources.
             # This will give us an array of changes in compartment sizes.
-            comp_changes = np.matmul(flow_map, sampled_flows).sum(axis=1)
+            transition_and_exit_changes = np.zeros_like(comp_vals)
+            if flow_map.size > 0:
+                _map_sampled_flows(transition_and_exit_changes, flow_map, sampled_flows)
 
             # Figure out changes in compartment sizes due to entry flows.
             # Sample entry flows using Poisson distribution
             lambdas = entry_flow_rates * self.timestep
-            comp_changes_entry = rng.poisson(lam=lambdas)
+            entry_changes = np.zeros_like(lambdas)
+            _sample_flows_poisson(seed, lambdas, entry_changes)
 
             # Find final compartment sizes at this timestep.
-            new_comp_vals = comp_vals.copy() + comp_changes + comp_changes_entry
+            new_comp_vals = comp_vals + transition_and_exit_changes + entry_changes
+
             self.outputs[time_idx] = new_comp_vals
 
     def _prepare_to_run(self):
@@ -1423,3 +1435,59 @@ class CompartmentalModel:
             "sources": sources,
             "save_results": save_results,
         }
+
+
+@jit(nopython=True)
+def _sample_flows_multinomial(
+    seed: Optional[int],
+    sampled_flows: np.ndarray,
+    comp_vals: np.ndarray,
+    flow_probs: np.ndarray,
+) -> np.ndarray:
+    """
+    Sample the transition and exit flows for each compartment using a multinomial.
+    So that we know how many people left the compartment for each flow.
+
+    This gives a ~2x performance boost compared to vanilla NumPy
+    """
+    if seed is not None:
+        np.random.seed(seed)
+
+    for c_idx in range(comp_vals.shape[0]):
+        comp_flow_probs = flow_probs[:, c_idx]
+        comp_size = comp_vals[c_idx]
+        sampled_flows[:, c_idx] = np.random.multinomial(comp_size, comp_flow_probs)
+
+
+@jit(nopython=True)
+def _sample_flows_poisson(
+    seed: Optional[int], lambdas: np.ndarray, entry_changes: np.ndarray
+) -> np.ndarray:
+    """
+    This gives a tiny performance boost compared to vanilla NumPy
+    """
+    if seed is not None:
+        np.random.seed(seed)
+
+    for l_idx in range(lambdas.shape[0]):
+        entry_changes[l_idx] = np.random.poisson(lambdas[l_idx])
+
+
+@jit(nopython=True)
+def _map_sampled_flows(comp_changes: np.ndarray, flow_map: np.ndarray, sampled_flows: np.ndarray):
+    """
+    Map exit flows to their destinations and subtract exit flows from the sources.
+    This will give us an array of changes in compartment sizes.
+
+    This accounts for most of the runtime after multinomial is optimized.
+    """
+
+    for i in range(flow_map.shape[0]):
+        f_idx, src_idx, dest_idx = flow_map[i]
+        # Source flow (there will always be a source, entry flows handled elsewhere)
+        flow_amount = sampled_flows[f_idx, src_idx]
+        comp_changes[src_idx] -= flow_amount
+
+        # Dest flow (when it is a transition, rather than an exit)
+        if dest_idx != NO_DESTINATION:
+            comp_changes[dest_idx] += flow_amount
