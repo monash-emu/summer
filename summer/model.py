@@ -13,6 +13,7 @@ import summer.flows as flows
 from summer import stochastic
 from summer.adjust import FlowParam
 from summer.compartment import Compartment
+from summer.derived_outputs import DerivedOutputRequest, calculate_derived_outputs
 from summer.solver import SolverType, solve_ode
 from summer.stratification import Stratification
 
@@ -724,6 +725,14 @@ class CompartmentalModel:
         comp_rates, _ = self._get_rates(comp_vals, time)
         return comp_rates
 
+    def _get_flow_rates(self, compartment_values: np.ndarray, time: float):
+        """
+        Returns the contribution of each flow to compartment rate of change for a given state and time.
+        """
+        comp_vals = self._clean_compartment_values(compartment_values)
+        _, flow_rates = self._get_rates(comp_vals, time)
+        return flow_rates
+
     def _solve_stochastic(self, seed: Optional[int] = None):
         """
         Runs the model over the provided time span, calculating the outputs.
@@ -1065,11 +1074,6 @@ class CompartmentalModel:
     """
     Requesting and calculating derived outputs
     """
-    _FLOW_REQUEST = "flow"
-    _COMPARTMENT_REQUEST = "comp"
-    _AGGREGATE_REQUEST = "agg"
-    _CUMULATIVE_REQUEST = "cum"
-    _FUNCTION_REQUEST = "func"
 
     def set_derived_outputs_whitelist(self, whitelist: List[str]):
         """
@@ -1083,129 +1087,17 @@ class CompartmentalModel:
         self._derived_outputs_whitelist = whitelist
 
     def _calculate_derived_outputs(self):
-        """
-        Calculates all requested derived outputs from the calculated compartment sizes.
-        """
-        assert self.outputs is not None, "Cannot calculate derived outputs: model has not been run."
-        error_msg = "Cannot calculate derived outputs: dependency graph has cycles."
-        assert networkx.is_directed_acyclic_graph(self._derived_output_graph), error_msg
-        graph = self._derived_output_graph.copy()
-
-        if self._derived_outputs_whitelist:
-            # Only calculate the required outputs and their dependencies, ignore everything else.
-            required_nodes = set()
-            for name in self._derived_outputs_whitelist:
-                # Find a list of the output required and its dependencies.
-                output_dependencies = networkx.dfs_tree(graph.reverse(), source=name).reverse()
-                required_nodes = required_nodes.union(output_dependencies.nodes)
-
-            # Remove any nodes that aren't required from the graph.
-            nodes = list(graph.nodes)
-            for node in nodes:
-                if not node in required_nodes:
-                    graph.remove_node(node)
-
-        derived_outputs = {}
-        outputs_to_delete_after = []
-
-        # Recalculate all flow rates and store in `flow_values` so that we can fulfill flow rate requests.
-        flow_values = np.zeros((len(self.times), len(self._flows)))
-        for time_idx, time in enumerate(self.times):
-            compartment_values = self._clean_compartment_values(self.outputs[time_idx])
-            _, flow_rates = self._get_rates(compartment_values, time)
-            flow_values[time_idx, :] = flow_rates * self.timestep
-
-        # Convert tracked flow values into a matrix where the 1st dimension is flow type, 2nd is time
-        flow_values = np.array(flow_values).T
-
-        # Calculate all the outputs in the correct order so that each output has its dependencies fulfilled.
-        for name in networkx.topological_sort(graph):
-            request = self._derived_output_requests[name]
-            request_type = request["request_type"]
-            output = np.zeros(self.times.shape)
-
-            if not request["save_results"]:
-                # Delete the results of this output once the calcs are done.
-                outputs_to_delete_after.append(name)
-
-            if request_type == self._FLOW_REQUEST:
-                # User wants to track a set of flow rates over time.
-                this_flow_values = np.zeros(len(self.times))
-                for flow_idx, flow in enumerate(self._flows):
-                    is_matching_flow = (
-                        flow.name == request["flow_name"]
-                        and ((not flow.source) or flow.source.has_strata(request["source_strata"]))
-                        and ((not flow.dest) or flow.dest.has_strata(request["dest_strata"]))
-                    )
-                    if is_matching_flow:
-                        this_flow_values += flow_values[flow_idx]
-
-                use_raw_results = request["raw_results"]
-                if use_raw_results:
-                    # Use interpolated flow rates wiuth no post-processing.
-                    output = this_flow_values
-                else:
-                    # Set the "flow rate" at time `t` to be an estimate of the flow rate
-                    # that is calculated at time `t-1`. By convention, flows are zero at t=0.
-                    # This is done so that we can estimate the number of people moving between compartments
-                    # using tracked flow rates.
-                    ignore_first_timestep_output = np.zeros(self.times.shape)
-                    ignore_first_timestep_output[1:] = this_flow_values[1:]
-                    offset_output = np.zeros(self.times.shape)
-                    offset_output[1:] = this_flow_values[:-1]
-                    output = (offset_output + ignore_first_timestep_output) / 2
-
-            elif request_type == self._COMPARTMENT_REQUEST:
-                # User wants to track a set of compartment sizes over time.
-                compartments = request["compartments"]
-                strata = request["strata"]
-                comps = (
-                    (i, c)
-                    for i, c in enumerate(self.compartments)
-                    if c.has_name_in_list(compartments)
-                )
-                idxs = [i for i, c in comps if c.is_match(c.name, strata)]
-                output = self.outputs[:, idxs].sum(axis=1)
-
-            elif request_type == self._AGGREGATE_REQUEST:
-                # User wants to track the sum of a set of outputs over time.
-                source_names = request["sources"]
-                output = sum([derived_outputs[s] for s in source_names])
-
-            elif request_type == self._CUMULATIVE_REQUEST:
-                # User wants to track cumulative value of an output over time.
-                source_name = request["source"]
-                start_time = request["start_time"]
-                max_time = self.times.max()
-                if start_time and start_time > max_time:
-                    # Handle case where the derived output starts accumulating after the last model timestep.
-                    msg = f"Cumulative output '{name}' start time {start_time} is greater than max model time {max_time}, defaulting to {max_time}"
-                    logger.warn(msg)
-                    start_time = max_time
-
-                if start_time is None:
-                    output = np.cumsum(derived_outputs[source_name])
-                else:
-                    assert (
-                        start_time in self.times
-                    ), f"Start time {start_time} not in times for '{name}'"
-                    start_idx = np.where(self.times == start_time)[0][0]
-                    output[start_idx:] = np.cumsum(derived_outputs[source_name][start_idx:])
-
-            elif request_type == self._FUNCTION_REQUEST:
-                # User wants to track the results of a function of other outputs over time.
-                func = request["func"]
-                source_names = request["sources"]
-                inputs = [derived_outputs[s] for s in source_names]
-                output = func(*inputs)
-
-            derived_outputs[name] = output
-
-        # Delete any intermediate outputs that we don't want to save.
-        for name in outputs_to_delete_after:
-            del derived_outputs[name]
-
-        return derived_outputs
+        return calculate_derived_outputs(
+            requests=self._derived_output_requests,
+            graph=self._derived_output_graph,
+            outputs=self.outputs,
+            times=self.times,
+            timestep=self.timestep,
+            flows=self._flows,
+            compartments=self.compartments,
+            get_flow_rates=self._get_flow_rates,
+            whitelist=self._derived_outputs_whitelist,
+        )
 
     def request_output_for_flow(
         self,
@@ -1239,7 +1131,7 @@ class CompartmentalModel:
         assert is_flow_exists, f"No flow matches: {flow_name} {source_strata} {dest_strata}"
         self._derived_output_graph.add_node(name)
         self._derived_output_requests[name] = {
-            "request_type": self._FLOW_REQUEST,
+            "request_type": DerivedOutputRequest.FLOW,
             "flow_name": flow_name,
             "source_strata": source_strata,
             "dest_strata": dest_strata,
@@ -1273,7 +1165,7 @@ class CompartmentalModel:
         assert is_match_exists, f"No compartment matches: {compartments} {strata}"
         self._derived_output_graph.add_node(name)
         self._derived_output_requests[name] = {
-            "request_type": self._COMPARTMENT_REQUEST,
+            "request_type": DerivedOutputRequest.COMPARTMENT,
             "compartments": compartments,
             "strata": strata,
             "save_results": save_results,
@@ -1304,7 +1196,7 @@ class CompartmentalModel:
 
         self._derived_output_graph.add_node(name)
         self._derived_output_requests[name] = {
-            "request_type": self._AGGREGATE_REQUEST,
+            "request_type": DerivedOutputRequest.AGGREGATE,
             "sources": sources,
             "save_results": save_results,
         }
@@ -1333,7 +1225,7 @@ class CompartmentalModel:
         self._derived_output_graph.add_node(name)
         self._derived_output_graph.add_edge(source, name)
         self._derived_output_requests[name] = {
-            "request_type": self._CUMULATIVE_REQUEST,
+            "request_type": DerivedOutputRequest.CUMULATIVE,
             "source": source,
             "start_time": start_time,
             "save_results": save_results,
@@ -1390,7 +1282,7 @@ class CompartmentalModel:
 
         self._derived_output_graph.add_node(name)
         self._derived_output_requests[name] = {
-            "request_type": self._FUNCTION_REQUEST,
+            "request_type": DerivedOutputRequest.FUNCTION,
             "func": func,
             "sources": sources,
             "save_results": save_results,
