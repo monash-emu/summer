@@ -5,7 +5,8 @@ A derived output is an additional output that the user has requested,
 which can be calculated (or "derived") using the model results, which are the:
 
     - evaluation times
-    - 
+    - compartment sizes for each time
+    - flow rates for each time
 
 """
 import logging
@@ -80,7 +81,7 @@ def calculate_derived_outputs(
     outputs_to_delete_after = []
 
     # Calculate all flow rates and store in `flow_values` so that we can fulfill flow rate requests.
-    # We need to do this here because some solvers do not evaluate all timesteps.
+    # We need to do this here because some solvers do not necessarily evaluate all timesteps.
     flow_values = np.zeros((len(times), len(flows)))
     for time_idx, time in enumerate(times):
         # Flow rates are per unit time so we need to normalize by timestep.

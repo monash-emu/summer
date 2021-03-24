@@ -667,13 +667,6 @@ class CompartmentalModel:
     Running the model
     """
 
-    def run_stochastic(self, seed: Optional[int] = None):
-        """
-        Runs the model over the provided time span, calculating the outputs and the derived outputs.
-        Uses an stochastic interpretation of flow rates.
-        """
-        self.run(solver=SolverType.STOCHASTIC, seed=seed)
-
     def run(
         self,
         solver: str = SolverType.SOLVE_IVP,
@@ -702,6 +695,13 @@ class CompartmentalModel:
         # Calculate any requested derived outputs, based on the calculated compartment sizes.
         self.derived_outputs = self._calculate_derived_outputs()
 
+    def run_stochastic(self, seed: Optional[int] = None):
+        """
+        Runs the model over the provided time span, calculating the outputs and the derived outputs.
+        Uses an stochastic interpretation of flow rates.
+        """
+        self.run(solver=SolverType.STOCHASTIC, seed=seed)
+
     def _solve_ode(self, solver, solver_args: dict):
         """
         Runs the model over the provided time span, calculating the outputs.
@@ -715,23 +715,6 @@ class CompartmentalModel:
             self.times,
             solver_args,
         )
-
-    def _get_compartment_rates(self, compartment_values: np.ndarray, time: float):
-        """
-        Interface for the ODE solver: this function is passed to solve_ode func and defines the dynamics of the model.
-        Returns the rate of change of the compartment values for a given state and time.
-        """
-        comp_vals = self._clean_compartment_values(compartment_values)
-        comp_rates, _ = self._get_rates(comp_vals, time)
-        return comp_rates
-
-    def _get_flow_rates(self, compartment_values: np.ndarray, time: float):
-        """
-        Returns the contribution of each flow to compartment rate of change for a given state and time.
-        """
-        comp_vals = self._clean_compartment_values(compartment_values)
-        _, flow_rates = self._get_rates(comp_vals, time)
-        return flow_rates
 
     def _solve_stochastic(self, seed: Optional[int] = None):
         """
@@ -776,6 +759,23 @@ class CompartmentalModel:
 
             # Calculate final compartment sizes at this timestep.
             self.outputs[time_idx] = comp_vals + transition_changes + entry_changes
+
+    def _get_compartment_rates(self, compartment_values: np.ndarray, time: float):
+        """
+        Interface for the ODE solver: this function is passed to solve_ode func and defines the dynamics of the model.
+        Returns the rate of change of the compartment values for a given state and time.
+        """
+        comp_vals = self._clean_compartment_values(compartment_values)
+        comp_rates, _ = self._get_rates(comp_vals, time)
+        return comp_rates
+
+    def _get_flow_rates(self, compartment_values: np.ndarray, time: float):
+        """
+        Returns the contribution of each flow to compartment rate of change for a given state and time.
+        """
+        comp_vals = self._clean_compartment_values(compartment_values)
+        _, flow_rates = self._get_rates(comp_vals, time)
+        return flow_rates
 
     def _get_rates(self, comp_vals: np.ndarray, time: float) -> Tuple[np.ndarray, np.ndarray]:
         """

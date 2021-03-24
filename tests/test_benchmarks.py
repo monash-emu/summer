@@ -1,5 +1,6 @@
 import numpy as np
 import pytest
+
 from summer import CompartmentalModel, Multiply, Overwrite, Stratification
 
 RANDOM_SEED = 1337
