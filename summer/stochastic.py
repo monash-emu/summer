@@ -20,7 +20,7 @@ def build_flow_map(flows) -> np.ndarray:
             # Entry flows and handled separately.
             continue
 
-        flow_map_el = [flow_idx, flow.source.idx, NO_DESTINATION]
+        flow_map_el = flow_idx, flow.source.idx, NO_DESTINATION
         if flow.dest:
             flow_map_el[2] = flow.dest.idx
 
