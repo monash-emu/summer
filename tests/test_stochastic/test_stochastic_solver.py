@@ -110,19 +110,11 @@ def test_solve_stochastic(monkeypatch):
     monkeypatch.setattr(stochastic, "sample_entry_flows", mock_sample_entry_flows)
     monkeypatch.setattr(stochastic, "sample_transistion_flows", mock_sample_transistion_flows)
 
-    # Mock out flow rate calculation - tested elsewhere and tricky to predict.
     model = CompartmentalModel(
         times=[0, 5],
         compartments=["S", "I", "R"],
         infectious_compartments=["I"],
     )
-
-    def mock_get_rates(comp_vals, time):
-        # return the flow rates that will be used to solve the model
-        return None, np.array([8.0, 6.0, 3.0, 2.0])
-
-    monkeypatch.setattr(model, "_get_rates", mock_get_rates)
-
     # Add some people to the model, expect initial conditions of [990, 10, 0]
     model.set_initial_population(distribution={"S": 990, "I": 10})
     # Add flows - the parameters add here will be overidden by  `mock_get_rates`
@@ -131,6 +123,14 @@ def test_solve_stochastic(monkeypatch):
     model.add_infection_frequency_flow("infection", 6, "S", "I")
     model.add_death_flow("infect_death", 3, "I")
     model.add_fractional_flow("recovery", 2, "I", "R")
+
+    # Mock out flow rate calculation - tested elsewhere and tricky to predict.
+    def mock_get_rates(comp_vals, time):
+        # return the flow rates that will be used to solve the model
+        return None, np.array([float(f.param) for f in model._flows])
+
+    monkeypatch.setattr(model, "_get_rates", mock_get_rates)
+
     model.run_stochastic()
     expected_outputs = np.array(
         [
