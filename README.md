@@ -46,17 +46,17 @@ import summer
 ## Development
 
 [Poetry](https://python-poetry.org/) is used for packaging and dependency management.
-You will need to install poetry to work on this codebase.
+
+Initial project setup is documented [here](./docs/dev-setup.md) and should work for Windows or Ubuntu, maybe for MacOS.
+
 Some common things to do as a developer working on this codebase:
 
 ```bash
-# Install requirements
-poetry config virtualenvs.in-project true
-poetry shell
-poetry install
+# Activate summer conda environment prior to doing other stuff (see setup docs)
+conda activate summer
 
-# Get a virtualenv for running other stuff
-poetry shell
+# Install latest requirements
+poetry install
 
 # Publish to PyPI - use your PyPI credentials
 poetry publish --build
@@ -65,7 +65,6 @@ poetry publish --build
 poetry add
 
 # Run tests
-poetry shell
 pytest -vv
 
 # Format Python code
