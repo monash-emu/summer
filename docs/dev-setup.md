@@ -32,7 +32,9 @@ conda env list
 #
 
 # Configure Poetry to use our conda environment
-poetry config settings.virtualenvs.path  C:/tools/Anaconda3/envs/summer
+poetry config virtualenvs.path  C:/tools/Anaconda3/envs/summer
+
+# Make sure you are in the top-level directory of the summer repository in order to run the next steps
 
 # Install packages with Poetry
 poetry install
