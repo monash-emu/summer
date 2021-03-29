@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1616451472623,
+  "lastUpdate": 1616994952725,
   "repoUrl": "https://github.com/monash-emu/summer",
   "entries": {
     "Benchmark": [
@@ -190,6 +190,44 @@ window.BENCHMARK_DATA = {
             "unit": "iter/sec",
             "range": "stddev: 0.04543066106640228",
             "extra": "mean: 7.8247381996666645 sec\nrounds: 3"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "mattdsegal@gmail.com",
+            "name": "Matt Segal",
+            "username": "MattSegal"
+          },
+          "committer": {
+            "email": "mattdsegal@gmail.com",
+            "name": "Matt Segal",
+            "username": "MattSegal"
+          },
+          "distinct": true,
+          "id": "4c5c53612b85992fd4f31f2837b82e89940f79bc",
+          "message": "Add setup instructions using Miniconda",
+          "timestamp": "2021-03-29T16:12:53+11:00",
+          "tree_id": "cf63f0043c3677c8937d04f12d50bfe365fbff6b",
+          "url": "https://github.com/monash-emu/summer/commit/4c5c53612b85992fd4f31f2837b82e89940f79bc"
+        },
+        "date": 1616994951855,
+        "tool": "pytest",
+        "benches": [
+          {
+            "name": "tests/test_benchmarks.py::test_benchmark_default_ode_solver",
+            "value": 0.10961087197393843,
+            "unit": "iter/sec",
+            "range": "stddev: 0.07343169720409018",
+            "extra": "mean: 9.123182600333337 sec\nrounds: 3"
+          },
+          {
+            "name": "tests/test_benchmarks.py::test_benchmark_rk4_ode_solver",
+            "value": 0.1520086215637889,
+            "unit": "iter/sec",
+            "range": "stddev: 0.027972232517185516",
+            "extra": "mean: 6.57857422633334 sec\nrounds: 3"
           }
         ]
       }
