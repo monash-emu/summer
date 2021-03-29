@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1616994952725,
+  "lastUpdate": 1617060666020,
   "repoUrl": "https://github.com/monash-emu/summer",
   "entries": {
     "Benchmark": [
@@ -228,6 +228,44 @@ window.BENCHMARK_DATA = {
             "unit": "iter/sec",
             "range": "stddev: 0.027972232517185516",
             "extra": "mean: 6.57857422633334 sec\nrounds: 3"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "dshipman@gmail.com",
+            "name": "David Shipman",
+            "username": "dshipman"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "610e89834790b7a6bd6ea02d31fe357c36278227",
+          "message": "Update docs for changes to poetry setup process",
+          "timestamp": "2021-03-30T10:28:06+11:00",
+          "tree_id": "18e8b53733b31bcc4f90f203ec0d3d331d5bb3b1",
+          "url": "https://github.com/monash-emu/summer/commit/610e89834790b7a6bd6ea02d31fe357c36278227"
+        },
+        "date": 1617060665155,
+        "tool": "pytest",
+        "benches": [
+          {
+            "name": "tests/test_benchmarks.py::test_benchmark_default_ode_solver",
+            "value": 0.11029154660107865,
+            "unit": "iter/sec",
+            "range": "stddev: 0.01186155243505292",
+            "extra": "mean: 9.066878022999996 sec\nrounds: 3"
+          },
+          {
+            "name": "tests/test_benchmarks.py::test_benchmark_rk4_ode_solver",
+            "value": 0.15085964925694156,
+            "unit": "iter/sec",
+            "range": "stddev: 0.17271370172085632",
+            "extra": "mean: 6.628677747333332 sec\nrounds: 3"
           }
         ]
       }
