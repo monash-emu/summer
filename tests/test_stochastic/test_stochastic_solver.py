@@ -3,7 +3,9 @@ import pytest
 from numpy.testing import assert_array_equal
 
 
-from summer import stochastic
+from summer import stochastic, CompartmentalModel
+from summer.flows import DeathFlow, FractionalFlow
+from summer.compartment import Compartment
 
 ENTRY_FLOW_TESTS = [
     # timestep, flow rates, expected
@@ -36,16 +38,17 @@ TRANSITION_FLOW_TESTS = [
         # Flow proportions of
         #   [1, 0, 0], [0, 1, 0]
         # Stay prob of
-        #   [0.9996, 0.992, 1]
-        # Leave prob of
-        #   [4e-4, 8e-3, 0]
+        #   [0.9999, 0.995, 1]
+        # Leave prob of about
+        #   [1e-4, 5e-3, 0]
         # Giving us flow probabilities of approx
-        #   [1e-4, 3e-3, 0], [3e-4, 5e-3, 0], [0.9996, 0.992, 1]
+        #   [1e-4, 0, 0], [0, 5e-3, 0], [0.9999, 0.995, 1]
         # Which should sample to (using mock multinomial)
-        #   [1, 3, 0], [3, 5, 0], [9996, 992, 1]
+        #   [1, 0, 0], [0, 5, 0], [9999, 995, 1]
         # Which should be mapped to these changes in compartment size
-        np.array([-4, 2, 3]),  # expected compartment size changes
+        np.array([-1, -4, 5]),  # expected compartment size changes
     ]
+    # TODO: Test some more exotic cases (different timesteps, higher/lower flow rates)
 ]
 
 
@@ -67,16 +70,79 @@ def test_sample_transistion_flows(
 
 
 def test_build_flow_map():
-    pass
+    S = Compartment("S")
+    S.idx = 0
+    I = Compartment("I")
+    I.idx = 1
+    R = Compartment("R")
+    R.idx = 2
+    exit_a = DeathFlow("a", source=S, param=1.0)
+    exit_b = DeathFlow("b", source=I, param=1.0)
+    trans_c = FractionalFlow("c", source=S, dest=I, param=1.0)
+    trans_d = FractionalFlow("d", source=I, dest=R, param=1.0)
+    trans_e = FractionalFlow("e", source=R, dest=S, param=1.0)
+    flows = [exit_a, exit_b, trans_c, trans_d, trans_e]
+    expected_map = np.array(
+        [
+            [0, 0, stochastic.NO_DESTINATION],
+            [1, 1, stochastic.NO_DESTINATION],
+            [2, 0, 1],
+            [3, 1, 2],
+            [4, 2, 0],
+        ]
+    )
+    actual_map = stochastic.build_flow_map(flows)
+    assert_array_equal(expected_map, actual_map)
 
 
-def test_solve_stochastic():
+def test_solve_stochastic(monkeypatch):
     """
-    - mock out get rates
-    - mock out sample_entry_flows
-    - mock out sample_transistion_flows
+    Test that _solve_stochastic glue code works.
+    Don't test the actual flow rate calculations or stochastic sampling bits.
     """
-    pass
+    # Mock out stochastic flow sampling - tested elsewhere.
+    def mock_sample_entry_flows(seed, entry_flow_rates, timestep):
+        return entry_flow_rates
+
+    def mock_sample_transistion_flows(seed, flow_rates, flow_map, comp_vals, timestep):
+        return flow_rates.sum(axis=0)
+
+    monkeypatch.setattr(stochastic, "sample_entry_flows", mock_sample_entry_flows)
+    monkeypatch.setattr(stochastic, "sample_transistion_flows", mock_sample_transistion_flows)
+
+    # Mock out flow rate calculation - tested elsewhere and tricky to predict.
+    model = CompartmentalModel(
+        times=[0, 5],
+        compartments=["S", "I", "R"],
+        infectious_compartments=["I"],
+    )
+
+    def mock_get_rates(comp_vals, time):
+        # return the flow rates that will be used to solve the model
+        return None, np.array([8.0, 6.0, 3.0, 2.0])
+
+    monkeypatch.setattr(model, "_get_rates", mock_get_rates)
+
+    # Add some people to the model, expect initial conditions of [990, 10, 0]
+    model.set_initial_population(distribution={"S": 990, "I": 10})
+    # Add flows - the parameters add here will be overidden by  `mock_get_rates`
+    # but the flow directions will be used.
+    model.add_crude_birth_flow("birth", 8, "S")
+    model.add_infection_frequency_flow("infection", 6, "S", "I")
+    model.add_death_flow("infect_death", 3, "I")
+    model.add_fractional_flow("recovery", 2, "I", "R")
+    model.run_stochastic()
+    expected_outputs = np.array(
+        [
+            [990, 10, 0],
+            [992, 11, 2],
+            [994, 12, 4],
+            [996, 13, 6],
+            [998, 14, 8],
+            [1000, 15, 10],
+        ]
+    )
+    assert_array_equal(model.outputs, expected_outputs)
 
 
 def _mock_multinomial(size, probs):
