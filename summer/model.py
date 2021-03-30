@@ -749,14 +749,13 @@ class CompartmentalModel:
                     transition_flow_rates[flow_idx][flow.source.idx] = flow_rates[flow_idx]
                 else:
                     # It's an entry flow, which we sample with a Poisson distribution.
-                    entry_flow_rates[flow_idx] += flow_rates[flow_idx]
+                    entry_flow_rates[flow.dest.idx] += flow_rates[flow_idx]
 
             # Convert flow rates to probabilities, and take a sample using these probabilities,
             entry_changes = stochastic.sample_entry_flows(seed, entry_flow_rates, self.timestep)
             transition_changes = stochastic.sample_transistion_flows(
                 seed, transition_flow_rates, flow_map, comp_vals, self.timestep
             )
-
             # Calculate final compartment sizes at this timestep.
             self.outputs[time_idx] = comp_vals + transition_changes + entry_changes
 

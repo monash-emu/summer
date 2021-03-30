@@ -100,17 +100,6 @@ def test_solve_stochastic(monkeypatch):
     Test that _solve_stochastic glue code works.
     Don't test the actual flow rate calculations or stochastic sampling bits.
     """
-    # Mock out stochastic flow sampling - tested elsewhere.
-    def mock_sample_entry_flows(seed, entry_flow_rates, timestep):
-        return entry_flow_rates
-
-    def mock_sample_transistion_flows(seed, flow_rates, flow_map, comp_vals, timestep):
-        return flow_rates.sum(axis=0)
-
-    monkeypatch.setattr(stochastic, "sample_entry_flows", mock_sample_entry_flows)
-    monkeypatch.setattr(stochastic, "sample_transistion_flows", mock_sample_transistion_flows)
-
-    # Mock out flow rate calculation - tested elsewhere and tricky to predict.
     model = CompartmentalModel(
         times=[0, 5],
         compartments=["S", "I", "R"],
@@ -127,10 +116,34 @@ def test_solve_stochastic(monkeypatch):
 
     # Mock out flow rate calculation - tested elsewhere and tricky to predict.
     def mock_get_rates(comp_vals, time):
-        # return the flow rates that will be used to solve the model
+        # Return the flow rates that will be used to solve the model
         return None, np.array([float(f.param) for f in model._flows])
 
     monkeypatch.setattr(model, "_get_rates", mock_get_rates)
+
+    # Mock out stochastic flow sampling - tested elsewhere.
+    def mock_sample_entry_flows(seed, entry_flow_rates, timestep):
+        assert not seed
+        assert 0 < timestep <= 5
+        expected_flow_rates = np.array([8, 0, 0])
+        assert_array_equal(entry_flow_rates, expected_flow_rates)
+        return np.array([8, 0, 0])
+
+    def mock_sample_transistion_flows(seed, flow_rates, flow_map, comp_vals, timestep):
+        assert not seed
+        assert 0 < timestep <= 5
+        # Flows get re-arranged by setup process
+        expected_flow_map = np.array([[0, 1, -1], [2, 0, 1], [3, 1, 2]])
+        assert_array_equal(flow_map, expected_flow_map)
+        expected_flow_rates = np.array(
+            [[0.0, 3.0, 0.0], [0.0, 0.0, 0.0], [6.0, 0.0, 0.0], [0.0, 2.0, 0.0]]
+        )
+        assert_array_equal(flow_rates, expected_flow_rates)
+
+        return np.array([-6, 1, 2])
+
+    monkeypatch.setattr(stochastic, "sample_entry_flows", mock_sample_entry_flows)
+    monkeypatch.setattr(stochastic, "sample_transistion_flows", mock_sample_transistion_flows)
 
     model.run_stochastic()
     expected_outputs = np.array(
