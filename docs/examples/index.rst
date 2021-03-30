@@ -9,3 +9,4 @@ See below for some examples on how to use summer:
 
    sir-example
    sir-derived-outputs-example
+   stochastic-mode

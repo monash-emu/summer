@@ -8,12 +8,12 @@ from typing import Callable, Dict, List, Optional, Tuple
 
 import networkx
 import numpy as np
-from numba import jit
-from scipy.interpolate import interp1d
 
 import summer.flows as flows
+from summer import stochastic
 from summer.adjust import FlowParam
 from summer.compartment import Compartment
+from summer.derived_outputs import DerivedOutputRequest, calculate_derived_outputs
 from summer.solver import SolverType, solve_ode
 from summer.stratification import Stratification
 
@@ -34,7 +34,7 @@ class CompartmentalModel:
         times: The start and end times.
         compartments: The compartments to simulate.
         infectious_compartments: The compartments which are counted as infectious.
-        time_step (optional): The timesteps to return results for. Does not affect the ODE solver. Defaults to ``1``.
+        time_step (optional): The timesteps to return results for. Does not affect the ODE solver, but is used for the stochastic solver. Defaults to ``1``.
 
     Attributes:
         times (np.ndarray): The times that the model will simulate.
@@ -65,6 +65,7 @@ class CompartmentalModel:
         end_t = round(end_t)
         time_period = end_t - start_t + 1
         num_steps = time_period / timestep
+        self.timestep = timestep
         assert num_steps >= 1, "Time step should be less than time period."
         assert num_steps % 1 == 0, "Time step should be a factor of time period"
         self.times = np.linspace(start_t, end_t, num=int(num_steps))
@@ -75,31 +76,31 @@ class CompartmentalModel:
         self.compartments = [Compartment(n) for n in compartments]
         self._infectious_compartments = [Compartment(n) for n in infectious_compartments]
         self.initial_population = np.zeros_like(self.compartments, dtype=np.float)
-
         # Keeps track of original, pre-stratified compartment names.
         self._original_compartment_names = [Compartment.deserialize(n) for n in compartments]
-        # Tracks total deaths per timestep for death-replacement birth flows
-        self._total_deaths = None
         # Keeps track of Stratifications that have been applied.
         self._stratifications = []
         # Flows to be applied to the model compartments
         self._flows = []
-        # No outputs until the model has been run.
+
+        # Tracks total deaths per timestep for death-replacement birth flows
+        self._total_deaths = None
+
+        # The results calculated using the model: no outputs exist until the model has been run.
         self.outputs = None
         self.derived_outputs = None
-        # Track derived output requests in a dictionary.
+        # Track 'derived output' requests in a dictionary.
         self._derived_output_requests = {}
-        # Track derived output request dependencies in a directed acylic graph (DAG).
+        # Track 'derived output' request dependencies in a directed acylic graph (DAG).
         self._derived_output_graph = networkx.DiGraph()
-        # Whitelist of derived outputs to evaluate
+        # Whitelist of 'derived outputs' to evaluate
         self._derived_outputs_whitelist = []
 
-        # Mixing matrices a list of NxN arrays used to calculate force of infection.
+        # Mixing matrices: a list of square arrays, or functions, used to calculate force of infection.
         self._mixing_matrices = []
-
-        # A list of dicts that has the strata required to match a row in the mixing matrix.
+        # Mixing categories: a list of dicts that knows the strata required to match a row in the mixing matrix.
         self._mixing_categories = [{}]
-        # A list of the different sub-categories ('strains') of the diease that we are modelling.
+        # Strains: a list of the different sub-categories ('strains') of the disease that we are modelling.
         self._disease_strains = [self._DEFAULT_DISEASE_STRAIN]
 
         self._update_compartment_indices()
@@ -620,7 +621,6 @@ class CompartmentalModel:
             self._disease_strains = strat.strata
 
         # Stratify compartments, split according to split_proportions
-
         prev_compartment_names = copy.copy(self.compartments)
         self.compartments = strat._stratify_compartments(self.compartments)
         self.initial_population = strat._stratify_compartment_values(
@@ -670,7 +670,7 @@ class CompartmentalModel:
     def run(
         self,
         solver: str = SolverType.SOLVE_IVP,
-        solver_args: Optional[dict] = None,
+        **kwargs,
     ):
         """
         Runs the model over the provided time span, calculating the outputs and the derived outputs.
@@ -682,22 +682,145 @@ class CompartmentalModel:
 
         Args:
             solver (optional): The ODE solver to use, defaults to SciPy's IVP solver.
-            solver_args (optional): Extra arguments to supplied to the solver, see ``summer.solver`` for details.
+            **kwargs (optional): Extra arguments to supplied to the solver, see ``summer.solver`` for details.
 
         """
-        solver_args = solver_args or {}
-        # Do some setup.
         self._prepare_to_run()
-        # Calculate the outputs (compartment sizes) by solving the ODE defined by _get_flows().
+        if solver == SolverType.STOCHASTIC:
+            seed = kwargs.get("seed")
+            self._solve_stochastic(seed)
+        else:
+            self._solve_ode(solver, kwargs)
+
+        # Calculate any requested derived outputs, based on the calculated compartment sizes.
+        self.derived_outputs = self._calculate_derived_outputs()
+
+    def run_stochastic(self, seed: Optional[int] = None):
+        """
+        Runs the model over the provided time span, calculating the outputs and the derived outputs.
+        Uses an stochastic interpretation of flow rates.
+        """
+        self.run(solver=SolverType.STOCHASTIC, seed=seed)
+
+    def _solve_ode(self, solver, solver_args: dict):
+        """
+        Runs the model over the provided time span, calculating the outputs.
+        Uses an ODE interpretation of flow rates.
+        """
+        # Calculate the outputs (compartment sizes) by solving the ODE defined by _get_compartment_rates().
         self.outputs = solve_ode(
             solver,
-            self._get_flow_rates,
+            self._get_compartment_rates,
             self.initial_population,
             self.times,
             solver_args,
         )
-        # Calculate any requested derived outputs, based on the calculated compartment sizes.
-        self.derived_outputs = self._calculate_derived_outputs()
+
+    def _solve_stochastic(self, seed: Optional[int] = None):
+        """
+        Runs the model over the provided time span, calculating the outputs.
+        Uses an stochastic interpretation of flow rates.
+        See here for more details:
+
+            https://autumn-files.s3-ap-southeast-2.amazonaws.com/Switching_to_stochastic_mode.pdf
+
+        """
+        self.outputs = np.zeros((len(self.times), len(self.initial_population)), dtype=np.int)
+        self.outputs[0] = self.initial_population
+
+        # Create an list that maps flows to the source and destination compartments.
+        flow_map = stochastic.build_flow_map(self._flows)
+
+        # Calculate compartment sizes for each time step.
+        for time_idx, time in enumerate(self.times):
+            if time_idx == 0:
+                continue
+
+            # Calculate flow rates: they derivatives and define an ODE which describes the system.
+            # Later we will convert these to probabilities.
+            comp_vals = self._clean_compartment_values(self.outputs[time_idx - 1])
+            _, flow_rates = self._get_rates(comp_vals, time)
+            transition_flow_rates = np.zeros((len(self._flows), len(comp_vals)))
+            entry_flow_rates = np.zeros_like(comp_vals)
+            # Split flow rates into entry or {transition, exit} flows
+            for flow_idx, flow in enumerate(self._flows):
+                if flow.source:
+                    # It's an exit or transition flow, which we sample with a multinomial.
+                    transition_flow_rates[flow_idx][flow.source.idx] = flow_rates[flow_idx]
+                else:
+                    # It's an entry flow, which we sample with a Poisson distribution.
+                    entry_flow_rates[flow.dest.idx] += flow_rates[flow_idx]
+
+            # Convert flow rates to probabilities, and take a sample using these probabilities,
+            entry_changes = stochastic.sample_entry_flows(seed, entry_flow_rates, self.timestep)
+            transition_changes = stochastic.sample_transistion_flows(
+                seed, transition_flow_rates, flow_map, comp_vals, self.timestep
+            )
+            # Calculate final compartment sizes at this timestep.
+            self.outputs[time_idx] = comp_vals + transition_changes + entry_changes
+
+    def _get_compartment_rates(self, compartment_values: np.ndarray, time: float):
+        """
+        Interface for the ODE solver: this function is passed to solve_ode func and defines the dynamics of the model.
+        Returns the rate of change of the compartment values for a given state and time.
+        """
+        comp_vals = self._clean_compartment_values(compartment_values)
+        comp_rates, _ = self._get_rates(comp_vals, time)
+        return comp_rates
+
+    def _get_flow_rates(self, compartment_values: np.ndarray, time: float):
+        """
+        Returns the contribution of each flow to compartment rate of change for a given state and time.
+        """
+        comp_vals = self._clean_compartment_values(compartment_values)
+        _, flow_rates = self._get_rates(comp_vals, time)
+        return flow_rates
+
+    def _get_rates(self, comp_vals: np.ndarray, time: float) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Calculates inter-compartmental flow rates for a given state and time, including:
+            - entry: flows of people into the system
+            - exit: flows of people leaving of the system, and;
+            - transition: flows of people between compartments
+
+        Args:
+            comp_vals: The current state of the model compartments (ie. number of people)
+            time: The current time
+
+        Returns:
+            comp_rates: Rate of change of compartments
+            flow_rates: Contribution of each flow to compartment rate of change
+
+        """
+        self._prepare_time_step(time, comp_vals)
+        # Track each flow's flow-rates at this point in time for function flows.
+        flow_rates = np.zeros(len(self._flows))
+        # Track the rate of change of compartments for the ODE solver.
+        comp_rates = np.zeros(len(comp_vals))
+
+        # Find the flow rate for each flow.
+        for flow_idx, flow in self._iter_non_function_flows:
+            # Evaluate all the flows that are not function flows.
+            net_flow = flow.get_net_flow(comp_vals, time)
+            flow_rates[flow_idx] = net_flow
+            if flow.source:
+                comp_rates[flow.source.idx] -= net_flow
+            if flow.dest:
+                comp_rates[flow.dest.idx] += net_flow
+            if flow.is_death_flow:
+                # Track total deaths for any later birth replacement flows.
+                self._total_deaths += net_flow
+
+        if self._iter_function_flows:
+            # Evaluate the function flows.
+            for flow_idx, flow in self._iter_function_flows:
+                net_flow = flow.get_net_flow(
+                    self.compartments, comp_vals, self._flows, flow_rates, time
+                )
+                comp_rates[flow.source.idx] -= net_flow
+                comp_rates[flow.dest.idx] += net_flow
+
+        return comp_rates, flow_rates
 
     def _prepare_to_run(self):
         """
@@ -717,7 +840,7 @@ class CompartmentalModel:
                 if adj and callable(adj.param):
                     funcs.add(adj.param)
 
-        # Cache return values to prevent re-computation. This will a little leak memory, which is fine.
+        # Cache return values to prevent re-computation. This will a little leak memory, which is (mostly) fine.
         funcs_cached = {}
         for func in funcs:
             # Floating point return type is 8 bytes, meaning 2**17 values is ~1MB of memory.
@@ -732,6 +855,7 @@ class CompartmentalModel:
                     adj.param = funcs_cached[adj.param]
 
         # Optimize flow adjustments
+        # TODO: Delete this it probably doesn't help.
         for f in self._flows:
             f.optimize_adjustments()
 
@@ -861,16 +985,16 @@ class CompartmentalModel:
 
     def _prepare_time_step(self, time: float, compartment_values: np.ndarray):
         """
-        Pre-timestep setup. This should be run before `_get_flow_rates`.
+        Pre-timestep setup. This should be run before `_get_compartment_rates`.
         Here we set up any stateful updates that need to happen before we get the flow rates.
         """
         # Prepare total deaths for tracking deaths.
         self._total_deaths = 0
 
-        # Find the effective infectious population for the force of infection calculations.
+        # Find the effective infectious population for the force of infection (FoI) calculations.
         mixing_matrix = self._get_mixing_matrix(time)
 
-        # Calculate total number of people per category.
+        # Calculate total number of people per category (for FoI).
         # A vector with size (num_cats x 1).
         comp_values_transposed = compartment_values.reshape((compartment_values.shape[0], 1))
         self._category_populations = np.matmul(self._category_matrix, comp_values_transposed)
@@ -893,6 +1017,17 @@ class CompartmentalModel:
             # A vector with size (num_cats x 1).
             category_frequency = infectious_populations / self._category_populations
             self._infection_frequency[strain] = np.matmul(mixing_matrix, category_frequency)
+
+    def _clean_compartment_values(self, compartment_values: np.ndarray):
+        """
+        Zero out -ve compartment sizes in flow rate calculations,
+        to prevent negative values from messing up the direction of flows.
+        We don't expect large -ve values, but there can be small ones due to numerical errors.
+        """
+        comp_vals = compartment_values.copy()
+        zero_mask = comp_vals < 0
+        comp_vals[zero_mask] = 0
+        return comp_vals
 
     def _get_force_idx(self, source: Compartment):
         """
@@ -922,47 +1057,6 @@ class CompartmentalModel:
         strain = dest.strata.get("strain", self._DEFAULT_DISEASE_STRAIN)
         return self._infection_density[strain][idx][0]
 
-    def _get_flow_rates(self, compartment_values: np.ndarray, time: float):
-        """
-        Get net flows into, out of, and between all compartments.
-        This function is passed to solve_ode func and defines the dynamics of the model.
-        """
-        # Zero out -ve compartment sizes in flow rate calculations,
-        # to prevent negative values from messing up the direction of flows.
-        # We don't expect large -ve values, but there can be small ones due to numerical errors.
-        comp_vals = compartment_values.copy()
-        zero_mask = comp_vals < 0
-        comp_vals[zero_mask] = 0
-        self._prepare_time_step(time, comp_vals)
-        # Track each flow's flow-rates at this point in time for function flows.
-        flow_rates = np.zeros(len(self._flows))
-        # Track the net flow rates between compartments for the ODE solver.
-        net_flow_rates = np.zeros(len(comp_vals))
-
-        # Find the flow rate for each flow.
-        for flow_idx, flow in self._iter_non_function_flows:
-            # Evaluate all the flows that are not function flows.
-            net_flow = flow.get_net_flow(compartment_values, time)
-            flow_rates[flow_idx] = net_flow
-            if flow.source:
-                net_flow_rates[flow.source.idx] -= net_flow
-            if flow.dest:
-                net_flow_rates[flow.dest.idx] += net_flow
-            if flow.is_death_flow:
-                # Track total deaths for any later birth replacement flows.
-                self._total_deaths += net_flow
-
-        if self._iter_function_flows:
-            # Evaluate the function flows.
-            for flow_idx, flow in self._iter_function_flows:
-                net_flow = flow.get_net_flow(
-                    self.compartments, compartment_values, self._flows, flow_rates, time
-                )
-                net_flow_rates[flow.source.idx] -= net_flow
-                net_flow_rates[flow.dest.idx] += net_flow
-
-        return net_flow_rates
-
     def _get_mixing_matrix(self, time: float) -> np.ndarray:
         """
         Returns the final mixing matrix for a given time.
@@ -979,11 +1073,6 @@ class CompartmentalModel:
     """
     Requesting and calculating derived outputs
     """
-    _FLOW_REQUEST = "flow"
-    _COMPARTMENT_REQUEST = "comp"
-    _AGGREGATE_REQUEST = "agg"
-    _CUMULATIVE_REQUEST = "cum"
-    _FUNCTION_REQUEST = "func"
 
     def set_derived_outputs_whitelist(self, whitelist: List[str]):
         """
@@ -997,147 +1086,17 @@ class CompartmentalModel:
         self._derived_outputs_whitelist = whitelist
 
     def _calculate_derived_outputs(self):
-        """
-        Calculates all requested derived outputs from the calculated compartment sizes.
-        """
-        assert self.outputs is not None, "Cannot calculate derived outputs: model has not been run."
-        error_msg = "Cannot calculate derived outputs: dependency graph has cycles."
-        assert networkx.is_directed_acyclic_graph(self._derived_output_graph), error_msg
-        graph = self._derived_output_graph.copy()
-
-        if self._derived_outputs_whitelist:
-            # Only calculate the required outputs and their dependencies, ignore everything else.
-            required_nodes = set()
-            for name in self._derived_outputs_whitelist:
-                # Find a list of the output required and its dependencies.
-                output_dependencies = networkx.dfs_tree(graph.reverse(), source=name).reverse()
-                required_nodes = required_nodes.union(output_dependencies.nodes)
-
-            # Remove any nodes that aren't required from the graph.
-            nodes = list(graph.nodes)
-            for node in nodes:
-                if not node in required_nodes:
-                    graph.remove_node(node)
-
-        derived_outputs = {}
-        outputs_to_delete_after = []
-
-        # Recalculate all flows and store in `flow_values` so that we can fulfill flow requests.
-        flow_values = np.zeros((len(self.times), len(self._flows)))
-        for time_idx, time in enumerate(self.times):
-            compartment_values = self.outputs[time_idx]
-            flow_rates = flow_values[time_idx]
-
-            # Find the flow rate for each flow.
-            for flow_idx, flow in self._iter_non_function_flows:
-                # Evaluate all the flows that are not function flows.
-                net_flow = flow.get_net_flow(compartment_values, time)
-                flow_rates[flow_idx] = net_flow * self.timestep
-
-            if self._iter_function_flows:
-                # Evaluate the function flows.
-                original_flow_rates = flow_rates.copy()
-                for flow_idx, flow in self._iter_function_flows:
-                    net_flow = flow.get_net_flow(
-                        self.compartments,
-                        compartment_values,
-                        self._flows,
-                        original_flow_rates,
-                        time,
-                    )
-                    flow_rates[flow_idx] = net_flow * self.timestep
-
-        # Convert tracked flow values into a matrix where the 1st dimension is flow type, 2nd is time
-        flow_values = np.array(flow_values).T
-
-        # Calculate all the outputs in the correct order so that each output has its dependencies fulfilled.
-        for name in networkx.topological_sort(graph):
-            request = self._derived_output_requests[name]
-            request_type = request["request_type"]
-            output = np.zeros(self.times.shape)
-
-            if not request["save_results"]:
-                # Delete the results of this output once the calcs are done.
-                outputs_to_delete_after.append(name)
-
-            if request_type == self._FLOW_REQUEST:
-                # User wants to track a set of flow rates over time.
-                this_flow_values = np.zeros(len(self.times))
-                for flow_idx, flow in enumerate(self._flows):
-                    is_matching_flow = (
-                        flow.name == request["flow_name"]
-                        and ((not flow.source) or flow.source.has_strata(request["source_strata"]))
-                        and ((not flow.dest) or flow.dest.has_strata(request["dest_strata"]))
-                    )
-                    if is_matching_flow:
-                        this_flow_values += flow_values[flow_idx]
-
-                use_raw_results = request["raw_results"]
-                if use_raw_results:
-                    # Use interpolated flow rates wiuth no post-processing.
-                    output = this_flow_values
-                else:
-                    # Set the "flow rate" at time `t` to be an estimate of the flow rate
-                    # that is calculated at time `t-1`. By convention, flows are zero at t=0.
-                    # This is done so that we can estimate the number of people moving between compartments
-                    # using tracked flow rates.
-                    ignore_first_timestep_output = np.zeros(self.times.shape)
-                    ignore_first_timestep_output[1:] = this_flow_values[1:]
-                    offset_output = np.zeros(self.times.shape)
-                    offset_output[1:] = this_flow_values[:-1]
-                    output = (offset_output + ignore_first_timestep_output) / 2
-
-            elif request_type == self._COMPARTMENT_REQUEST:
-                # User wants to track a set of compartment sizes over time.
-                compartments = request["compartments"]
-                strata = request["strata"]
-                comps = (
-                    (i, c)
-                    for i, c in enumerate(self.compartments)
-                    if c.has_name_in_list(compartments)
-                )
-                idxs = [i for i, c in comps if c.is_match(c.name, strata)]
-                output = self.outputs[:, idxs].sum(axis=1)
-
-            elif request_type == self._AGGREGATE_REQUEST:
-                # User wants to track the sum of a set of outputs over time.
-                source_names = request["sources"]
-                output = sum([derived_outputs[s] for s in source_names])
-
-            elif request_type == self._CUMULATIVE_REQUEST:
-                # User wants to track cumulative value of an output over time.
-                source_name = request["source"]
-                start_time = request["start_time"]
-                max_time = self.times.max()
-                if start_time and start_time > max_time:
-                    # Handle case where the derived output starts accumulating after the last model timestep.
-                    msg = f"Cumulative output '{name}' start time {start_time} is greater than max model time {max_time}, defaulting to {max_time}"
-                    logger.warn(msg)
-                    start_time = max_time
-
-                if start_time is None:
-                    output = np.cumsum(derived_outputs[source_name])
-                else:
-                    assert (
-                        start_time in self.times
-                    ), f"Start time {start_time} not in times for '{name}'"
-                    start_idx = np.where(self.times == start_time)[0][0]
-                    output[start_idx:] = np.cumsum(derived_outputs[source_name][start_idx:])
-
-            elif request_type == self._FUNCTION_REQUEST:
-                # User wants to track the results of a function of other outputs over time.
-                func = request["func"]
-                source_names = request["sources"]
-                inputs = [derived_outputs[s] for s in source_names]
-                output = func(*inputs)
-
-            derived_outputs[name] = output
-
-        # Delete any intermediate outputs that we don't want to save.
-        for name in outputs_to_delete_after:
-            del derived_outputs[name]
-
-        return derived_outputs
+        return calculate_derived_outputs(
+            requests=self._derived_output_requests,
+            graph=self._derived_output_graph,
+            outputs=self.outputs,
+            times=self.times,
+            timestep=self.timestep,
+            flows=self._flows,
+            compartments=self.compartments,
+            get_flow_rates=self._get_flow_rates,
+            whitelist=self._derived_outputs_whitelist,
+        )
 
     def request_output_for_flow(
         self,
@@ -1171,7 +1130,7 @@ class CompartmentalModel:
         assert is_flow_exists, f"No flow matches: {flow_name} {source_strata} {dest_strata}"
         self._derived_output_graph.add_node(name)
         self._derived_output_requests[name] = {
-            "request_type": self._FLOW_REQUEST,
+            "request_type": DerivedOutputRequest.FLOW,
             "flow_name": flow_name,
             "source_strata": source_strata,
             "dest_strata": dest_strata,
@@ -1205,7 +1164,7 @@ class CompartmentalModel:
         assert is_match_exists, f"No compartment matches: {compartments} {strata}"
         self._derived_output_graph.add_node(name)
         self._derived_output_requests[name] = {
-            "request_type": self._COMPARTMENT_REQUEST,
+            "request_type": DerivedOutputRequest.COMPARTMENT,
             "compartments": compartments,
             "strata": strata,
             "save_results": save_results,
@@ -1236,7 +1195,7 @@ class CompartmentalModel:
 
         self._derived_output_graph.add_node(name)
         self._derived_output_requests[name] = {
-            "request_type": self._AGGREGATE_REQUEST,
+            "request_type": DerivedOutputRequest.AGGREGATE,
             "sources": sources,
             "save_results": save_results,
         }
@@ -1265,7 +1224,7 @@ class CompartmentalModel:
         self._derived_output_graph.add_node(name)
         self._derived_output_graph.add_edge(source, name)
         self._derived_output_requests[name] = {
-            "request_type": self._CUMULATIVE_REQUEST,
+            "request_type": DerivedOutputRequest.CUMULATIVE,
             "source": source,
             "start_time": start_time,
             "save_results": save_results,
@@ -1322,7 +1281,7 @@ class CompartmentalModel:
 
         self._derived_output_graph.add_node(name)
         self._derived_output_requests[name] = {
-            "request_type": self._FUNCTION_REQUEST,
+            "request_type": DerivedOutputRequest.FUNCTION,
             "func": func,
             "sources": sources,
             "save_results": save_results,
