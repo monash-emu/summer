@@ -1,19 +1,16 @@
 Summer documentation
 ==================================
 
-Summer is a compartmental disease modelling framework, written in Python.
-It provides a high-level API to build and run models. Features include:
+Summer is a disease modelling framework, written in Python. This library provides a high level interface for defining and running compartmental models.
+Features include:
 
-- A variety of inter-compartmental flows (infections, sojourn, fractional, births, deaths, imports)
+- A variety of inter-compartmental flows
 - Force of infection multipliers (frequency, density)
-- Post-processing of compartment sizes into derived outputs
-- Stratification of compartments, including:
-   - Adjustments to flow rates based on strata
-   - Adjustments to infectiousness based on strata
-   - Heterogeneous mixing between strata
-   - Multiple disease strains
+- Post-processing of compartment sizes into custom outputs
+- Stratification of compartments
 
-The source code for this library is available [on GitHub](https://github.com/monash-emu/summer).
+The source code for this library is available `on GitHub <https://github.com/monash-emu/summer>`_.
+
 
 Contents
 --------
@@ -24,4 +21,3 @@ Contents
    install
    examples/index.rst
    api/index.rst
-   
