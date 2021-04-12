@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1618208158736,
+  "lastUpdate": 1618208965326,
   "repoUrl": "https://github.com/monash-emu/summer",
   "entries": {
     "Benchmark": [
@@ -401,6 +401,51 @@ window.BENCHMARK_DATA = {
             "unit": "iter/sec",
             "range": "stddev: 0.015559469048276658",
             "extra": "mean: 11.266687022999974 sec\nrounds: 3"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "mattdsegal@gmail.com",
+            "name": "Matthew Segal",
+            "username": "MattSegal"
+          },
+          "committer": {
+            "email": "mattdsegal@gmail.com",
+            "name": "Matthew Segal",
+            "username": "MattSegal"
+          },
+          "distinct": true,
+          "id": "443daf2440c4836f2e5674724780de982c6a5068",
+          "message": "Tweak wording, figure sizes in example notebooks",
+          "timestamp": "2021-04-12T16:25:42+10:00",
+          "tree_id": "d12ffbf93a68d0f1f29cd9b33024540507d6998d",
+          "url": "https://github.com/monash-emu/summer/commit/443daf2440c4836f2e5674724780de982c6a5068"
+        },
+        "date": 1618208964465,
+        "tool": "pytest",
+        "benches": [
+          {
+            "name": "tests/test_benchmarks.py::test_benchmark_default_ode_solver",
+            "value": 0.12530624427892187,
+            "unit": "iter/sec",
+            "range": "stddev: 0.019282591050825266",
+            "extra": "mean: 7.980448266999995 sec\nrounds: 3"
+          },
+          {
+            "name": "tests/test_benchmarks.py::test_benchmark_rk4_ode_solver",
+            "value": 0.17153422331670204,
+            "unit": "iter/sec",
+            "range": "stddev: 0.04359125640340213",
+            "extra": "mean: 5.829740448666674 sec\nrounds: 3"
+          },
+          {
+            "name": "tests/test_benchmarks.py::test_benchmark_stochastic_solver",
+            "value": 0.1104793167780899,
+            "unit": "iter/sec",
+            "range": "stddev: 0.09371226742492046",
+            "extra": "mean: 9.051467995666664 sec\nrounds: 3"
           }
         ]
       }
