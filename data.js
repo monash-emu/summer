@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1618207131000,
+  "lastUpdate": 1618208158736,
   "repoUrl": "https://github.com/monash-emu/summer",
   "entries": {
     "Benchmark": [
@@ -356,6 +356,51 @@ window.BENCHMARK_DATA = {
             "unit": "iter/sec",
             "range": "stddev: 0.0966643009967213",
             "extra": "mean: 11.49492071233334 sec\nrounds: 3"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "mattdsegal@gmail.com",
+            "name": "Matthew Segal",
+            "username": "MattSegal"
+          },
+          "committer": {
+            "email": "mattdsegal@gmail.com",
+            "name": "Matthew Segal",
+            "username": "MattSegal"
+          },
+          "distinct": true,
+          "id": "e0dd71b8b108b79d9be46dd75d94e23b02da937d",
+          "message": "Fix flow function URLs in flow type example docs",
+          "timestamp": "2021-04-12T16:11:19+10:00",
+          "tree_id": "3b9520a90182a5d6eda05c52666a7b11f8d10a4a",
+          "url": "https://github.com/monash-emu/summer/commit/e0dd71b8b108b79d9be46dd75d94e23b02da937d"
+        },
+        "date": 1618208157832,
+        "tool": "pytest",
+        "benches": [
+          {
+            "name": "tests/test_benchmarks.py::test_benchmark_default_ode_solver",
+            "value": 0.09251105736971575,
+            "unit": "iter/sec",
+            "range": "stddev: 0.03755557007391298",
+            "extra": "mean: 10.80951865033334 sec\nrounds: 3"
+          },
+          {
+            "name": "tests/test_benchmarks.py::test_benchmark_rk4_ode_solver",
+            "value": 0.12456409189973619,
+            "unit": "iter/sec",
+            "range": "stddev: 0.018841368087389294",
+            "extra": "mean: 8.027995747000006 sec\nrounds: 3"
+          },
+          {
+            "name": "tests/test_benchmarks.py::test_benchmark_stochastic_solver",
+            "value": 0.08875723608533599,
+            "unit": "iter/sec",
+            "range": "stddev: 0.015559469048276658",
+            "extra": "mean: 11.266687022999974 sec\nrounds: 3"
           }
         ]
       }
