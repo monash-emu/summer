@@ -12,9 +12,4 @@ See below for some examples on how to use summer:
    3-flow-types
    4-ode-solvers
    5-stochastic-solver
-   6-basic-stratification
-   7-mixing-matrices
-   8-flow-adjustments
-   9-infectiousness-adjustments
-   10-age-stratification
-   11-strain-stratification
+   6-stratification-introduction
