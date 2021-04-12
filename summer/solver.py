@@ -64,21 +64,13 @@ def solve_with_ivp(ode_func: OdeFunction, values: np.ndarray, times: np.ndarray,
 
     https://docs.scipy.org/doc/scipy/reference/generated/scipy.integrate.solve_ivp.html
     """
-    stopping_tolerance = solver_args.get("stopping_tolerance", 1e-60)
 
     def _ode_func(time, values):
         """Reverse parameters"""
         return ode_func(values, time)
 
-    def _get_stopping_conditions(time, values):
-        flows = ode_func(values, time)
-        return max(list(map(abs, flows))) - stopping_tolerance
-
-    _get_stopping_conditions.terminal = True
     t_span = (times[0], times[-1])
-    results = solve_ivp(_ode_func, t_span, values, t_eval=times)
-    # FIXME: the command below would make the optimisation analyses crash because of the stopping conditions
-    # results = solve_ivp(_ode_func, t_span, values, t_eval=times, events=_get_stopping_conditions)
+    results = solve_ivp(_ode_func, t_span, values, t_eval=times, **solver_args)
     return results["y"].transpose()
 
 
