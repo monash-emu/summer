@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1618380217041,
+  "lastUpdate": 1618383035368,
   "repoUrl": "https://github.com/monash-emu/summer",
   "entries": {
     "Benchmark": [
@@ -806,6 +806,51 @@ window.BENCHMARK_DATA = {
             "unit": "iter/sec",
             "range": "stddev: 0.08483591694040288",
             "extra": "mean: 11.631392041000026 sec\nrounds: 3"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "mattdsegal@gmail.com",
+            "name": "Matt Segal",
+            "username": "MattSegal"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "1f898b84cb378329fe2eb91ef20eca7e7de22373",
+          "message": "Add strain stratification example to docs (#3)",
+          "timestamp": "2021-04-14T16:46:18+10:00",
+          "tree_id": "59258f2bf06f07f0c305ef1274732683136b70c7",
+          "url": "https://github.com/monash-emu/summer/commit/1f898b84cb378329fe2eb91ef20eca7e7de22373"
+        },
+        "date": 1618383034384,
+        "tool": "pytest",
+        "benches": [
+          {
+            "name": "tests/test_benchmarks.py::test_benchmark_default_ode_solver",
+            "value": 0.09069785877318175,
+            "unit": "iter/sec",
+            "range": "stddev: 0.27693174317414887",
+            "extra": "mean: 11.025618614666655 sec\nrounds: 3"
+          },
+          {
+            "name": "tests/test_benchmarks.py::test_benchmark_rk4_ode_solver",
+            "value": 0.12607252140148337,
+            "unit": "iter/sec",
+            "range": "stddev: 0.09208207037284465",
+            "extra": "mean: 7.931942574666664 sec\nrounds: 3"
+          },
+          {
+            "name": "tests/test_benchmarks.py::test_benchmark_stochastic_solver",
+            "value": 0.08896534680451279,
+            "unit": "iter/sec",
+            "range": "stddev: 0.1475187807676004",
+            "extra": "mean: 11.240331611333355 sec\nrounds: 3"
           }
         ]
       }
