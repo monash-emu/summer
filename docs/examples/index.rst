@@ -13,3 +13,4 @@ See below for some examples on how to use summer:
    4-ode-solvers
    5-stochastic-solver
    6-stratification-introduction
+   7-age-stratification
