@@ -15,3 +15,4 @@ See below for some examples on how to use summer:
    6-stratification-introduction
    7-age-stratification
    8-strain-stratification
+   9-mixing-matrices
