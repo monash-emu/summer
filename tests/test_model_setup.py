@@ -20,12 +20,6 @@ def test_create_model():
             times=[5, 0], compartments=["S", "I", "R"], infectious_compartments=["I"]
         )
 
-    # Start time negative
-    with pytest.raises(AssertionError):
-        CompartmentalModel(
-            times=[-1, 5], compartments=["S", "I", "R"], infectious_compartments=["I"]
-        )
-
     # Infectious compartment not a compartment
     with pytest.raises(AssertionError):
         CompartmentalModel(
