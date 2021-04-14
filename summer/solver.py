@@ -80,7 +80,7 @@ def solve_with_euler(
     """
     Solve ODE with a hand-rolled Euler's method implementation.
 
-    `WARNING: This method is too innacurate to use for real applications.`
+    `WARNING: This method is too inaccurate to use for real applications.`
     """
     step_size = solver_args.get("step_size", 0.1)
     start_time = times[0]
@@ -107,7 +107,7 @@ def solve_with_rk4(ode_func: OdeFunction, values: np.ndarray, times: np.ndarray,
     """
     Solve ODE with a hand-rolled Runge-Kutta 4 implementation.
 
-    `WARNING: This method is too innacurate to use for real applications.`
+    `WARNING: This method may require a very small time step to perform accurate numerical integration.`
     """
     step_size = solver_args.get("step_size", 0.1)
     start_time = times[0]
