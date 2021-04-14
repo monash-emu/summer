@@ -42,7 +42,7 @@ class CompartmentalModel:
         initial_population (np.ndarray): The model's starting population. The indices of this
             array will match up with ``compartments``. This is zero by default and can be set with ``set_initial_population``.
         outputs (np.ndarray): The values of each compartment for each requested timestep. For ``C`` compartments and
-            ``T`` timesteps this will be a ``CxT`` matrix. The column indices of this array will match up with ``compartments`` and the row indices will match up with ``times``.
+            ``T`` timesteps this will be a ``TxC`` matrix. The column indices of this array will match up with ``compartments`` and the row indices will match up with ``times``.
         derived_outputs (Dict[str, np.ndarray]): Additional results that are caculated from ``outputs`` for each timestep.
 
 
@@ -59,7 +59,6 @@ class CompartmentalModel:
         timestep: float = 1.0,
     ):
         start_t, end_t = times
-        assert start_t >= 0, "Start time must be >= 0"
         assert end_t > start_t, "End time must be greater than start time"
         start_t = round(start_t)
         end_t = round(end_t)
@@ -210,7 +209,7 @@ class CompartmentalModel:
     ):
         """
         Adds an importation flow to the model, where people enter the destination compartment from outside the system.
-        The number of people imported per timestep is be completely determined by ``num_imported``.
+        The number of people imported per timestep is completely determined by ``num_imported``.
 
         Args:
             name: The name of the new flow.
