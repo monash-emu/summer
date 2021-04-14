@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1618229876260,
+  "lastUpdate": 1618364977103,
   "repoUrl": "https://github.com/monash-emu/summer",
   "entries": {
     "Benchmark": [
@@ -536,6 +536,51 @@ window.BENCHMARK_DATA = {
             "unit": "iter/sec",
             "range": "stddev: 0.07752591118836348",
             "extra": "mean: 11.89128363366666 sec\nrounds: 3"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "mattdsegal@gmail.com",
+            "name": "Matthew Segal",
+            "username": "MattSegal"
+          },
+          "committer": {
+            "email": "mattdsegal@gmail.com",
+            "name": "Matthew Segal",
+            "username": "MattSegal"
+          },
+          "distinct": true,
+          "id": "ad09c341be277e71aa3f52a09289228e23db7b98",
+          "message": "Add age stratification example",
+          "timestamp": "2021-04-14T11:45:35+10:00",
+          "tree_id": "a631d7b9e2da8579eb0027a5ef2d38df1619a955",
+          "url": "https://github.com/monash-emu/summer/commit/ad09c341be277e71aa3f52a09289228e23db7b98"
+        },
+        "date": 1618364976644,
+        "tool": "pytest",
+        "benches": [
+          {
+            "name": "tests/test_benchmarks.py::test_benchmark_default_ode_solver",
+            "value": 0.1075611281812811,
+            "unit": "iter/sec",
+            "range": "stddev: 0.04352246350816902",
+            "extra": "mean: 9.297038966666682 sec\nrounds: 3"
+          },
+          {
+            "name": "tests/test_benchmarks.py::test_benchmark_rk4_ode_solver",
+            "value": 0.14703286557612102,
+            "unit": "iter/sec",
+            "range": "stddev: 0.024564496274876495",
+            "extra": "mean: 6.801200507666674 sec\nrounds: 3"
+          },
+          {
+            "name": "tests/test_benchmarks.py::test_benchmark_stochastic_solver",
+            "value": 0.09993982209560748,
+            "unit": "iter/sec",
+            "range": "stddev: 0.050201696249604695",
+            "extra": "mean: 10.006021414000012 sec\nrounds: 3"
           }
         ]
       }
