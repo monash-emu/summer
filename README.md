@@ -74,7 +74,29 @@ isort . --profile black
 
 ## Releases
 
-- 1.0.X: Initial release
+Releases are numbered using [Semantic Versioning](https://semver.org/)
+
+- 1.0.0/1: Initial release
+- 1.1.0: Add stochastic integrator
+
+## Release process
+
+To do a release:
+
+- Commit any code changes and push them to GitHub
+- Choose a new release number accoridng to [Semantic Versioning](https://semver.org/)
+- Add a release note above
+- Edit the `version` key in `pyproject.toml` to reflect the release number
+- Publish the package to [PyPI](https://pypi.org/project/summerepi/) using Poetry, you will need a PyPI login and access to the project
+- Commit the release changes and push them to GitHub (Use a commit message like "Release 1.1.0")
+- Update `requirements.txt` in Autumn to use the new version of Summer
+
+```bash
+poetry build
+poetry publish
+```
+
+poetry publish
 
 ## Documentation
 
