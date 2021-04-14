@@ -96,12 +96,22 @@ poetry build
 poetry publish
 ```
 
-poetry publish
-
 ## Documentation
 
 Sphinx is used to automatically build reference documentation for this library.
 The documentation is automatically built and deployed to [summerepi.com](http://summerepi.com/) whenever code is pushed to `master`.
+
+To edit the documentation, start a jupyter notebook server as follows:
+
+```bash
+jupyter notebook --config docs/jupyter_notebook_config.py
+```
+
+You can clean outputs from all the example notbooks with
+
+```bash
+./docs/scripts/clean.sh
+```
 
 To build and deploy
 
