@@ -58,7 +58,7 @@ def _get_test_model(timestep=1):
     model.add_sojourn_flow(name="progress", sojourn_time=7, source="EA", dest="LA")
     model.add_sojourn_flow(name="recovery", sojourn_time=7, source="LA", dest="R")
     model.add_death_flow(name="infect_death", death_rate=0.005, source="LA")
-    model.add_fractional_flow(name="warning_immunity", fractional_rate=0.01, source="R", dest="S")
+    model.add_standard_transition_flow(name="warning_immunity", fractional_rate=0.01, source="R", dest="S")
 
     # Stratify by age
     age_strat = Stratification("age", AGE_STRATA, comps)

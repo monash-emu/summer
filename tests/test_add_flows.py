@@ -30,7 +30,7 @@ def test_apply_flows__with_fractional_flow__expect_flows_applied(inf_pop, sus_po
     """
     model = CompartmentalModel(times=[0, 5], compartments=["S", "I"], infectious_compartments=["I"])
     model.set_initial_population(distribution={"S": sus_pop, "I": inf_pop})
-    model.add_fractional_flow("deliberately_infected", 0.1, "S", "I")
+    model.add_standard_transition_flow("deliberately_infected", 0.1, "S", "I")
     model._prepare_to_run()
     actual_flow_rates = model._get_compartment_rates(model.initial_population, 0)
     # Expect sus_pop * 0.1 = exp_flow
@@ -72,7 +72,7 @@ def test_apply_flows__with_function_flow__expect_flows_applied(inf_pop, sus_pop,
         times=[0, 5], compartments=["S", "I", "R"], infectious_compartments=["I"]
     )
     model.set_initial_population(distribution={"S": sus_pop, "I": inf_pop})
-    model.add_fractional_flow("infection", 0.1, "S", "I")
+    model.add_standard_transition_flow("infection", 0.1, "S", "I")
     model.add_function_flow("treatment", get_flow_rate, "I", "S")
     model._prepare_to_run()
     actual_flow_rates = model._get_compartment_rates(model.initial_population, 0)
@@ -136,7 +136,7 @@ def test_apply_infect_death_flows(inf_pop, exp_flow):
     assert_array_equal(actual_flow_rates, expected_flow_rates)
 
 
-def test_apply_univeral_death_flow():
+def test_apply_universal_death_flow():
     model = CompartmentalModel(times=[0, 5], compartments=["S", "I"], infectious_compartments=["I"])
     model.set_initial_population(distribution={"S": 990, "I": 10})
     model.add_universal_death_flows("universal_death", 0.1)
@@ -189,7 +189,7 @@ def test_apply_many_flows():
     model.add_universal_death_flows("universal_death", 0.1)
     model.add_infection_frequency_flow("infection", 0.2, "S", "I")
     model.add_sojourn_flow("recovery", 10, "I", "R")
-    model.add_fractional_flow("vaccination", 0.1, "S", "R")
+    model.add_standard_transition_flow("vaccination", 0.1, "S", "R")
     model.add_crude_birth_flow("births", 0.1, "S")
     model._prepare_to_run()
     actual_flow_rates = model._get_compartment_rates(model.initial_population, 0)

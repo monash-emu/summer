@@ -31,19 +31,19 @@ class CompartmentalModel:
     The model is run over a period of time, starting from some initial conditions to predict the future state of a disease.
 
     Args:
-        times: The start and end times.
+        times: The start and end times. ***
         compartments: The compartments to simulate.
         infectious_compartments: The compartments which are counted as infectious.
-        time_step (optional): The timesteps to return results for. Does not affect the ODE solver, but is used for the stochastic solver. Defaults to ``1``.
+        time_step (optional): The timesteps to return results for. This request does not affect the ODE solver, but is used for the stochastic solver. Defaults to ``1``.
 
     Attributes:
         times (np.ndarray): The times that the model will simulate.
         compartments (List[Compartment]): The model's compartments.
         initial_population (np.ndarray): The model's starting population. The indices of this
-            array will match up with ``compartments``. This is zero by default and can be set with ``set_initial_population``.
+            array match to the ``compartments`` attribute. This is zero by default, but should be set with the ``set_initial_population`` method.
         outputs (np.ndarray): The values of each compartment for each requested timestep. For ``C`` compartments and
             ``T`` timesteps this will be a ``TxC`` matrix. The column indices of this array will match up with ``compartments`` and the row indices will match up with ``times``.
-        derived_outputs (Dict[str, np.ndarray]): Additional results that are caculated from ``outputs`` for each timestep.
+        derived_outputs (Dict[str, np.ndarray]): Additional results that are calculated from ``outputs`` for each timestep.
 
 
     """
@@ -65,13 +65,13 @@ class CompartmentalModel:
         time_period = end_t - start_t + 1
         num_steps = time_period / timestep
         self.timestep = timestep
-        assert num_steps >= 1, "Time step should be less than time period."
-        assert num_steps % 1 == 0, "Time step should be a factor of time period"
+        assert num_steps >= 1, "Time step must be less than time period."
+        assert num_steps % 1 == 0, "Time step must be a factor of time period"
         self.times = np.linspace(start_t, end_t, num=int(num_steps))
         self.timestep = timestep
 
-        msg = "Infectious compartments must be a subset of compartments"
-        assert all(n in compartments for n in infectious_compartments), msg
+        error_msg = "Infectious compartments must be a subset of compartments"
+        assert all(n in compartments for n in infectious_compartments), error_msg
         self.compartments = [Compartment(n) for n in compartments]
         self._infectious_compartments = [Compartment(n) for n in infectious_compartments]
         self.initial_population = np.zeros_like(self.compartments, dtype=np.float)
@@ -83,7 +83,7 @@ class CompartmentalModel:
         self._flows = []
 
         # Tracks total deaths per timestep for death-replacement birth flows
-        self._total_deaths = None
+        self._timestep_deaths = None
 
         # The results calculated using the model: no outputs exist until the model has been run.
         self.outputs = None
@@ -157,6 +157,12 @@ class CompartmentalModel:
 
         """
         self._validate_param(name, birth_rate)
+        is_already_birth_flow = \
+            any([type(f) is flows.CrudeBirthFlow or type(f) is flows.ReplacementBirthFlow for f in self._flows])
+        if is_already_birth_flow:
+            msg = "There is already a birth flow in this model, cannot add a second."
+            raise ValueError(msg)
+
         self._add_entry_flow(
             flows.CrudeBirthFlow,
             name,
@@ -185,15 +191,16 @@ class CompartmentalModel:
 
         """
         # Only allow a single replacement flow to be added to the model.
-        is_already_used = any([type(f) is flows.ReplacementBirthFlow for f in self._flows])
-        if is_already_used:
-            msg = "There is already a replacement birth flow in this model, cannot add a second."
+        is_already_birth_flow = \
+            any([type(f) is flows.CrudeBirthFlow or type(f) is flows.ReplacementBirthFlow for f in self._flows])
+        if is_already_birth_flow:
+            msg = "There is already a birth flow in this model, cannot add a second."
             raise ValueError(msg)
 
         self._add_entry_flow(
             flows.ReplacementBirthFlow,
             name,
-            self._get_total_deaths,
+            self._get_timestep_deaths,
             dest,
             dest_strata,
             expected_flow_count,
@@ -221,7 +228,12 @@ class CompartmentalModel:
         """
         self._validate_param(name, num_imported)
         self._add_entry_flow(
-            flows.ImportFlow, name, num_imported, dest, dest_strata, expected_flow_count
+            flows.ImportFlow,
+            name,
+            num_imported,
+            dest,
+            dest_strata,
+            expected_flow_count
         )
 
     def _add_entry_flow(
@@ -279,7 +291,7 @@ class CompartmentalModel:
         the death rate and the compartment population.
 
         The base name will be used to create the name of each flow. For example a
-        base name of "universal_death" applied to the "S" comparement will result in a flow called
+        base name of "universal_death" applied to the "S" compartment will result in a flow called
         "universal_death_for_S".
 
         Args:
@@ -345,7 +357,7 @@ class CompartmentalModel:
         """
         Adds a flow where that models a "sojourn" through a compartment, where the flow rate
         is proportional to the inverse of the sojourn time. For example if there is a sojourn time of 10
-        days, then the flow rate will be 10% of the occupants per day.
+        days, then the flow rate will be 10% of the occupants per time unit.
 
         Args:
             name: The name of the new flow.
@@ -384,7 +396,7 @@ class CompartmentalModel:
 
         Args:
             name: The name of the new flow.
-            contact_rate: The contact rate.
+            contact_rate: The effective contact rate.
             source: The name of the source compartment.
             dest: The name of the destination compartment.
             source_strata (optional): A whitelist of strata to filter the source compartments.
@@ -440,7 +452,7 @@ class CompartmentalModel:
             find_infectious_multiplier=self._get_infection_density_multiplier,
         )
 
-    def add_fractional_flow(
+    def add_standard_transition_flow(
         self,
         name: str,
         fractional_rate: FlowParam,
@@ -615,7 +627,7 @@ class CompartmentalModel:
 
         if strat.is_strain():
             # Track disease strain names, overriding default values.
-            msg = "A disease strain stratification has already been applied, cannot use more than one."
+            msg = "An infection strain stratification has already been applied, cannot use this more than once."
             assert not any([s.is_strain() for s in self._stratifications]), msg
             self._disease_strains = strat.strata
 
@@ -808,7 +820,7 @@ class CompartmentalModel:
                 comp_rates[flow.dest.idx] += net_flow
             if flow.is_death_flow:
                 # Track total deaths for any later birth replacement flows.
-                self._total_deaths += net_flow
+                self._timestep_deaths += net_flow
 
         if self._iter_function_flows:
             # Evaluate the function flows.
@@ -965,7 +977,7 @@ class CompartmentalModel:
                             comp_name, {strat.name: stratum}
                         )
                         if should_apply_adjustment:
-                            # Cannot use time-varying funtions for infectiousness adjustments,
+                            # Cannot use time-varying functions for infectiousness adjustments,
                             # because this is calculated before the model starts running.
                             inf_value = adjustment.get_new_value(inf_value, None)
 
@@ -988,7 +1000,7 @@ class CompartmentalModel:
         Here we set up any stateful updates that need to happen before we get the flow rates.
         """
         # Prepare total deaths for tracking deaths.
-        self._total_deaths = 0
+        self._timestep_deaths = 0
 
         # Find the effective infectious population for the force of infection (FoI) calculations.
         mixing_matrix = self._get_mixing_matrix(time)
@@ -1014,8 +1026,8 @@ class CompartmentalModel:
 
             # Calculate total infected person frequency per category, including adjustment factors.
             # A vector with size (num_cats x 1).
-            category_frequency = infectious_populations / self._category_populations
-            self._infection_frequency[strain] = np.matmul(mixing_matrix, category_frequency)
+            category_prevalence = infectious_populations / self._category_populations
+            self._infection_frequency[strain] = np.matmul(mixing_matrix, category_prevalence)
 
     def _clean_compartment_values(self, compartment_values: np.ndarray):
         """
@@ -1034,9 +1046,9 @@ class CompartmentalModel:
         """
         return self._category_lookup[source.idx]
 
-    def _get_total_deaths(self, *args, **kwargs) -> float:
-        assert self._total_deaths is not None, "Total deaths has not been set."
-        return self._total_deaths
+    def _get_timestep_deaths(self, *args, **kwargs) -> float:
+        assert self._timestep_deaths is not None, "Total deaths has not been set."
+        return self._timestep_deaths
 
     def _get_infection_frequency_multiplier(self, source: Compartment, dest: Compartment) -> float:
         """

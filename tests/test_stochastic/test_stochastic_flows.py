@@ -27,7 +27,7 @@ def test_stochastic_transition_flows(pop, rtol, recovery_rate):
     s_pop = 0.10 * pop
     i_pop = 0.90 * pop
     model.set_initial_population(distribution={"S": s_pop, "I": i_pop})
-    model.add_fractional_flow("recovery", recovery_rate, "I", "R")
+    model.add_standard_transition_flow("recovery", recovery_rate, "I", "R")
     model.run_stochastic(RANDOM_SEED)
 
     # No change to susceptible compartments

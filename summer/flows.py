@@ -17,7 +17,7 @@ class BaseFlow(ABC):
     """
     :meta private:
     Abstract base class for all flows.
-    A flow represents the movement of people from one compartment to another.
+    A flow represents the movement of people into, between or out of compartments.
     """
 
     name = None
@@ -513,7 +513,7 @@ class SojournFlow(BaseTransitionFlow):
 class FunctionFlow(BaseTransitionFlow):
     """
     A flow that transfers people from a source to a destination based on a user-defined function.
-    This can be used to define more complex flows if requird.
+    This can be used to define more complex flows if required.
 
     Args:
         name: The flow name.
