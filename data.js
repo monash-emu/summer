@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1618444830756,
+  "lastUpdate": 1618446378589,
   "repoUrl": "https://github.com/monash-emu/summer",
   "entries": {
     "Benchmark": [
@@ -941,6 +941,51 @@ window.BENCHMARK_DATA = {
             "unit": "iter/sec",
             "range": "stddev: 0.09589407651517237",
             "extra": "mean: 12.740434275333334 sec\nrounds: 3"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "mattdsegal@gmail.com",
+            "name": "Matthew Segal",
+            "username": "MattSegal"
+          },
+          "committer": {
+            "email": "mattdsegal@gmail.com",
+            "name": "Matthew Segal",
+            "username": "MattSegal"
+          },
+          "distinct": true,
+          "id": "f54ed8feb7a1fc5ad92c71fbee5ddad2ad63edec",
+          "message": "Rerun tests",
+          "timestamp": "2021-04-15T10:22:10+10:00",
+          "tree_id": "1db585bc776854d291b84ff7c16f6faac6058bf7",
+          "url": "https://github.com/monash-emu/summer/commit/f54ed8feb7a1fc5ad92c71fbee5ddad2ad63edec"
+        },
+        "date": 1618446376625,
+        "tool": "pytest",
+        "benches": [
+          {
+            "name": "tests/test_benchmarks.py::test_benchmark_default_ode_solver",
+            "value": 0.1029450971174544,
+            "unit": "iter/sec",
+            "range": "stddev: 0.09288377059540927",
+            "extra": "mean: 9.713915747333337 sec\nrounds: 3"
+          },
+          {
+            "name": "tests/test_benchmarks.py::test_benchmark_rk4_ode_solver",
+            "value": 0.13886141808241131,
+            "unit": "iter/sec",
+            "range": "stddev: 0.02049498896764549",
+            "extra": "mean: 7.201424368333335 sec\nrounds: 3"
+          },
+          {
+            "name": "tests/test_benchmarks.py::test_benchmark_stochastic_solver",
+            "value": 0.09262572812605557,
+            "unit": "iter/sec",
+            "range": "stddev: 0.06984804010052859",
+            "extra": "mean: 10.796136453999983 sec\nrounds: 3"
           }
         ]
       }
