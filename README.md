@@ -105,6 +105,7 @@ To edit the documentation, start a jupyter notebook server as follows:
 
 ```bash
 jupyter notebook --config docs/jupyter_notebook_config.py
+# Go to http://localhost:8888/tree/docs/examples in your web browser.
 ```
 
 You can clean outputs from all the example notbooks with
