@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1618443274978,
+  "lastUpdate": 1618444830756,
   "repoUrl": "https://github.com/monash-emu/summer",
   "entries": {
     "Benchmark": [
@@ -896,6 +896,51 @@ window.BENCHMARK_DATA = {
             "unit": "iter/sec",
             "range": "stddev: 0.10595700919718117",
             "extra": "mean: 11.730843232333351 sec\nrounds: 3"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "mattdsegal@gmail.com",
+            "name": "Matthew Segal",
+            "username": "MattSegal"
+          },
+          "committer": {
+            "email": "mattdsegal@gmail.com",
+            "name": "Matthew Segal",
+            "username": "MattSegal"
+          },
+          "distinct": true,
+          "id": "2fc491c6bd3d1ac4f037d11a27946a98cd4ba825",
+          "message": "Add process to help clean notebooks",
+          "timestamp": "2021-04-15T09:55:43+10:00",
+          "tree_id": "ece1fd239516e40e65d8dfda838c29473e74569a",
+          "url": "https://github.com/monash-emu/summer/commit/2fc491c6bd3d1ac4f037d11a27946a98cd4ba825"
+        },
+        "date": 1618444830231,
+        "tool": "pytest",
+        "benches": [
+          {
+            "name": "tests/test_benchmarks.py::test_benchmark_default_ode_solver",
+            "value": 0.08894308400244001,
+            "unit": "iter/sec",
+            "range": "stddev: 0.014644629520223001",
+            "extra": "mean: 11.24314511033333 sec\nrounds: 3"
+          },
+          {
+            "name": "tests/test_benchmarks.py::test_benchmark_rk4_ode_solver",
+            "value": 0.1208305268184618,
+            "unit": "iter/sec",
+            "range": "stddev: 0.056542898422032695",
+            "extra": "mean: 8.276054291333347 sec\nrounds: 3"
+          },
+          {
+            "name": "tests/test_benchmarks.py::test_benchmark_stochastic_solver",
+            "value": 0.0784902600954579,
+            "unit": "iter/sec",
+            "range": "stddev: 0.09589407651517237",
+            "extra": "mean: 12.740434275333334 sec\nrounds: 3"
           }
         ]
       }
