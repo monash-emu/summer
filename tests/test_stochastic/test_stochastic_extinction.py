@@ -99,7 +99,7 @@ def test_stochastic_recovery_exitinction(recovery_rate, contact_rate):
             infectious_compartments=["I"],
         )
         model.set_initial_population(distribution={"S": 999, "I": 1})
-        model.add_standard_transition_flow("recovery", recovery_rate, "I", "R")
+        model.add_transition_flow("recovery", recovery_rate, "I", "R")
         model.add_infection_frequency_flow("infection", contact_rate, "S", "I")
         model.run_stochastic()
         is_extinct = model.outputs[1, 1] == 0
@@ -141,7 +141,7 @@ def test_stochastic_exitinction(death_rate, recovery_rate, contact_rate):
         )
         model.set_initial_population(distribution={"S": 999, "I": 1})
         model.add_death_flow("infect_death", death_rate, "I")
-        model.add_standard_transition_flow("recovery", recovery_rate, "I", "R")
+        model.add_transition_flow("recovery", recovery_rate, "I", "R")
         model.add_infection_frequency_flow("infection", contact_rate, "S", "I")
         model.run_stochastic()
         is_extinct = model.outputs[1, 1] == 0
