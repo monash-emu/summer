@@ -220,7 +220,7 @@ class CompartmentalModel:
 
         Args:
             name: The name of the new flow.
-            num_imported: The number of people imported per timestep.
+            num_imported: The number of people arriving per timestep.
             dest: The name of the destination compartment.
             dest_strata (optional): A whitelist of strata to filter the destination compartments.
             expected_flow_count (optional): Used to assert that a particular number of flows are created.
@@ -452,7 +452,7 @@ class CompartmentalModel:
             find_infectious_multiplier=self._get_infection_density_multiplier,
         )
 
-    def add_standard_transition_flow(
+    def add_transition_flow(
         self,
         name: str,
         fractional_rate: FlowParam,
@@ -851,7 +851,7 @@ class CompartmentalModel:
                 if adj and callable(adj.param):
                     funcs.add(adj.param)
 
-        # Cache return values to prevent re-computation. This will a little leak memory, which is (mostly) fine.
+        # Cache return values to prevent re-computation. This will cause a little memory leak, which is (mostly) fine.
         funcs_cached = {}
         for func in funcs:
             # Floating point return type is 8 bytes, meaning 2**17 values is ~1MB of memory.
@@ -925,7 +925,7 @@ class CompartmentalModel:
             - the infected population per category
             - the inter-category mixing coefficients (mixing matrix)
 
-        We can calculate the infection density or frequency per category.
+        We can calculate infection density or infection frequency transition flows for each category.
         Finally, at runtime, we can lookup which category a given compartment is in and look up its infectious multiplier (density or frequency).
         """
         # Figure out which compartments should be infectious
@@ -1089,6 +1089,8 @@ class CompartmentalModel:
         """
         Request that we should only calculate a subset of the model's derived outputs.
         This can be useful when you only care about some results and you want to cut down on runtime.
+        For example, we may only need some derived outputs for calibration, but may need more later when we want to know
+        all the dyanmics that the model actually showed.
 
         Args:
             whitelist: A list of the derived output names to calculate, ignoring all others.
@@ -1119,8 +1121,8 @@ class CompartmentalModel:
         raw_results: bool = False,
     ):
         """
-        Adds a derived output to the model's results. The output
-        will be the value of the requested flow at the at each timestep.
+        Adds a derived output to the model's results.
+        The output will be the value of the requested flow at each timestep.
 
         Args:
             name: The name of the derived output.
@@ -1219,8 +1221,8 @@ class CompartmentalModel:
         save_results: bool = True,
     ):
         """
-        Adds a derived output to the model's results. The output will be the cumulative value
-        of another derived outputs over the model's time period.
+        Adds a derived output to the model's results. The output will be the accumulated values of another derived
+        output over the model's time period.
 
         Args:
             name: The name of the derived output.
@@ -1259,7 +1261,7 @@ class CompartmentalModel:
             save_results (optional): Whether to save or discard the results.
 
         Example:
-            Request a function-based derived ouput::
+            Request a function-based derived output:
 
                 model.request_output_for_compartments(
                     compartments=["S", "E", "I", "R"],
@@ -1269,7 +1271,7 @@ class CompartmentalModel:
                 model.request_output_for_compartments(
                     compartments=["R"],
                     name="recovered_population",
-                     save_results=False
+                    save_results=False
                 )
 
                 def calculate_proportion_seropositive(recovered_pop, total_pop):
