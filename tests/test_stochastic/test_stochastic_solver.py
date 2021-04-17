@@ -112,7 +112,7 @@ def test_solve_stochastic(monkeypatch):
     model.add_crude_birth_flow("birth", 8, "S")
     model.add_infection_frequency_flow("infection", 6, "S", "I")
     model.add_death_flow("infect_death", 3, "I")
-    model.add_fractional_flow("recovery", 2, "I", "R")
+    model.add_transition_flow("recovery", 2, "I", "R")
 
     # Mock out flow rate calculation - tested elsewhere and tricky to predict.
     def mock_get_rates(comp_vals, time):
