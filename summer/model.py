@@ -575,8 +575,9 @@ class CompartmentalModel:
         error_msg = f"Parameter for {flow_name} must be >= 0 for all timesteps: {param}"
         assert is_all_positive, error_msg
 
+    @staticmethod
     def _validate_expected_flow_count(
-        self, expected_count: Optional[int], new_flows: List[flows.BaseFlow]
+        expected_count: Optional[int], new_flows: List[flows.BaseFlow]
     ):
         """
         Ensure the number of new flows created is the expected amount
@@ -1029,7 +1030,8 @@ class CompartmentalModel:
             category_prevalence = infectious_populations / self._category_populations
             self._infection_frequency[strain] = np.matmul(mixing_matrix, category_prevalence)
 
-    def _clean_compartment_values(self, compartment_values: np.ndarray):
+    @staticmethod
+    def _clean_compartment_values(compartment_values: np.ndarray):
         """
         Zero out -ve compartment sizes in flow rate calculations,
         to prevent negative values from messing up the direction of flows.
