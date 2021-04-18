@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1618472395279,
+  "lastUpdate": 1618788999687,
   "repoUrl": "https://github.com/monash-emu/summer",
   "entries": {
     "Benchmark": [
@@ -1076,6 +1076,51 @@ window.BENCHMARK_DATA = {
             "unit": "iter/sec",
             "range": "stddev: 0.03159054004071895",
             "extra": "mean: 9.823218664999994 sec\nrounds: 3"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "mattdsegal@gmail.com",
+            "name": "Matthew Segal",
+            "username": "MattSegal"
+          },
+          "committer": {
+            "email": "mattdsegal@gmail.com",
+            "name": "Matthew Segal",
+            "username": "MattSegal"
+          },
+          "distinct": true,
+          "id": "cc4c722367734ba70a8f6111346941bf0245ff59",
+          "message": "Update docs to use renamed transition flow, renamed FractionalFlow to TransitionFlow, add release note",
+          "timestamp": "2021-04-19T09:31:53+10:00",
+          "tree_id": "9dbd7fe7dad60aa04ca90908a8be151ed0f56275",
+          "url": "https://github.com/monash-emu/summer/commit/cc4c722367734ba70a8f6111346941bf0245ff59"
+        },
+        "date": 1618788998744,
+        "tool": "pytest",
+        "benches": [
+          {
+            "name": "tests/test_benchmarks.py::test_benchmark_default_ode_solver",
+            "value": 0.08824824475520789,
+            "unit": "iter/sec",
+            "range": "stddev: 0.043094747380775296",
+            "extra": "mean: 11.331670139999991 sec\nrounds: 3"
+          },
+          {
+            "name": "tests/test_benchmarks.py::test_benchmark_rk4_ode_solver",
+            "value": 0.12004926877213096,
+            "unit": "iter/sec",
+            "range": "stddev: 0.010262895006865794",
+            "extra": "mean: 8.329913294999983 sec\nrounds: 3"
+          },
+          {
+            "name": "tests/test_benchmarks.py::test_benchmark_stochastic_solver",
+            "value": 0.08327428983087584,
+            "unit": "iter/sec",
+            "range": "stddev: 0.04531643987577885",
+            "extra": "mean: 12.008508292666667 sec\nrounds: 3"
           }
         ]
       }
