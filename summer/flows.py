@@ -468,7 +468,7 @@ class DeathFlow(BaseExitFlow):
         return flow_rate
 
 
-class FractionalFlow(BaseTransitionFlow):
+class TransitionFlow(BaseTransitionFlow):
     """
     A flow that transfers people from a source to a destination based on
     the population of the source compartment and the fractional flow rate.

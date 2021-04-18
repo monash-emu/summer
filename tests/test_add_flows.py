@@ -57,7 +57,7 @@ def test_apply_flows__too_many_birth_flows():
 @pytest.mark.parametrize(
     "inf_pop, sus_pop, exp_flow", [(10, 990, 99), (500, 500, 50), (0, 1000, 100), (1000, 0, 0)]
 )
-def test_apply_flows__with_fractional_flow__expect_flows_applied(inf_pop, sus_pop, exp_flow):
+def test_apply_flows__with_transition_flow__expect_flows_applied(inf_pop, sus_pop, exp_flow):
     """
     Expect a flow to occur proportional to the compartment size and parameter.
     """

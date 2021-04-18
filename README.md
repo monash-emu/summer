@@ -4,7 +4,7 @@
 
 Summer is a compartmental disease modelling framework, written in Python. It provides a high-level API to build and run models. Features include:
 
-- A variety of inter-compartmental flows (infections, sojourn, fractional, births, deaths, imports)
+- A variety of inter-compartmental flows (infections, sojourn, transitions, births, deaths, imports)
 - Force of infection multipliers (frequency, density)
 - Post-processing of compartment sizes into derived outputs
 - Stratification of compartments, including:
@@ -78,6 +78,7 @@ Releases are numbered using [Semantic Versioning](https://semver.org/)
 
 - 1.0.0/1: Initial release
 - 1.1.0: Add stochastic integrator
+- 2.0.0: Rename fractional flow to transition flow (not released)
 
 ## Release process
 

@@ -157,8 +157,12 @@ class CompartmentalModel:
 
         """
         self._validate_param(name, birth_rate)
-        is_already_birth_flow = \
-            any([type(f) is flows.CrudeBirthFlow or type(f) is flows.ReplacementBirthFlow for f in self._flows])
+        is_already_birth_flow = any(
+            [
+                type(f) is flows.CrudeBirthFlow or type(f) is flows.ReplacementBirthFlow
+                for f in self._flows
+            ]
+        )
         if is_already_birth_flow:
             msg = "There is already a birth flow in this model, cannot add a second."
             raise ValueError(msg)
@@ -191,8 +195,12 @@ class CompartmentalModel:
 
         """
         # Only allow a single replacement flow to be added to the model.
-        is_already_birth_flow = \
-            any([type(f) is flows.CrudeBirthFlow or type(f) is flows.ReplacementBirthFlow for f in self._flows])
+        is_already_birth_flow = any(
+            [
+                type(f) is flows.CrudeBirthFlow or type(f) is flows.ReplacementBirthFlow
+                for f in self._flows
+            ]
+        )
         if is_already_birth_flow:
             msg = "There is already a birth flow in this model, cannot add a second."
             raise ValueError(msg)
@@ -228,12 +236,7 @@ class CompartmentalModel:
         """
         self._validate_param(name, num_imported)
         self._add_entry_flow(
-            flows.ImportFlow,
-            name,
-            num_imported,
-            dest,
-            dest_strata,
-            expected_flow_count
+            flows.ImportFlow, name, num_imported, dest, dest_strata, expected_flow_count
         )
 
     def _add_entry_flow(
@@ -477,7 +480,7 @@ class CompartmentalModel:
 
         """
         self._add_transition_flow(
-            flows.FractionalFlow,
+            flows.TransitionFlow,
             name,
             fractional_rate,
             source,

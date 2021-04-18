@@ -4,7 +4,7 @@ from numpy.testing import assert_array_equal
 
 
 from summer import stochastic, CompartmentalModel
-from summer.flows import DeathFlow, FractionalFlow
+from summer.flows import DeathFlow, TransitionFlow
 from summer.compartment import Compartment
 
 ENTRY_FLOW_TESTS = [
@@ -78,9 +78,9 @@ def test_build_flow_map():
     R.idx = 2
     exit_a = DeathFlow("a", source=S, param=1.0)
     exit_b = DeathFlow("b", source=I, param=1.0)
-    trans_c = FractionalFlow("c", source=S, dest=I, param=1.0)
-    trans_d = FractionalFlow("d", source=I, dest=R, param=1.0)
-    trans_e = FractionalFlow("e", source=R, dest=S, param=1.0)
+    trans_c = TransitionFlow("c", source=S, dest=I, param=1.0)
+    trans_d = TransitionFlow("d", source=I, dest=R, param=1.0)
+    trans_e = TransitionFlow("e", source=R, dest=S, param=1.0)
     flows = [exit_a, exit_b, trans_c, trans_d, trans_e]
     expected_map = np.array(
         [
