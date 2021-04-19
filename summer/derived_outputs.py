@@ -84,7 +84,7 @@ def calculate_derived_outputs(
     # We need to do this here because some solvers do not necessarily evaluate all timesteps.
     flow_values = np.zeros((len(times), len(flows)))
     for time_idx, time in enumerate(times):
-        # Flow rates are per unit time so we need to normalize by timestep.
+        # Flow rates are instantaneous; we need to provide and integrated value over timestep
         flow_values[time_idx, :] = get_flow_rates(outputs[time_idx], time) * timestep
 
     # Convert tracked flow values into a matrix where the 1st dimension is flow type, 2nd is time
@@ -138,18 +138,19 @@ def _get_flow_output(request, times, flows, flow_values):
 
     use_raw_results = request["raw_results"]
     if use_raw_results:
-        # Use interpolated flow rates wiuth no post-processing.
+        # Use interpolated flow rates with no post-processing.
         return this_flow_values
     else:
-        # Set the "flow rate" at time `t` to be an estimate of the flow rate
-        # that is calculated at time `t-1`. By convention, flows are zero at t=0.
+        # Set the "flow value" at time `t` to be a midpoint approximation of the integrated flow
+        # bewteen `t-1` and 't'
         # This is done so that we can estimate the number of people moving between compartments
         # using tracked flow rates.
-        ignore_first_timestep_output = np.zeros(times.shape)
-        ignore_first_timestep_output[1:] = this_flow_values[1:]
-        offset_output = np.zeros(times.shape)
-        offset_output[1:] = this_flow_values[:-1]
-        return (offset_output + ignore_first_timestep_output) / 2
+        midpoint_output = np.zeros(times.shape)
+        # First point just uses existing value since no 't=-1' step is available
+        # Client using these outputs will typically the first value
+        midpoint_output[0] = this_flow_values[0]
+        midpoint_output[1:] = (this_flow_values[1:] + this_flow_values[:-1]) * 0.5
+        return midpoint_output
 
 
 def _get_compartment_output(request, outputs, compartments):
