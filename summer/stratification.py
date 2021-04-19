@@ -70,7 +70,7 @@ class Stratification:
 
         """
         msg = f"All strata must be specified when setting population split: {proportions}"
-        assert list(proportions.keys()) == self.strata, msg
+        assert set(list(proportions.keys())) == set(self.strata), msg
         msg = f"All proportions must be >= 0 when setting population split: {proportions}"
         assert all([v >= 0 for v in proportions.values()]), msg
         msg = f"All proportions sum to 1+/-0.01 when setting population split: {proportions}"
