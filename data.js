@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1618816243222,
+  "lastUpdate": 1618875553174,
   "repoUrl": "https://github.com/monash-emu/summer",
   "entries": {
     "Benchmark": [
@@ -1256,6 +1256,51 @@ window.BENCHMARK_DATA = {
             "unit": "iter/sec",
             "range": "stddev: 0.08103586570407657",
             "extra": "mean: 8.78670638799999 sec\nrounds: 3"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "mattdsegal@gmail.com",
+            "name": "Matthew Segal",
+            "username": "MattSegal"
+          },
+          "committer": {
+            "email": "mattdsegal@gmail.com",
+            "name": "Matthew Segal",
+            "username": "MattSegal"
+          },
+          "distinct": true,
+          "id": "66a3656eab1cd9a74c43dab4f144c2c6a4da11a1",
+          "message": "Fix bug in validationg stratified population split",
+          "timestamp": "2021-04-20T09:35:17+10:00",
+          "tree_id": "eaf7d303336a9924c3956cfa9e61c15189646b55",
+          "url": "https://github.com/monash-emu/summer/commit/66a3656eab1cd9a74c43dab4f144c2c6a4da11a1"
+        },
+        "date": 1618875552604,
+        "tool": "pytest",
+        "benches": [
+          {
+            "name": "tests/test_benchmarks.py::test_benchmark_default_ode_solver",
+            "value": 0.1064328524824932,
+            "unit": "iter/sec",
+            "range": "stddev: 0.19398293111379983",
+            "extra": "mean: 9.39559521966666 sec\nrounds: 3"
+          },
+          {
+            "name": "tests/test_benchmarks.py::test_benchmark_rk4_ode_solver",
+            "value": 0.14796503586301207,
+            "unit": "iter/sec",
+            "range": "stddev: 0.024194364593469596",
+            "extra": "mean: 6.75835337833333 sec\nrounds: 3"
+          },
+          {
+            "name": "tests/test_benchmarks.py::test_benchmark_stochastic_solver",
+            "value": 0.1103344017877622,
+            "unit": "iter/sec",
+            "range": "stddev: 0.28724984770612305",
+            "extra": "mean: 9.063356340333334 sec\nrounds: 3"
           }
         ]
       }
