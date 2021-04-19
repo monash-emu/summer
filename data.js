@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1618788999687,
+  "lastUpdate": 1618807334562,
   "repoUrl": "https://github.com/monash-emu/summer",
   "entries": {
     "Benchmark": [
@@ -1121,6 +1121,51 @@ window.BENCHMARK_DATA = {
             "unit": "iter/sec",
             "range": "stddev: 0.04531643987577885",
             "extra": "mean: 12.008508292666667 sec\nrounds: 3"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "mattdsegal@gmail.com",
+            "name": "Matthew Segal",
+            "username": "MattSegal"
+          },
+          "committer": {
+            "email": "mattdsegal@gmail.com",
+            "name": "Matthew Segal",
+            "username": "MattSegal"
+          },
+          "distinct": true,
+          "id": "9fa7498da732c835cd80e0da1087272c79a4e3b3",
+          "message": "Remove sojourn flows from docs, improve and expand docs",
+          "timestamp": "2021-04-19T14:38:18+10:00",
+          "tree_id": "8e91b7b3b4ca79657963ccd2e3294c5afadfa710",
+          "url": "https://github.com/monash-emu/summer/commit/9fa7498da732c835cd80e0da1087272c79a4e3b3"
+        },
+        "date": 1618807334008,
+        "tool": "pytest",
+        "benches": [
+          {
+            "name": "tests/test_benchmarks.py::test_benchmark_default_ode_solver",
+            "value": 0.10906888880409733,
+            "unit": "iter/sec",
+            "range": "stddev: 0.03671427915090595",
+            "extra": "mean: 9.168517355999995 sec\nrounds: 3"
+          },
+          {
+            "name": "tests/test_benchmarks.py::test_benchmark_rk4_ode_solver",
+            "value": 0.15125563706220138,
+            "unit": "iter/sec",
+            "range": "stddev: 0.054879910911191036",
+            "extra": "mean: 6.611323845000015 sec\nrounds: 3"
+          },
+          {
+            "name": "tests/test_benchmarks.py::test_benchmark_stochastic_solver",
+            "value": 0.10297029892272525,
+            "unit": "iter/sec",
+            "range": "stddev: 0.0703489510675232",
+            "extra": "mean: 9.711538283000001 sec\nrounds: 3"
           }
         ]
       }
