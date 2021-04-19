@@ -1,7 +1,8 @@
 Summer documentation
 ==================================
 
-Summer is a disease modelling framework, written in Python. This library provides a high level interface for defining and running [compartmental models](https://en.wikipedia.org/wiki/Compartmental_models_in_epidemiology).
+Summer is a disease modelling framework, written in Python. This library provides a high level interface for defining and running `compartmental models <https://en.wikipedia.org/wiki/Compartmental_models_in_epidemiology>`_.
+
 Features include:
 
 - A variety of inter-compartmental flows
