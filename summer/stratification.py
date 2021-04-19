@@ -74,7 +74,7 @@ class Stratification:
         msg = f"All proportions must be >= 0 when setting population split: {proportions}"
         assert all([v >= 0 for v in proportions.values()]), msg
         msg = f"All proportions sum to 1+/-0.01 when setting population split: {proportions}"
-        assert abs(1 - sum(proportions.values())) < 1e2, msg
+        assert abs(1 - sum(proportions.values())) < 1e-2, msg
         self.population_split = proportions
 
     def add_flow_adjustments(
