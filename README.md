@@ -2,7 +2,7 @@
 
 [![Automated Tests](https://github.com/monash-emu/summer/actions/workflows/tests.yml/badge.svg)](https://github.com/monash-emu/summer/actions/workflows/tests.yml)
 
-Summer is a compartmental disease modelling framework, written in Python. It provides a high-level API to build and run models. Features include:
+Summer is a [compartmental](https://en.wikipedia.org/wiki/Compartmental_models_in_epidemiology) disease modelling framework, written in Python. It provides a high-level API to build and run models. Features include:
 
 - A variety of inter-compartmental flows (infections, sojourn, transitions, births, deaths, imports)
 - Force of infection multipliers (frequency, density)
