@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1618898534408,
+  "lastUpdate": 1618901291728,
   "repoUrl": "https://github.com/monash-emu/summer",
   "entries": {
     "Benchmark": [
@@ -1391,6 +1391,51 @@ window.BENCHMARK_DATA = {
             "unit": "iter/sec",
             "range": "stddev: 0.09434796056527134",
             "extra": "mean: 11.677267789333333 sec\nrounds: 3"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "mattdsegal@gmail.com",
+            "name": "Matthew Segal",
+            "username": "MattSegal"
+          },
+          "committer": {
+            "email": "mattdsegal@gmail.com",
+            "name": "Matthew Segal",
+            "username": "MattSegal"
+          },
+          "distinct": true,
+          "id": "e763524628442495d9f6a73184db09d057c7601f",
+          "message": "Improve stochastic example docs after review",
+          "timestamp": "2021-04-20T16:44:13+10:00",
+          "tree_id": "2c9a32da29365514d51b6c23ab46743981c07fbc",
+          "url": "https://github.com/monash-emu/summer/commit/e763524628442495d9f6a73184db09d057c7601f"
+        },
+        "date": 1618901288285,
+        "tool": "pytest",
+        "benches": [
+          {
+            "name": "tests/test_benchmarks.py::test_benchmark_default_ode_solver",
+            "value": 0.1073751904989113,
+            "unit": "iter/sec",
+            "range": "stddev: 0.044821313664761955",
+            "extra": "mean: 9.31313830833333 sec\nrounds: 3"
+          },
+          {
+            "name": "tests/test_benchmarks.py::test_benchmark_rk4_ode_solver",
+            "value": 0.14811124962771913,
+            "unit": "iter/sec",
+            "range": "stddev: 0.021292358033336158",
+            "extra": "mean: 6.751681607666683 sec\nrounds: 3"
+          },
+          {
+            "name": "tests/test_benchmarks.py::test_benchmark_stochastic_solver",
+            "value": 0.1002021157571331,
+            "unit": "iter/sec",
+            "range": "stddev: 0.032746544491706726",
+            "extra": "mean: 9.979829192666651 sec\nrounds: 3"
           }
         ]
       }
