@@ -12,6 +12,7 @@ NO_DESTINATION = -1
 def build_flow_map(flows) -> np.ndarray:
     """
     Create an list that maps flows to the source and destination compartments.
+    This is done because numba like ndarrays, and numba is fast.
     """
     flow_map = []
     for flow_idx, flow in enumerate(flows):
@@ -31,6 +32,23 @@ def build_flow_map(flows) -> np.ndarray:
 
 
 def sample_transistion_flows(seed, flow_rates, flow_map, comp_vals, timestep):
+    """
+    Returns a 1D array of changes to each compartment due to transition and exit flows.
+    The number of transitions are calculated by sampling from a multinomial distribution.
+
+    The probability of an individual leaving a compartment, and their probability
+    of leaving via a given flow is calculated according to the method outlined in this doc:
+
+        https://autumn-files.s3-ap-southeast-2.amazonaws.com/Switching_to_stochastic_mode.pdf
+
+    Args:
+        seed: random seed for multinomial sampling
+        flow_rates: 2D FxC array (F - flows, C - compartments) of flow rates out of a given compartment
+        flow_map: 2D array mapping of flow idxs to compartment idxs, creating using `build_flow_map`.
+        comp_vals: 1D array of current compartment values
+        timestep: timestep being used for solver
+
+    """
     # Normalize flow rates by compartment size
     flow_rates_normalized = np.true_divide(
         flow_rates,
@@ -119,6 +137,19 @@ def _map_sampled_flows(comp_changes: np.ndarray, flow_map: np.ndarray, sampled_f
 
 
 def sample_entry_flows(seed: Optional[int], entry_flow_rates: np.ndarray, timestep: float):
+    """
+    Returns a 1D array of new arrivals to each compartment due to entry flows.
+    The new arrivals are calculated by sampling from a Poisson distribution, where
+    the provided entry flow rates are assumed to be the mean number of arrivals.
+
+    https://en.wikipedia.org/wiki/Poisson_distribution
+
+    Args:
+        seed: random seed for Poisson sampling
+        entry_flow_rates: 1D array of mean net entry flows per time-unit into each compartment
+        timestep: timestep being used for solver
+
+    """
     entry_changes = np.zeros_like(entry_flow_rates)
     _sample_entry_flows(seed, entry_changes, entry_flow_rates, timestep)
     return entry_changes

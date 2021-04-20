@@ -702,9 +702,11 @@ class CompartmentalModel:
         """
         self._prepare_to_run()
         if solver == SolverType.STOCHASTIC:
+            # Run the model in 'stochastic mode'.
             seed = kwargs.get("seed")
             self._solve_stochastic(seed)
         else:
+            # Run the model as a deterministic ODE
             self._solve_ode(solver, kwargs)
 
         # Calculate any requested derived outputs, based on the calculated compartment sizes.
@@ -734,30 +736,66 @@ class CompartmentalModel:
     def _solve_stochastic(self, seed: Optional[int] = None):
         """
         Runs the model over the provided time span, calculating the outputs.
-        Uses an stochastic interpretation of flow rates.
-        See here for more details:
+        This method is stochastic: each run may produce different results.
+        A random seed (eg. 12345, 1337) can be provided to ensure the same results are produced.
 
-            https://autumn-files.s3-ap-southeast-2.amazonaws.com/Switching_to_stochastic_mode.pdf
+        With this approach we represent a discrete number of people, unlike in the ODE solver, there
+        is way to have of 'half a person' or a compartment size of 101.23. Both compartment sizes and
+        flows are discrete.
+
+        We use an stochastic interpretation of flow rates.
+        The flow rates from _get_rates() are used to calculate the probability of an person
+            - entering the model (births, imports)
+            - leaving the model (deaths)
+            - moving between compartments (transitions, infections)
+
+        There are two sampling methods used:
+            - Transition and exit flows are sampled from an exponential distribution using a multinomial
+            - Entry flows are sampled froma  Poisson distribution
+
+        The main difference is that there is no 'source' compartment for entry flows.
+
+        See here for more detail on the underlying theory and how this approach can be used:
+
+            http://summerepi.com/examples/5-stochastic-solver.html#How-it-works
+
+        There are three main steps to this method:
+            - 1. calculate the flow rates
+            - 2. split the flow rates into entry or transition flows
+            - 3. calculate and sample the probabilities given the flow rates
 
         """
         self.outputs = np.zeros((len(self.times), len(self.initial_population)), dtype=np.int)
         self.outputs[0] = self.initial_population
 
-        # Create an list that maps flows to the source and destination compartments.
+        # Create an array that maps flows to the source and destination compartments.
+        # This is done because numba like ndarrays, and numba is fast.
         flow_map = stochastic.build_flow_map(self._flows)
 
-        # Calculate compartment sizes for each time step.
+        # Evaluate the model: calculate compartment sizes for each timestep.
         for time_idx, time in enumerate(self.times):
             if time_idx == 0:
+                # Skip time zero, use initial conditions.
                 continue
 
-            # Calculate flow rates: they derivatives and define an ODE which describes the system.
+            # Calculate the flow rates at this timestep.
+            # These describe the rate (people/timeunit) at which people follow the flow.
             # Later we will convert these to probabilities.
             comp_vals = self._clean_compartment_values(self.outputs[time_idx - 1])
             _, flow_rates = self._get_rates(comp_vals, time)
+
+            # We split the calculatd flow rates into entry or {transition, exit} flows,
+            # because we handle them separately with different methods.
+
+            # Transition (and exit) flow are stored in a 2D FxC ndarray where f is the flow idx
+            # and c is the compartment idx, giving us a matrix of flows rates out of each compartment.
             transition_flow_rates = np.zeros((len(self._flows), len(comp_vals)))
+
+            # Entry flows are stored in 1D C sized ndarray with one element per compartment.
+            # Giving us a vector of *net* flow rates into each compartment from outside the system.
             entry_flow_rates = np.zeros_like(comp_vals)
-            # Split flow rates into entry or {transition, exit} flows
+
+            # Split the flow rates into entry or {transition, exit} flows.
             for flow_idx, flow in enumerate(self._flows):
                 if flow.source:
                     # It's an exit or transition flow, which we sample with a multinomial.
@@ -767,10 +805,12 @@ class CompartmentalModel:
                     entry_flow_rates[flow.dest.idx] += flow_rates[flow_idx]
 
             # Convert flow rates to probabilities, and take a sample using these probabilities,
+            # so we end up with the changes to the compartment sizes due to flows over this timestep.
             entry_changes = stochastic.sample_entry_flows(seed, entry_flow_rates, self.timestep)
             transition_changes = stochastic.sample_transistion_flows(
                 seed, transition_flow_rates, flow_map, comp_vals, self.timestep
             )
+
             # Calculate final compartment sizes at this timestep.
             self.outputs[time_idx] = comp_vals + transition_changes + entry_changes
 
@@ -786,6 +826,7 @@ class CompartmentalModel:
     def _get_flow_rates(self, compartment_values: np.ndarray, time: float):
         """
         Returns the contribution of each flow to compartment rate of change for a given state and time.
+        Returns a 1D array with an entry for each flow, the value being that flow's rate.
         """
         comp_vals = self._clean_compartment_values(compartment_values)
         _, flow_rates = self._get_rates(comp_vals, time)
