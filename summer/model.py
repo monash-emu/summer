@@ -15,7 +15,7 @@ from summer.adjust import FlowParam
 from summer.compartment import Compartment
 from summer.derived_outputs import DerivedOutputRequest, calculate_derived_outputs
 from summer.solver import SolverType, solve_ode
-from summer.stratification import Stratification
+from summer.stratification import Stratification, AgeStratification
 
 logger = logging.getLogger()
 
@@ -652,17 +652,22 @@ class CompartmentalModel:
         self._update_compartment_indices()
 
         if strat.is_ageing():
+            msg = "Age stratification can only be applied once"
+            assert not any([s.is_ageing() for s in self._stratifications]), msg
+
             # Create inter-compartmental flows for ageing from one stratum to the next.
             # The ageing rate is proportional to the width of the age bracket.
             # It's assumed that both ages and model timesteps are in years.
             ages = list(sorted(map(int, strat.strata)))
+
+            # Only allow age stratification to be applied with complete stratifications, because everyone has an age.
+            msg = "Mixing matrices only allowed for full stratification."
+            assert strat.compartments == self._original_compartment_names, msg
+
             for age_idx in range(len(ages) - 1):
                 start_age = int(ages[age_idx])
                 end_age = int(ages[age_idx + 1])
                 for comp in prev_compartment_names:
-                    if not comp.has_name_in_list(strat.compartments):
-                        # Don't include unstratified compartments
-                        continue
 
                     source = comp.stratify(strat.name, str(start_age))
                     dest = comp.stratify(strat.name, str(end_age))
