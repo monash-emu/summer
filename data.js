@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1618901291728,
+  "lastUpdate": 1619437341122,
   "repoUrl": "https://github.com/monash-emu/summer",
   "entries": {
     "Benchmark": [
@@ -1436,6 +1436,51 @@ window.BENCHMARK_DATA = {
             "unit": "iter/sec",
             "range": "stddev: 0.032746544491706726",
             "extra": "mean: 9.979829192666651 sec\nrounds: 3"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "james.trauer@monash.edu",
+            "name": "James Trauer",
+            "username": "jtrauer"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "eb83b68ae7c2287de1aec1f1849022a1d79a1797",
+          "message": "Merge pull request #9 from monash-emu/james-revise-age-stratification\n\nChange approach to age stratification and add tests for new behaviour",
+          "timestamp": "2021-04-26T21:37:51+10:00",
+          "tree_id": "ca603bdca6ac32e524d1403eee002bbd3be7ab41",
+          "url": "https://github.com/monash-emu/summer/commit/eb83b68ae7c2287de1aec1f1849022a1d79a1797"
+        },
+        "date": 1619437340190,
+        "tool": "pytest",
+        "benches": [
+          {
+            "name": "tests/test_benchmarks.py::test_benchmark_default_ode_solver",
+            "value": 0.0922071210644904,
+            "unit": "iter/sec",
+            "range": "stddev: 0.02828770648137158",
+            "extra": "mean: 10.845149359999994 sec\nrounds: 3"
+          },
+          {
+            "name": "tests/test_benchmarks.py::test_benchmark_rk4_ode_solver",
+            "value": 0.12528790958028604,
+            "unit": "iter/sec",
+            "range": "stddev: 0.011669444979631448",
+            "extra": "mean: 7.9816161300000585 sec\nrounds: 3"
+          },
+          {
+            "name": "tests/test_benchmarks.py::test_benchmark_stochastic_solver",
+            "value": 0.08499890987722282,
+            "unit": "iter/sec",
+            "range": "stddev: 0.06117533570781668",
+            "extra": "mean: 11.76485676633331 sec\nrounds: 3"
           }
         ]
       }
