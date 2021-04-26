@@ -653,7 +653,7 @@ class CompartmentalModel:
 
         if strat.is_ageing():
             msg = "Age stratification can only be applied once"
-            assert not any([type(strat) is AgeStratification for strat in self._stratifications]), msg
+            assert not any([s.is_ageing() for s in self._stratifications]), msg
 
             # Create inter-compartmental flows for ageing from one stratum to the next.
             # The ageing rate is proportional to the width of the age bracket.
