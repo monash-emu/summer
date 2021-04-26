@@ -8,6 +8,7 @@ from typing import Callable, Dict, List, Optional, Tuple
 
 import networkx
 import numpy as np
+import numba
 
 import summer.flows as flows
 from summer import stochastic
@@ -20,6 +21,18 @@ from summer.stratification import Stratification
 logger = logging.getLogger()
 
 FlowRateFunction = Callable[[List[Compartment], np.ndarray, np.ndarray, float], np.ndarray]
+
+class BackendType:
+    DEFAULT = 'default'
+    NUMBA = 'numba'
+
+@numba.jit(nopython=True)
+def accumulate_flow_contributions(flow_rates, comp_rates, pos_flow_map, neg_flow_map):
+    for src, target in pos_flow_map:
+        comp_rates[target] += flow_rates[src]
+    for src, target in neg_flow_map:
+        comp_rates[target] -= flow_rates[src]
+
 
 
 class CompartmentalModel:
@@ -669,6 +682,7 @@ class CompartmentalModel:
     def run(
         self,
         solver: str = SolverType.SOLVE_IVP,
+        backend: str = BackendType.DEFAULT,
         **kwargs,
     ):
         """
@@ -685,11 +699,14 @@ class CompartmentalModel:
 
         """
         self._prepare_to_run()
+        if backend == BackendType.NUMBA:
+            self._prepare_to_run_numba()
+
         if solver == SolverType.STOCHASTIC:
             seed = kwargs.get("seed")
             self._solve_stochastic(seed)
         else:
-            self._solve_ode(solver, kwargs)
+            self._solve_ode(solver, backend, kwargs)
 
         # Calculate any requested derived outputs, based on the calculated compartment sizes.
         self.derived_outputs = self._calculate_derived_outputs()
@@ -701,15 +718,24 @@ class CompartmentalModel:
         """
         self.run(solver=SolverType.STOCHASTIC, seed=seed)
 
-    def _solve_ode(self, solver, solver_args: dict):
+    def _solve_ode(self, solver, backend, solver_args: dict):
         """
         Runs the model over the provided time span, calculating the outputs.
         Uses an ODE interpretation of flow rates.
         """
+        # Select our ODE function based on backend
+        if backend == BackendType.DEFAULT:
+            ode_func = self._get_compartment_rates
+        elif backend == BackendType.NUMBA:
+            ode_func = self._get_compartment_rates_numba
+        else:
+            msg = f"Invalid backend: f{backend}"
+            raise ValueError(msg)
+        
         # Calculate the outputs (compartment sizes) by solving the ODE defined by _get_compartment_rates().
         self.outputs = solve_ode(
             solver,
-            self._get_compartment_rates,
+            ode_func,
             self.initial_population,
             self.times,
             solver_args,
@@ -767,6 +793,15 @@ class CompartmentalModel:
         comp_rates, _ = self._get_rates(comp_vals, time)
         return comp_rates
 
+    def _get_compartment_rates_numba(self, compartment_values: np.ndarray, time: float):
+        """
+        Fast(er) numba optimized equivalent of _get_compartment_rates
+        """
+        comp_vals = self._clean_compartment_values(compartment_values)
+        comp_rates, _ = self._get_rates_numba(comp_vals, time)
+        return comp_rates
+
+
     def _get_flow_rates(self, compartment_values: np.ndarray, time: float):
         """
         Returns the contribution of each flow to compartment rate of change for a given state and time.
@@ -809,6 +844,39 @@ class CompartmentalModel:
             if flow.is_death_flow:
                 # Track total deaths for any later birth replacement flows.
                 self._total_deaths += net_flow
+
+        if self._iter_function_flows:
+            # Evaluate the function flows.
+            for flow_idx, flow in self._iter_function_flows:
+                net_flow = flow.get_net_flow(
+                    self.compartments, comp_vals, self._flows, flow_rates, time
+                )
+                comp_rates[flow.source.idx] -= net_flow
+                comp_rates[flow.dest.idx] += net_flow
+
+        return comp_rates, flow_rates
+
+    def _get_rates_numba(self, comp_vals: np.ndarray, time: float) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Fast(er) numba optimized equivalent of _get_rates
+        """
+        self._prepare_time_step(time, comp_vals)
+        # Track each flow's flow-rates at this point in time for function flows.
+        flow_rates = np.zeros(len(self._flows))
+        # Track the rate of change of compartments for the ODE solver.
+        comp_rates = np.zeros(len(comp_vals))
+
+        # Find the flow rate for each flow.
+        for flow_idx, flow in self._iter_non_function_flows:
+            # Evaluate all the flows that are not function flows.
+            net_flow = flow.get_net_flow(comp_vals, time)
+            flow_rates[flow_idx] = net_flow
+
+            if flow.is_death_flow:
+                # Track total deaths for any later birth replacement flows.
+                self._total_deaths += net_flow
+
+        accumulate_flow_contributions(flow_rates, comp_rates, self._pos_flow_map, self._neg_flow_map)
 
         if self._iter_function_flows:
             # Evaluate the function flows.
@@ -930,6 +998,8 @@ class CompartmentalModel:
 
         # Create a matrix that tracks which categories each compartment is in.
         # A matrix with size (num_cats x num_comps).
+        # This is a very sparse static matrix, and there's almost certainly a much
+        # faster way of using it than naive matrix multiplication
         num_comps = len(self.compartments)
         num_categories = len(self._mixing_categories)
         self._category_lookup = {}  # Map compartments to categories.
@@ -939,6 +1009,21 @@ class CompartmentalModel:
                 if all(comp.has_stratum(k, v) for k, v in category.items()):
                     self._category_matrix[i][j] = 1
                     self._category_lookup[j] = i
+
+    def _prepare_to_run_numba(self):
+        """
+        Precompute anything specific to numba backend runs
+        """
+        f_pos_map = []
+        f_neg_map = []
+        for i, f in self._iter_non_function_flows:
+            if f.source:
+                f_neg_map.append((i, f.source.idx))
+            if f.dest:
+                f_pos_map.append((i, f.dest.idx))
+
+        self._pos_flow_map = np.array(f_pos_map, dtype=int)
+        self._neg_flow_map = np.array(f_neg_map, dtype=int)
 
     def _get_compartment_infectiousness_for_strain(self, strain: str):
         """
@@ -1060,6 +1145,8 @@ class CompartmentalModel:
         """
         Returns the final mixing matrix for a given time.
         """
+        #+++ FIXME _DEFAULT_MIXING_MATRIX hardcoded to [[1]], meaning first kroneker product does
+        # effectively nothing...
         mixing_matrix = self._DEFAULT_MIXING_MATRIX
         for mm_func in self._mixing_matrices:
             # Assume each mixing matrix is either an np.ndarray or a function of time that returns one.
