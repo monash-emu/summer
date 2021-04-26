@@ -7,7 +7,7 @@ import numpy as np
 
 from summer.adjust import Multiply, Overwrite
 from summer.compartment import Compartment
-
+ 
 Adjustment = Union[Multiply, Overwrite]
 MixingMatrix = Union[np.ndarray, Callable[[float], np.ndarray]]
 
