@@ -114,7 +114,6 @@ class Stratification:
                     "alpine": None, # No adjustment
                 })
 
-
         """
         source_strata = source_strata or {}
         dest_strata = dest_strata or {}
@@ -136,6 +135,7 @@ class Stratification:
         Note that the loop structure implies that if the user has requested multiple adjustments that apply to a single
         combination of strata (across multiple stratifications), then only the last one that is applicable will be used
         - because the last request will over-write the earlier ones in the loop.
+        Therefore, the most recently added flow adjustment that matches a given flow will be returned.
 
         """
         flow_adjustments = self.flow_adjustments.get(flow.name, [])
@@ -144,7 +144,6 @@ class Stratification:
         # Loop over all the requested adjustments.
         for adjustment, source_strata, dest_strata in flow_adjustments:
 
-            # Skip any adjustments that don't match the flow's source and dest compartment strata.
             # For entry flows:
             msg = f"Source strata requested in flow adjustment of {self.name}, but {flow.name} does not have a source"
             assert not (source_strata and not flow.source), msg
@@ -155,8 +154,9 @@ class Stratification:
 
             # Make sure that the source request applies to this flow because it has all of the requested strata.
             # Note that these can be specified in the current or any previous stratifications.
-            if (source_strata and flow.source and not flow.source.has_strata(source_strata)) or \
-                    (dest_strata and flow.dest and not flow.dest.has_strata(dest_strata)):
+            is_source_no_match = source_strata and flow.source and not flow.source.has_strata(source_strata)
+            is_dest_no_match = dest_strata and flow.dest and not flow.dest.has_strata(dest_strata)
+            if is_source_no_match or is_dest_no_match:
                 continue
 
             matching_adjustment = adjustment
