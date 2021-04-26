@@ -67,37 +67,44 @@ def test_create_age_stratification():
 
 
 def test_create_stratification__with_pop_split():
+
+    # Default behaviour.
     strat = Stratification(name="location", strata=["rural", "urban"], compartments=["S", "I", "R"])
     assert strat.population_split == {"rural": 0.5, "urban": 0.5}
-    # Works
+
+    # Correct assignment works.
     strat.set_population_split({"rural": 0.2, "urban": 0.8})
     assert strat.population_split == {"rural": 0.2, "urban": 0.8}
 
-    # Fails coz missing a key
+    # Fails coz missing a key.
     with pytest.raises(AssertionError):
-        strat.set_population_split({"urban": 1})
+        strat.set_population_split({"urban": 1.})
 
-    # Fails coz doesn't sum to 1
+    # Fails because sum is less than one.
     with pytest.raises(AssertionError):
         strat.set_population_split({"urban": 0.2, "rural": 0.3})
 
-    # Fails coz contains negative number
+    # Fails because sum is more than one.
     with pytest.raises(AssertionError):
-        strat.set_population_split({"urban": -2, "rural": 3})
+        strat.set_population_split({"urban": 0.8, "rural": 0.8})
+
+    # Fails coz contains negative number.
+    with pytest.raises(AssertionError):
+        strat.set_population_split({"urban": -0.2, "rural": 0.8})
 
 
 def test_create_stratification__with_flow_adjustments():
     strat = Stratification(name="location", strata=["rural", "urban"], compartments=["S", "I", "R"])
     assert strat.flow_adjustments == {}
 
-    # Fail coz not all strata specified
+    # Fails coz not all strata specified.
     with pytest.raises(AssertionError):
         strat.add_flow_adjustments(
             flow_name="recovery",
             adjustments={"rural": Multiply(1.2)},
         )
 
-    # Fail coz an incorrect strata specified
+    # Fails coz an incorrect stratum was specified.
     with pytest.raises(AssertionError):
         strat.add_flow_adjustments(
             flow_name="recovery",
@@ -108,6 +115,7 @@ def test_create_stratification__with_flow_adjustments():
             },
         )
 
+    # Correct version works.
     strat.add_flow_adjustments(
         flow_name="recovery",
         adjustments={"rural": Multiply(1.2), "urban": Multiply(0.8)},
@@ -117,7 +125,7 @@ def test_create_stratification__with_flow_adjustments():
     adj, src, dst = strat.flow_adjustments["recovery"][0]
     assert adj["rural"]._is_equal(Multiply(1.2))
     assert adj["urban"]._is_equal(Multiply(0.8))
-    assert not (src or dst)
+    assert not src and not dst
 
     # Add another adjustment for the same flow.
     strat.add_flow_adjustments(
@@ -130,7 +138,7 @@ def test_create_stratification__with_flow_adjustments():
     adj, src, dst = strat.flow_adjustments["recovery"][0]
     assert adj["rural"]._is_equal(Multiply(1.2))
     assert adj["urban"]._is_equal(Multiply(0.8))
-    assert not (src or dst)
+    assert not src and not dst
     adj, src, dst = strat.flow_adjustments["recovery"][1]
     assert adj["rural"]._is_equal(Multiply(1.3))
     assert adj["urban"]._is_equal(Multiply(0.9))
@@ -151,7 +159,7 @@ def test_create_stratification__with_flow_adjustments():
     adj, src, dst = strat.flow_adjustments["infection"][0]
     assert adj["rural"]._is_equal(Multiply(urban_infection_adjustment))
     assert adj["urban"] is None
-    assert not (src or dst)
+    assert not src and not dst
 
 
 def test_get_flow_adjustments__with_no_adjustments():
@@ -209,7 +217,7 @@ def test_get_flow_adjustments__with_strata_whitelist():
         "flow", {"rural": Multiply(2), "urban": Overwrite(1)}, source_strata={"age": "20"}
     )
 
-    # No source strata
+    # Source strata shouldn't be specified for an entry flow
     entry_flow = EntryFlow("flow", Compartment("S"), 1)
     with pytest.raises(AssertionError):
         strat.get_flow_adjustment(entry_flow)
