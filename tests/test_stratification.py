@@ -217,14 +217,16 @@ def test_get_flow_adjustments__with_strata_whitelist():
         "flow", {"rural": Multiply(2), "urban": Overwrite(1)}, source_strata={"age": "20"}
     )
 
-    # Source strata shouldn't be specified for an entry flow
+    # Source strata shouldn't be specified for an entry flow.
     entry_flow = EntryFlow("flow", Compartment("S"), 1)
     with pytest.raises(AssertionError):
         strat.get_flow_adjustment(entry_flow)
 
+    # get_flow_adjustments returns None when adjustment doesn't apply to the flow being processed.
     other_flow = TransitionFlow("other", Compartment("S"), Compartment("I"), 1)
     assert strat.get_flow_adjustment(other_flow) is None
 
+    # Behaviour is the same for transition and exit flows, to which the adjustment should apply.
     trans_flow = TransitionFlow("flow", Compartment("S"), Compartment("I"), 1)
     exit_flow = ExitFlow("flow", Compartment("I"), 1)
     for flow in [trans_flow, exit_flow]:
@@ -232,7 +234,7 @@ def test_get_flow_adjustments__with_strata_whitelist():
         assert adj["rural"]._is_equal(Multiply(3))
         assert adj["urban"]._is_equal(Overwrite(2))
 
-    # Only flows with matching strata should get the adjustment
+    # Only flows with matching strata should get the adjustment.
     strat = Stratification(name="location", strata=["rural", "urban"], compartments=["S", "I", "R"])
     strat.add_flow_adjustments("flow", {"rural": Multiply(1), "urban": None})
     strat.add_flow_adjustments("flow", {"rural": Multiply(3), "urban": Overwrite(2)})
@@ -240,12 +242,12 @@ def test_get_flow_adjustments__with_strata_whitelist():
         "flow", {"rural": Multiply(2), "urban": Overwrite(1)}, dest_strata={"age": "20"}
     )
 
-    # No dest strata
+    # No destination stratum for the flow being stratified, but destination strata requested.
     exit_flow = ExitFlow("flow", Compartment("I"), 1)
     with pytest.raises(AssertionError):
         strat.get_flow_adjustment(exit_flow)
 
-    # No matching dest strata
+    # No matching destination stratum.
     other_flow = TransitionFlow("other", Compartment("S"), Compartment("I"), 1)
     other_flow_strat = TransitionFlow("other", Compartment("S"), Compartment("I", {"age": "20"}), 1)
     assert strat.get_flow_adjustment(other_flow) is None
