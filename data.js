@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1619437341122,
+  "lastUpdate": 1619479934249,
   "repoUrl": "https://github.com/monash-emu/summer",
   "entries": {
     "Benchmark": [
@@ -1481,6 +1481,51 @@ window.BENCHMARK_DATA = {
             "unit": "iter/sec",
             "range": "stddev: 0.06117533570781668",
             "extra": "mean: 11.76485676633331 sec\nrounds: 3"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "james.trauer@monash.edu",
+            "name": "James Trauer",
+            "username": "jtrauer"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "d019b0fc7a817d0b63d9fe794a45dc7f73b80fe5",
+          "message": "Merge pull request #8 from monash-emu/james-review-stratification\n\nJames review stratification",
+          "timestamp": "2021-04-27T09:28:24+10:00",
+          "tree_id": "1ee8b873b89111ec5cea990d933e315e4d105aa9",
+          "url": "https://github.com/monash-emu/summer/commit/d019b0fc7a817d0b63d9fe794a45dc7f73b80fe5"
+        },
+        "date": 1619479933333,
+        "tool": "pytest",
+        "benches": [
+          {
+            "name": "tests/test_benchmarks.py::test_benchmark_default_ode_solver",
+            "value": 0.10283923817672998,
+            "unit": "iter/sec",
+            "range": "stddev: 0.1014786854666364",
+            "extra": "mean: 9.723914896000034 sec\nrounds: 3"
+          },
+          {
+            "name": "tests/test_benchmarks.py::test_benchmark_rk4_ode_solver",
+            "value": 0.13900184212687067,
+            "unit": "iter/sec",
+            "range": "stddev: 0.06530941823747959",
+            "extra": "mean: 7.194149262333326 sec\nrounds: 3"
+          },
+          {
+            "name": "tests/test_benchmarks.py::test_benchmark_stochastic_solver",
+            "value": 0.09866118965778893,
+            "unit": "iter/sec",
+            "range": "stddev: 0.05428078701258188",
+            "extra": "mean: 10.135697770000016 sec\nrounds: 3"
           }
         ]
       }
