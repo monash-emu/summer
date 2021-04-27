@@ -17,6 +17,7 @@ from summer.compartment import Compartment
 from summer.derived_outputs import DerivedOutputRequest, calculate_derived_outputs
 from summer.solver import SolverType, solve_ode
 from summer.stratification import Stratification
+from summer.runner import VectorizedRunner
 
 logger = logging.getLogger()
 
@@ -24,16 +25,7 @@ FlowRateFunction = Callable[[List[Compartment], np.ndarray, np.ndarray, float], 
 
 class BackendType:
     DEFAULT = 'default'
-    NUMBA = 'numba'
-
-@numba.jit(nopython=True)
-def accumulate_flow_contributions(flow_rates, comp_rates, pos_flow_map, neg_flow_map):
-    for src, target in pos_flow_map:
-        comp_rates[target] += flow_rates[src]
-    for src, target in neg_flow_map:
-        comp_rates[target] -= flow_rates[src]
-
-
+    VECTORIZED = 'vectorized'
 
 class CompartmentalModel:
     """
@@ -698,15 +690,22 @@ class CompartmentalModel:
             **kwargs (optional): Extra arguments to supplied to the solver, see ``summer.solver`` for details.
 
         """
-        self._prepare_to_run()
-        if backend == BackendType.NUMBA:
-            self._prepare_to_run_numba()
+        
+        if backend == BackendType.DEFAULT:
+            self._runner = self
+        elif backend == BackendType.VECTORIZED:
+            self._runner = VectorizedRunner(self)
+        else:
+            msg = f"Invalid backend: {backend}"    
+            raise ValueError(msg)
+
+        self._runner._prepare_to_run()
 
         if solver == SolverType.STOCHASTIC:
             seed = kwargs.get("seed")
             self._solve_stochastic(seed)
         else:
-            self._solve_ode(solver, backend, kwargs)
+            self._solve_ode(solver, kwargs)
 
         # Calculate any requested derived outputs, based on the calculated compartment sizes.
         self.derived_outputs = self._calculate_derived_outputs()
@@ -718,24 +717,16 @@ class CompartmentalModel:
         """
         self.run(solver=SolverType.STOCHASTIC, seed=seed)
 
-    def _solve_ode(self, solver, backend, solver_args: dict):
+    def _solve_ode(self, solver, solver_args: dict):
         """
         Runs the model over the provided time span, calculating the outputs.
         Uses an ODE interpretation of flow rates.
         """
-        # Select our ODE function based on backend
-        if backend == BackendType.DEFAULT:
-            ode_func = self._get_compartment_rates
-        elif backend == BackendType.NUMBA:
-            ode_func = self._get_compartment_rates_numba
-        else:
-            msg = f"Invalid backend: f{backend}"
-            raise ValueError(msg)
-        
+
         # Calculate the outputs (compartment sizes) by solving the ODE defined by _get_compartment_rates().
         self.outputs = solve_ode(
             solver,
-            ode_func,
+            self._runner._get_compartment_rates,
             self.initial_population,
             self.times,
             solver_args,
@@ -793,16 +784,7 @@ class CompartmentalModel:
         comp_rates, _ = self._get_rates(comp_vals, time)
         return comp_rates
 
-    def _get_compartment_rates_numba(self, compartment_values: np.ndarray, time: float):
-        """
-        Fast(er) numba optimized equivalent of _get_compartment_rates
-        """
-        comp_vals = self._clean_compartment_values(compartment_values)
-        comp_rates, _ = self._get_rates_numba(comp_vals, time)
-        return comp_rates
-
-
-    def _get_flow_rates(self, compartment_values: np.ndarray, time: float):
+    def _get_flow_rates(self, compartment_values: np.ndarray, time: float) -> np.ndarray:
         """
         Returns the contribution of each flow to compartment rate of change for a given state and time.
         """
@@ -844,39 +826,6 @@ class CompartmentalModel:
             if flow.is_death_flow:
                 # Track total deaths for any later birth replacement flows.
                 self._total_deaths += net_flow
-
-        if self._iter_function_flows:
-            # Evaluate the function flows.
-            for flow_idx, flow in self._iter_function_flows:
-                net_flow = flow.get_net_flow(
-                    self.compartments, comp_vals, self._flows, flow_rates, time
-                )
-                comp_rates[flow.source.idx] -= net_flow
-                comp_rates[flow.dest.idx] += net_flow
-
-        return comp_rates, flow_rates
-
-    def _get_rates_numba(self, comp_vals: np.ndarray, time: float) -> Tuple[np.ndarray, np.ndarray]:
-        """
-        Fast(er) numba optimized equivalent of _get_rates
-        """
-        self._prepare_time_step(time, comp_vals)
-        # Track each flow's flow-rates at this point in time for function flows.
-        flow_rates = np.zeros(len(self._flows))
-        # Track the rate of change of compartments for the ODE solver.
-        comp_rates = np.zeros(len(comp_vals))
-
-        # Find the flow rate for each flow.
-        for flow_idx, flow in self._iter_non_function_flows:
-            # Evaluate all the flows that are not function flows.
-            net_flow = flow.get_net_flow(comp_vals, time)
-            flow_rates[flow_idx] = net_flow
-
-            if flow.is_death_flow:
-                # Track total deaths for any later birth replacement flows.
-                self._total_deaths += net_flow
-
-        accumulate_flow_contributions(flow_rates, comp_rates, self._pos_flow_map, self._neg_flow_map)
 
         if self._iter_function_flows:
             # Evaluate the function flows.
@@ -1009,21 +958,6 @@ class CompartmentalModel:
                 if all(comp.has_stratum(k, v) for k, v in category.items()):
                     self._category_matrix[i][j] = 1
                     self._category_lookup[j] = i
-
-    def _prepare_to_run_numba(self):
-        """
-        Precompute anything specific to numba backend runs
-        """
-        f_pos_map = []
-        f_neg_map = []
-        for i, f in self._iter_non_function_flows:
-            if f.source:
-                f_neg_map.append((i, f.source.idx))
-            if f.dest:
-                f_pos_map.append((i, f.dest.idx))
-
-        self._pos_flow_map = np.array(f_pos_map, dtype=int)
-        self._neg_flow_map = np.array(f_neg_map, dtype=int)
 
     def _get_compartment_infectiousness_for_strain(self, strain: str):
         """
@@ -1180,7 +1114,7 @@ class CompartmentalModel:
             timestep=self.timestep,
             flows=self._flows,
             compartments=self.compartments,
-            get_flow_rates=self._get_flow_rates,
+            get_flow_rates=self._runner._get_flow_rates,
             whitelist=self._derived_outputs_whitelist,
         )
 
