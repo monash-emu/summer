@@ -36,7 +36,7 @@ def test_no_mixing_matrix():
 
     # We should get the default mixing matrix
     default_matrix = np.array([[1]])
-    actual_mixing = model._get_mixing_matrix(0)
+    actual_mixing = model._get_mixing_matrix(0)  # Zero an arbitrary time
     assert_array_equal(actual_mixing, default_matrix)
     # Static matrices shouldn't change over time
     actual_mixing = model._get_mixing_matrix(123)

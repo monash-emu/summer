@@ -336,7 +336,7 @@ def test_create_stratification__with_infectiousness_adjustments():
             adjustments={"rural": Multiply(1.2)},
         )
 
-    # Fail coz an incorrect strata specified
+    # Fail coz an incorrect stratum was specified
     with pytest.raises(AssertionError):
         strat.add_infectiousness_adjustments(
             compartment_name="S",
@@ -347,7 +347,7 @@ def test_create_stratification__with_infectiousness_adjustments():
             },
         )
 
-    # Fail coz a time-varying function was used (not allowed!)
+    # Fail coz a time-varying function was used (not currently supported!)
     with pytest.raises(AssertionError):
         strat.add_infectiousness_adjustments(
             compartment_name="S",
@@ -390,7 +390,7 @@ def test_create_stratification__with_infectiousness_adjustments():
     assert strat.infectiousness_adjustments["I"]["urban"] is None
 
 
-def test_stratify_compartments__with_no_extisting_strat():
+def test_stratify_compartments__with_no_existing_strat():
     strat = Stratification(
         name="age",
         strata=["0", "10", "20"],
@@ -413,22 +413,21 @@ def test_stratify_compartments__with_no_extisting_strat():
 
 def test_stratify_compartments__with_no_extisting_strat_and_subset_only():
     strat = Stratification(
-        name="age",
-        strata=["0", "10", "20"],
+        name="risk",
+        strata=["high", "low"],
         compartments=["S"],
     )
     comps = [Compartment("S"), Compartment("I"), Compartment("R")]
     strat_comps = strat._stratify_compartments(comps)
     assert strat_comps == [
-        Compartment("S", {"age": "0"}),
-        Compartment("S", {"age": "10"}),
-        Compartment("S", {"age": "20"}),
+        Compartment("S", {"risk": "high"}),
+        Compartment("S", {"risk": "low"}),
         Compartment("I"),
         Compartment("R"),
     ]
 
 
-def test_stratify_compartments__with_extisting_strat():
+def test_stratify_compartments__with_existing_strat():
     age_strat = Stratification(
         name="age",
         strata=["0", "10", "20"],
@@ -493,7 +492,7 @@ def test_stratify_compartment_values__with_subset_stratified():
     assert_array_equal(expected_arr, new_comp_values)
 
 
-def test_stratify_compartment_values__with_extisting_strat():
+def test_stratify_compartment_values__with_existing_strat():
     """
     Stratify compartments for the second time, expect that compartments
     are are split according to proportions and old compartments are removed.
