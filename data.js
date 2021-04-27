@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1619479934249,
+  "lastUpdate": 1619490836497,
   "repoUrl": "https://github.com/monash-emu/summer",
   "entries": {
     "Benchmark": [
@@ -1526,6 +1526,51 @@ window.BENCHMARK_DATA = {
             "unit": "iter/sec",
             "range": "stddev: 0.05428078701258188",
             "extra": "mean: 10.135697770000016 sec\nrounds: 3"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "mattdsegal@gmail.com",
+            "name": "Matthew Segal",
+            "username": "MattSegal"
+          },
+          "committer": {
+            "email": "mattdsegal@gmail.com",
+            "name": "Matthew Segal",
+            "username": "MattSegal"
+          },
+          "distinct": true,
+          "id": "fc256d86ca578d93de00eef0b3b21879a885ef70",
+          "message": "Fix NumPy type cast errors with times",
+          "timestamp": "2021-04-27T12:29:41+10:00",
+          "tree_id": "7c45907275d031b64c0033b845111d062f4bfaed",
+          "url": "https://github.com/monash-emu/summer/commit/fc256d86ca578d93de00eef0b3b21879a885ef70"
+        },
+        "date": 1619490835987,
+        "tool": "pytest",
+        "benches": [
+          {
+            "name": "tests/test_benchmarks.py::test_benchmark_default_ode_solver",
+            "value": 0.09719131839275459,
+            "unit": "iter/sec",
+            "range": "stddev: 0.17082630275058308",
+            "extra": "mean: 10.28898482433332 sec\nrounds: 3"
+          },
+          {
+            "name": "tests/test_benchmarks.py::test_benchmark_rk4_ode_solver",
+            "value": 0.13335399927965044,
+            "unit": "iter/sec",
+            "range": "stddev: 0.12543371643719603",
+            "extra": "mean: 7.498837720666681 sec\nrounds: 3"
+          },
+          {
+            "name": "tests/test_benchmarks.py::test_benchmark_stochastic_solver",
+            "value": 0.08939368986143212,
+            "unit": "iter/sec",
+            "range": "stddev: 0.0438264424672834",
+            "extra": "mean: 11.186471903666643 sec\nrounds: 3"
           }
         ]
       }
