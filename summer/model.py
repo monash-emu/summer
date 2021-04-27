@@ -60,15 +60,17 @@ class CompartmentalModel:
     ):
         start_t, end_t = times
         assert end_t > start_t, "End time must be greater than start time"
-        start_t = round(start_t)
-        end_t = round(end_t)
-        time_period = end_t - start_t + 1
-        num_steps = time_period / timestep
         self.timestep = timestep
-        assert num_steps >= 1, "Time step must be less than time period."
-        assert num_steps % 1 == 0, "Time step must be a factor of time period"
-        self.times = np.linspace(start_t, end_t, num=int(num_steps))
-        self.timestep = timestep
+
+        # Get evaluation times.
+        working_time = start_t
+        times = []
+        while working_time < end_t:
+            times.append(working_time)
+            working_time += timestep
+
+        times.append(end_t)
+        self.times = np.array(times)
 
         error_msg = "Infectious compartments must be a subset of compartments"
         assert all(n in compartments for n in infectious_compartments), error_msg
