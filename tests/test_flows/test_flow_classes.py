@@ -116,7 +116,7 @@ def test_sojourn_flow_get_net_flow_with_adjust():
     flow.source.idx = 2
     vals = np.array([1, 3, 5])
     net_flow = flow.get_net_flow(vals, 7)
-    assert net_flow == 5 / (2 * 13 * 7)
+    np.testing.assert_almost_equal(net_flow, 5 / (2 * 13 * 7))
 
 
 def test_import_flow_get_net_flow():

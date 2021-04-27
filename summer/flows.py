@@ -65,6 +65,15 @@ class BaseFlow(ABC):
 
         return flow_rate
 
+    def weight_is_static(self) -> bool:
+        """Determine whether get_weight_value is static (const over model lifetime), or time-varying
+
+        Returns:
+            bool: False if weight is time-varying, otherwise True
+        """
+        time_varying = callable(self.param) or sum([callable(a.param) for a in self.adjustments])
+        return not time_varying
+
     def update_compartment_indices(self, mapping: Dict[str, float]):
         """
         Update index which maps flow compartments to compartment value array.
@@ -500,6 +509,10 @@ class SojournFlow(BaseTransitionFlow):
 
     """
 
+    def get_weight_value(self, time: float):
+        value = super().get_weight_value(time)
+        return 1.0/value
+
     def get_net_flow(
         self,
         compartment_values: np.ndarray,
@@ -507,7 +520,7 @@ class SojournFlow(BaseTransitionFlow):
     ) -> float:
         parameter_value = self.get_weight_value(time)
         population = compartment_values[self.source.idx]
-        return population / parameter_value
+        return population * parameter_value
 
 
 class FunctionFlow(BaseTransitionFlow):
