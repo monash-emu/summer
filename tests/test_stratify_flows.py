@@ -422,6 +422,8 @@ def test_add_exit_flows_post_stratification__with_filter():
 
     model.add_death_flow("d_S", 3, "S", source_strata={"location": "rural"}, expected_flow_count=1)
     model.add_death_flow("d_I", 5, "I", source_strata={"location": "rural"}, expected_flow_count=1)
+
+    # FIXME: Ask Matt, would it be better if this just crashed?
     model.add_death_flow("d_R", 7, "R", source_strata={"location": "rural"}, expected_flow_count=0)
 
     expected_flows = [
