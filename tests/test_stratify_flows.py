@@ -325,6 +325,8 @@ def test_stratify__age__validate_ageing_flows_added_second():
 def test_stratify_exit_flows():
     """
     Ensure exit flows are stratified correctly.
+    Death flows should remain the same after stratification, so that everyone in all of the stratified compartments
+    continues to die at the same rate as before stratification.
     """
     model = CompartmentalModel(
         times=[0, 5], compartments=["S", "I", "R"], infectious_compartments=["I"]
