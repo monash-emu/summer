@@ -70,7 +70,7 @@ class CompartmentalModel:
             working_time += timestep
 
         times.append(end_t)
-        self.times = np.array(times)
+        self.times = np.array(times, dtype=np.float)
 
         error_msg = "Infectious compartments must be a subset of compartments"
         assert all(n in compartments for n in infectious_compartments), error_msg
