@@ -68,6 +68,7 @@ class CompartmentalModel:
         while working_time < end_t:
             times.append(working_time)
             working_time += timestep
+
         times.append(end_t)
         self.times = np.array(times)
 
