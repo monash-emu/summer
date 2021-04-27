@@ -161,7 +161,7 @@ def test_model__with_recovery_rate__expect_all_recover():
     )
     model.set_initial_population(distribution={"I": 100})
     # Add recovery dynamics.
-    model.add_fractional_flow("recovery", 1, "I", "R")
+    model.add_transition_flow("recovery", 1, "I", "R")
     model.run()
     # Expect that almost everyone recovers
     expected_outputs = np.array(
@@ -295,12 +295,12 @@ def test_model__with_complex_dynamics__expect_correct_outputs():
     model.add_infection_frequency_flow("infection", 14, "S", "EL")
     model.add_infection_frequency_flow("reinfection", 14, "R", "EL")
     model.add_infection_frequency_flow("regression", 3, "LL", "EL")
-    model.add_fractional_flow("early_progression", 2, "EL", "I")
-    model.add_fractional_flow("stabilisation", 3, "EL", "LL")
-    model.add_fractional_flow("early_progression", 1, "LL", "I")
+    model.add_transition_flow("early_progression", 2, "EL", "I")
+    model.add_transition_flow("stabilisation", 3, "EL", "LL")
+    model.add_transition_flow("early_progression", 1, "LL", "I")
     model.add_death_flow("infect_death", 0.4, "I")
-    model.add_fractional_flow("recovery", 0.2, "I", "R")
-    model.add_fractional_flow("case_detection", 1, "I", "R")
+    model.add_transition_flow("recovery", 0.2, "I", "R")
+    model.add_transition_flow("case_detection", 1, "I", "R")
     model.run()
     # Expect that the results are consistent, nothing crazy happens.
     # These results were not independently calculated, so this is more of an "acceptance test".

@@ -16,3 +16,5 @@ See below for some examples on how to use summer:
    7-age-stratification
    8-strain-stratification
    9-mixing-matrices
+   10-derived-outputs-stratified
+   11-flows-between-strata
