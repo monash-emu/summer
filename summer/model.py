@@ -18,7 +18,7 @@ from summer.derived_outputs import DerivedOutputRequest, calculate_derived_outpu
 from summer.solver import SolverType, solve_ode
 from summer.stratification import Stratification
 from summer.runner import VectorizedRunner
-from summer.compute import binary_matrix_to_sparse_pairs
+from summer.compute import binary_matrix_to_sparse_pairs, sparse_pairs_accum
 
 
 logger = logging.getLogger()
@@ -1085,10 +1085,15 @@ class CompartmentalModel:
         # Find the effective infectious population for the force of infection (FoI) calculations.
         mixing_matrix = self._get_mixing_matrix(time)
 
+        # Calculate infection frequency/density for all disease strains
+        self._calculate_strain_infection_values(time, compartment_values, mixing_matrix)
+
+    def _calculate_strain_infection_values(self, time: float, compartment_values: np.ndarray, mixing_matrix: np.ndarray):
+
+        num_cats = self.num_categories
         # Calculate total number of people per category (for FoI).
-        # A vector with size (num_cats x 1).
-        comp_values_transposed = compartment_values.reshape((compartment_values.shape[0], 1))
-        self._category_populations = np.matmul(self._category_matrix, comp_values_transposed)
+        # A vector with size (num_cats).
+        self._category_populations = sparse_pairs_accum(self._compartment_category_map, compartment_values, num_cats)
 
         # Calculate infectious populations for each strain.
         # Infection density / frequency is the infectious multiplier for each mixing category, calculated for each strain.
@@ -1098,14 +1103,13 @@ class CompartmentalModel:
             strain_compartment_infectiousness = self._compartment_infectiousness[strain]
 
             # Calculate total infected people per category, including adjustment factors.
-            # Returns a vector with size (num_cats x 1).
+            # vector with size (num_cats, 1).
             infected_values = compartment_values * strain_compartment_infectiousness
-            infected_values_transposed = infected_values.reshape((infected_values.shape[0], 1))
-            infectious_populations = np.matmul(self._category_matrix, infected_values_transposed)
+            infectious_populations = sparse_pairs_accum(self._compartment_category_map, infected_values, num_cats)
             self._infection_density[strain] = np.matmul(mixing_matrix, infectious_populations)
 
             # Calculate total infected person frequency per category, including adjustment factors.
-            # A vector with size (num_cats x 1).
+            # vector with size (num_cats, 1).
             category_prevalence = infectious_populations / self._category_populations
             self._infection_frequency[strain] = np.matmul(mixing_matrix, category_prevalence)
 
@@ -1138,7 +1142,7 @@ class CompartmentalModel:
         """
         idx = self._get_force_idx(source)
         strain = dest.strata.get("strain", self._DEFAULT_DISEASE_STRAIN)
-        return self._infection_frequency[strain][idx][0]
+        return self._infection_frequency[strain][idx]
 
     def _get_infection_density_multiplier(self, source: Compartment, dest: Compartment):
         """
@@ -1147,7 +1151,7 @@ class CompartmentalModel:
         """
         idx = self._get_force_idx(source)
         strain = dest.strata.get("strain", self._DEFAULT_DISEASE_STRAIN)
-        return self._infection_density[strain][idx][0]
+        return self._infection_density[strain][idx]
 
     def _get_mixing_matrix(self, time: float) -> np.ndarray:
         """

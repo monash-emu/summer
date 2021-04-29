@@ -146,13 +146,13 @@ def test_strain__with_infectious_multipliers():
 
     # Do pre-iteration force of infection calcs
     model._prepare_time_step(0, model.initial_population)
-    assert_array_equal(model._category_populations, np.array([[1000]]))
-    assert_array_equal(model._infection_density["a"], np.array([[70 * 0.5]]))
-    assert_array_equal(model._infection_density["b"], np.array([[20 * 3]]))
-    assert_array_equal(model._infection_density["c"], np.array([[10 * 2]]))
-    assert_array_equal(model._infection_frequency["a"], np.array([[70 * 0.5 / 1000]]))
-    assert_array_equal(model._infection_frequency["b"], np.array([[20 * 3 / 1000]]))
-    assert_array_equal(model._infection_frequency["c"], np.array([[10 * 2 / 1000]]))
+    assert_array_equal(model._category_populations, np.array([1000]))
+    assert_array_equal(model._infection_density["a"], np.array([70 * 0.5]))
+    assert_array_equal(model._infection_density["b"], np.array([20 * 3]))
+    assert_array_equal(model._infection_density["c"], np.array([10 * 2]))
+    assert_array_equal(model._infection_frequency["a"], np.array([70 * 0.5 / 1000]))
+    assert_array_equal(model._infection_frequency["b"], np.array([20 * 3 / 1000]))
+    assert_array_equal(model._infection_frequency["c"], np.array([10 * 2 / 1000]))
 
     # Get multipliers
     susceptible = model.compartments[0]
@@ -220,13 +220,13 @@ def test_strain__with_flow_adjustments():
 
     # Do pre-iteration force of infection calcs
     model._prepare_time_step(0, model.initial_population)
-    assert_array_equal(model._category_populations, np.array([[1000]]))
-    assert_array_equal(model._infection_density["a"], np.array([[70]]))
-    assert_array_equal(model._infection_density["b"], np.array([[20]]))
-    assert_array_equal(model._infection_density["c"], np.array([[10]]))
-    assert_array_equal(model._infection_frequency["a"], np.array([[70 / 1000]]))
-    assert_array_equal(model._infection_frequency["b"], np.array([[20 / 1000]]))
-    assert_array_equal(model._infection_frequency["c"], np.array([[10 / 1000]]))
+    assert_array_equal(model._category_populations, np.array([1000]))
+    assert_array_equal(model._infection_density["a"], np.array([70]))
+    assert_array_equal(model._infection_density["b"], np.array([20]))
+    assert_array_equal(model._infection_density["c"], np.array([10]))
+    assert_array_equal(model._infection_frequency["a"], np.array([70 / 1000]))
+    assert_array_equal(model._infection_frequency["b"], np.array([20 / 1000]))
+    assert_array_equal(model._infection_frequency["c"], np.array([10 / 1000]))
 
     # Get multipliers
     susceptible = model.compartments[0]
@@ -320,30 +320,30 @@ def test_strain__with_infectious_multipliers_and_heterogeneous_mixing():
 
     # Do pre-iteration force of infection calcs
     model._prepare_time_step(0, model.initial_population)
-    assert_array_equal(model._category_populations, np.array([[600], [400]]))
+    assert_array_equal(model._category_populations, np.array([600, 400]))
     assert_array_equal(
         model._infection_density["a"],
-        np.array([[0.5 * (42 * 1.5 + 28 * 0.5)], [0.5 * (42 * 0.5 + 28 * 1.5)]]),
+        np.array([0.5 * (42 * 1.5 + 28 * 0.5), 0.5 * (42 * 0.5 + 28 * 1.5)]),
     )
     assert_array_equal(
         model._infection_density["b"],
         np.array(
             [
-                [3 * (12 * 1.5 + 8 * 0.5)],
-                [3 * (8 * 1.5 + 12 * 0.5)],
+                3 * (12 * 1.5 + 8 * 0.5),
+                3 * (8 * 1.5 + 12 * 0.5),
             ]
         ),
     )
     assert_array_equal(
         model._infection_density["c"],
-        np.array([[2 * (6 * 1.5 + 4 * 0.5)], [2 * (4 * 1.5 + 6 * 0.5)]]),
+        np.array([2 * (6 * 1.5 + 4 * 0.5), 2 * (4 * 1.5 + 6 * 0.5)]),
     )
     assert_array_equal(
         model._infection_frequency["a"],
         np.array(
             [
-                [0.5 * ((42 / 600) * 1.5 + (28 / 400) * 0.5)],
-                [0.5 * ((42 / 600) * 0.5 + (28 / 400) * 1.5)],
+                0.5 * ((42 / 600) * 1.5 + (28 / 400) * 0.5),
+                0.5 * ((42 / 600) * 0.5 + (28 / 400) * 1.5),
             ]
         ),
     )
@@ -351,15 +351,15 @@ def test_strain__with_infectious_multipliers_and_heterogeneous_mixing():
         model._infection_frequency["b"],
         np.array(
             [
-                [3 * ((12 / 600) * 1.5 + (8 / 400) * 0.5)],
-                [3 * ((8 / 400) * 1.5 + (12 / 600) * 0.5)],
+                3 * ((12 / 600) * 1.5 + (8 / 400) * 0.5),
+                3 * ((8 / 400) * 1.5 + (12 / 600) * 0.5),
             ]
         ),
     )
     assert_array_equal(
         model._infection_frequency["c"],
         np.array(
-            [[2 * ((6 / 600) * 1.5 + (4 / 400) * 0.5)], [2 * ((4 / 400) * 1.5 + (6 / 600) * 0.5)]]
+            [2 * ((6 / 600) * 1.5 + (4 / 400) * 0.5), 2 * ((4 / 400) * 1.5 + (6 / 600) * 0.5)]
         ),
     )
 

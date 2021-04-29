@@ -48,9 +48,9 @@ def test_strat_get_infection_multiplier__with_age_strat_and_no_mixing():
 
     # Do pre-iteration force of infection calcs
     model._prepare_time_step(0, model.initial_population)
-    assert_array_equal(model._category_populations, np.array([[1000]]))
-    assert_array_equal(model._infection_density["default"], np.array([[10.0]]))
-    assert_array_equal(model._infection_frequency["default"], np.array([[0.01]]))
+    assert_array_equal(model._category_populations, np.array([1000]))
+    assert_array_equal(model._infection_density["default"], np.array([10.0]))
+    assert_array_equal(model._infection_frequency["default"], np.array([0.01]))
 
     # Get multipliers
     s_child = model.compartments[0]
@@ -121,14 +121,14 @@ def test_strat_get_infection_multiplier__with_age_strat_and_simple_mixing():
     assert child_density == 0.5 * 5 + 0.5 * 5
     assert adult_density == 0.5 * 5 + 0.5 * 5
     assert_array_equal(
-        model._infection_density["default"], np.array([[child_density], [adult_density]])
+        model._infection_density["default"], np.array([child_density, adult_density])
     )
     child_freq = 0.01
     adult_freq = 0.01
     assert child_freq == child_density / 500
     assert adult_freq == adult_density / 500
     assert_array_equal(
-        model._infection_frequency["default"], np.array([[child_freq], [adult_freq]])
+        model._infection_frequency["default"], np.array([child_freq, adult_freq])
     )
 
     # Get multipliers
@@ -191,14 +191,14 @@ def test_strat_get_infection_multiplier__with_age_split_and_simple_mixing():
     assert child_density == 0.5 * 5 + 0.5 * 5
     assert adult_density == 0.5 * 5 + 0.5 * 5
     assert_array_equal(
-        model._infection_density["default"], np.array([[child_density], [adult_density]])
+        model._infection_density["default"], np.array([child_density, adult_density])
     )
     child_freq = 0.01
     adult_freq = 0.01
     assert child_freq == 0.5 * 2 / 200 + 0.5 * 8 / 800
     assert adult_freq == 0.5 * 2 / 200 + 0.5 * 8 / 800
     assert_array_equal(
-        model._infection_frequency["default"], np.array([[child_freq], [adult_freq]])
+        model._infection_frequency["default"], np.array([child_freq, adult_freq])
     )
 
     # Get multipliers
@@ -255,13 +255,13 @@ def test_strat_get_infection_multiplier__with_age_strat_and_mixing():
 
     # Do pre-iteration force of infection calcs
     model._prepare_time_step(0, model.initial_population)
-    assert_array_equal(model._category_populations, np.array([[200.0], [800.0]]))
+    assert_array_equal(model._category_populations, np.array([200.0, 800.0]))
     child_density = 28
     adult_density = 66
     assert child_density == 2 * 2.0 + 3 * 8.0
     assert adult_density == 5 * 2.0 + 7 * 8.0
     assert_array_equal(
-        model._infection_density["default"], np.array([[child_density], [adult_density]])
+        model._infection_density["default"], np.array([child_density, adult_density])
     )
     child_freq = 0.05
     adult_freq = 0.12000000000000001
@@ -269,7 +269,7 @@ def test_strat_get_infection_multiplier__with_age_strat_and_mixing():
     assert adult_freq == 5 * 2.0 / 200 + 7 * 8.0 / 800
 
     assert_array_equal(
-        model._infection_frequency["default"], np.array([[child_freq], [adult_freq]])
+        model._infection_frequency["default"], np.array([child_freq, adult_freq])
     )
 
     # Get multipliers
@@ -328,9 +328,9 @@ def test_strat_get_infection_multiplier__with_double_strat_and_no_mixing():
 
     # Do pre-iteration force of infection calcs
     model._prepare_time_step(0, model.initial_population)
-    assert_array_equal(model._category_populations, np.array([[1000]]))
-    assert_array_equal(model._infection_density["default"], np.array([[10.0]]))
-    assert_array_equal(model._infection_frequency["default"], np.array([[0.01]]))
+    assert_array_equal(model._category_populations, np.array([1000]))
+    assert_array_equal(model._infection_density["default"], np.array([10.0]))
+    assert_array_equal(model._infection_frequency["default"], np.array([0.01]))
     s_child_work = model.compartments[0]
     s_child_home = model.compartments[1]
     s_adult_work = model.compartments[2]
@@ -397,18 +397,18 @@ def test_strat_get_infection_multiplier__with_double_strat_and_first_strat_mixin
 
     # Do pre-iteration force of infection calcs
     model._prepare_time_step(0, model.initial_population)
-    assert_array_equal(model._category_populations, np.array([[300.0], [700.0]]))
+    assert_array_equal(model._category_populations, np.array([300.0, 700.0]))
     child_density = 27
     adult_density = 64
     assert child_density == 2 * 3 + 3 * 7
     assert adult_density == 5 * 3 + 7 * 7
     assert_array_equal(
-        model._infection_density["default"], np.array([[child_density], [adult_density]])
+        model._infection_density["default"], np.array([child_density, adult_density])
     )
     child_freq = 2 * 3 / 300 + 3 * 7 / 700
     adult_freq = 5 * 3 / 300 + 7 * 7 / 700
     assert_array_equal(
-        model._infection_frequency["default"], np.array([[child_freq], [adult_freq]])
+        model._infection_frequency["default"], np.array([child_freq, adult_freq])
     )
 
     # Get multipliers
@@ -482,17 +482,17 @@ def test_strat_get_infection_multiplier__with_double_strat_and_second_strat_mixi
 
     # Do pre-iteration force of infection calcs
     model._prepare_time_step(0, model.initial_population)
-    assert_array_equal(model._category_populations, np.array([[500.0], [500.0]]))
+    assert_array_equal(model._category_populations, np.array([500.0, 500.0]))
     work_density = 25
     home_density = 60
     assert work_density == 2 * 5 + 3 * 5
     assert home_density == 5 * 5 + 7 * 5
     assert_array_equal(
-        model._infection_density["default"], np.array([[work_density], [home_density]])
+        model._infection_density["default"], np.array([work_density, home_density])
     )
     work_freq = 2 * 5 / 500 + 3 * 5 / 500
     home_freq = 5 * 5 / 500 + 7 * 5 / 500
-    assert_array_equal(model._infection_frequency["default"], np.array([[work_freq], [home_freq]]))
+    assert_array_equal(model._infection_frequency["default"], np.array([work_freq, home_freq]))
 
     # Get multipliers
     s_child_work = model.compartments[0]
@@ -598,10 +598,10 @@ def test_strat_get_infection_multiplier__with_double_strat_and_both_strats_mixin
     model._prepare_time_step(0, model.initial_population)
     exp_pops = np.array(
         [
-            [150],  # children at work
-            [150],  # children at home
-            [350],  # adults at work
-            [350],  # adults at home
+            150,  # children at work
+            150,  # children at home
+            350,  # adults at work
+            350,  # adults at home
         ]
     )
     assert_array_equal(model._category_populations, exp_pops)
@@ -623,18 +623,18 @@ def test_strat_get_infection_multiplier__with_double_strat_and_both_strats_mixin
     )
     exp_density = np.array(
         [
-            [child_work_density],  # children at work
-            [child_home_density],  # children at home
-            [adult_work_density],  # adults at work
-            [adult_home_density],  # adults at home
+            child_work_density,  # children at work
+            child_home_density,  # children at home
+            adult_work_density,  # adults at work
+            adult_home_density,  # adults at home
         ]
     )
     exp_frequency = np.array(
         [
-            [child_work_freq],  # children at work
-            [child_home_freq],  # children at home
-            [adult_work_freq],  # adults at work
-            [adult_home_freq],  # adults at home
+            child_work_freq,  # children at work
+            child_home_freq,  # children at home
+            adult_work_freq,  # adults at work
+            adult_home_freq,  # adults at home
         ]
     )
     assert_array_equal(model._infection_density["default"], exp_density)

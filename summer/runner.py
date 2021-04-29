@@ -98,13 +98,10 @@ class VectorizedRunner(ModelRunner):
         self._neg_flow_map = np.array(f_neg_map, dtype=int)
 
     def precompute_mixing_matrices(self):
-        oversample = 10
-
         num_cat = self.model.num_categories
-        self.mixing_matrices = np.empty((len(self.model.times)*oversample, num_cat, num_cat))
+        self.mixing_matrices = np.empty((len(self.model.times), num_cat, num_cat))
         for i, t in enumerate(self.model.times):
-            for j in range(oversample):
-                self.mixing_matrices[(i*oversample)+j] = self.model._get_mixing_matrix(t + (j/oversample))
+            self.mixing_matrices[i] = self.model._get_mixing_matrix(t)
 
     def _prepare_time_step(self, time: float, compartment_values: np.ndarray):
         """
@@ -142,9 +139,17 @@ class VectorizedRunner(ModelRunner):
             # Include reshape to maintain consistency with reference implementation
             self.model._infection_frequency[strain] = np.matmul(mixing_matrix, category_frequency).reshape((num_cat, 1))
     
-    def _get_mixing_matrix(self, time: float):
+    def _get_mixing_matrix(self, time: float) -> np.ndarray:
+        """Thin wrapper to either get the model's mixing matrix, or use our precomputed matrices
+
+        Args:
+            time (float): Time in model.times
+
+        Returns:
+            np.ndarray: Mixing matrix at time (time)
+        """
         if self._precompute_mixing:
-             t = int(10 * (time - self.model.times[0]))
+             t = int(time - self.model.times[0])
              return self.mixing_matrices[t]
         else:
             return self.model._get_mixing_matrix(time)
@@ -237,7 +242,7 @@ class VectorizedRunner(ModelRunner):
             # Evaluate the function flows.
             for flow_idx, flow in self.model._iter_function_flows:
                 net_flow = flow.get_net_flow(
-                    self.compartments, comp_vals, self._flows, flow_rates, time
+                    self.model.compartments, comp_vals, self.model._flows, flow_rates, time
                 )
                 comp_rates[flow.source.idx] -= net_flow
                 comp_rates[flow.dest.idx] += net_flow
