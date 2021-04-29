@@ -7,9 +7,12 @@ import numpy as np
 
 from summer.adjust import Multiply, Overwrite
 from summer.compartment import Compartment
-
+ 
 Adjustment = Union[Multiply, Overwrite]
 MixingMatrix = Union[np.ndarray, Callable[[float], np.ndarray]]
+
+# Allowable error in requested compartment splits between one and the total requested
+COMP_SPLIT_REQUEST_ERROR = 1e-2
 
 
 class Stratification:
@@ -36,7 +39,7 @@ class Stratification:
         self.strata = list(map(str, strata))
         self.compartments = [Compartment(c) if type(c) is str else c for c in compartments]
 
-        # Split population evently by default.
+        # Split population evenly by default.
         num_strata = len(self.strata)
         self.population_split = {s: 1 / num_strata for s in self.strata}
 
@@ -48,11 +51,11 @@ class Stratification:
         self.mixing_matrix = None
 
     def is_ageing(self) -> bool:
-        """Returns ``True`` if this stratification represets a set of age groups with ageing dynamics"""
+        """Returns ``True`` if this stratification represents a set of age groups with ageing dynamics"""
         return self._is_ageing
 
     def is_strain(self) -> bool:
-        """Returns ``True`` if this stratification represets a set of disease strains"""
+        """Returns ``True`` if this stratification represents a set of disease strains"""
         return self._is_strain
 
     def set_population_split(self, proportions: Dict[str, float]):
@@ -66,15 +69,15 @@ class Stratification:
 
             - Specify all strata
             - All be positive
-            - Sum to 1 +/- 0.01
+            - Sum to 1 +/- error defined above
 
         """
         msg = f"All strata must be specified when setting population split: {proportions}"
-        assert list(proportions.keys()) == self.strata, msg
+        assert set(list(proportions.keys())) == set(self.strata), msg
         msg = f"All proportions must be >= 0 when setting population split: {proportions}"
         assert all([v >= 0 for v in proportions.values()]), msg
         msg = f"All proportions sum to 1+/-0.01 when setting population split: {proportions}"
-        assert abs(1 - sum(proportions.values())) < 1e2, msg
+        assert abs(1 - sum(proportions.values())) < COMP_SPLIT_REQUEST_ERROR, msg
         self.population_split = proportions
 
     def add_flow_adjustments(
@@ -111,16 +114,16 @@ class Stratification:
                     "alpine": None, # No adjustment
                 })
 
-
         """
         source_strata = source_strata or {}
         dest_strata = dest_strata or {}
         msg = "You must specify all strata when adding flow adjustments."
         assert set(adjustments.keys()) == set(self.strata), msg
 
+        msg = "All flow adjustments must be Multiply, Overwrite or None."
         assert all(
-            [type(a) is Overwrite or type(a) is Multiply or a is None for a in adjustments.values()]
-        ), "All flow adjustments must be Multiply, Overwrite or None."
+            [type(adj) is Overwrite or type(adj) is Multiply or adj is None for adj in adjustments.values()]
+        ), msg
 
         if flow_name not in self.flow_adjustments:
             self.flow_adjustments[flow_name] = []
@@ -129,21 +132,31 @@ class Stratification:
 
     def get_flow_adjustment(self, flow) -> dict:
         """
-        Returns the most recently added flow adjustment that matches a given flow.
+        Note that the loop structure implies that if the user has requested multiple adjustments that apply to a single
+        combination of strata (across multiple stratifications), then only the last one that is applicable will be used
+        - because the last request will over-write the earlier ones in the loop.
+        Therefore, the most recently added flow adjustment that matches a given flow will be returned.
+
         """
         flow_adjustments = self.flow_adjustments.get(flow.name, [])
         matching_adjustment = None
-        for adjustment, source_strata, dest_strata in flow_adjustments:
-            # Skip any adjustments that don't match the flow's source compartment strata.
-            msg = f"Source strata specified in flow adjustment of {self.name} but {flow.name} does not have a source"
-            assert not (source_strata and not flow.source), msg
-            if source_strata and flow.source and not flow.source.has_strata(source_strata):
-                continue
 
-            # Skip any adjustments that don't match the flow's dest compartment strata.
-            msg = f"Dest strata specified in flow adjustment of {self.name} but {flow.name} does not have a dest"
+        # Loop over all the requested adjustments.
+        for adjustment, source_strata, dest_strata in flow_adjustments:
+
+            # For entry flows:
+            msg = f"Source strata requested in flow adjustment of {self.name}, but {flow.name} does not have a source"
+            assert not (source_strata and not flow.source), msg
+
+            # For exit flows:
+            msg = f"Dest strata requested in flow adjustment of {self.name}, but {flow.name} does not have a dest"
             assert not (dest_strata and not flow.dest), msg
-            if dest_strata and flow.dest and not flow.dest.has_strata(dest_strata):
+
+            # Make sure that the source request applies to this flow because it has all of the requested strata.
+            # Note that these can be specified in the current or any previous stratifications.
+            is_source_no_match = source_strata and flow.source and not flow.source.has_strata(source_strata)
+            is_dest_no_match = dest_strata and flow.dest and not flow.dest.has_strata(dest_strata)
+            if is_source_no_match or is_dest_no_match:
                 continue
 
             matching_adjustment = adjustment
@@ -155,7 +168,9 @@ class Stratification:
     ):
         """
         Add an adjustment of a compartment's infectiousness to the stratification.
-        You cannot use time-varying functions for infectiousness adjustments.
+        You cannot currently use time-varying functions for infectiousness adjustments.
+        All strata in this stratification must be specified as keys in the adjustments argument,
+        if no adjustment required for a stratum, specify None as the value to the request for that stratum.
 
         Args:
             compartment_name: The name of the compartment to adjust.
@@ -179,20 +194,24 @@ class Stratification:
         msg = "You must specify all strata when adding infectiousness adjustments."
         assert set(adjustments.keys()) == set(self.strata), msg
 
+        msg = "All infectiousness adjustments must be Multiply, Overwrite or None."
         assert all(
             [type(a) is Overwrite or type(a) is Multiply or a is None for a in adjustments.values()]
-        ), "All infectiousness adjustments must be Multiply, Overwrite or None."
+        ), msg
 
         msg = f"An infectiousness adjustment for {compartment_name} already exists for strat {self.name}"
         assert compartment_name not in self.infectiousness_adjustments, msg
 
         msg = "Cannot use time varying functions for infectiousness adjustments."
-        assert not any([callable(a.param) for a in adjustments.values() if a])
+        assert not any([callable(adj.param) for adj in adjustments.values() if adj]), msg
 
         self.infectiousness_adjustments[compartment_name] = adjustments
 
     def set_mixing_matrix(self, mixing_matrix: MixingMatrix):
-        """"""
+        """
+        Sets the mixing matrix for the model.
+        Note that this must apply to all compartments, although this is checked at runtime rather than here.
+        """
         msg = "Strain stratifications cannot have a mixing matrix."
         assert not self.is_strain(), msg
 
@@ -202,7 +221,7 @@ class Stratification:
         assert type(mm) is np.ndarray, msg
 
         num_strata = len(self.strata)
-        msg = f"Mixing matrix must have shape ({num_strata}, {num_strata})"
+        msg = f"Mixing matrix must have both {num_strata} rows and {num_strata} columns."
         assert mm.shape == (num_strata, num_strata), msg
 
         self.mixing_matrix = mixing_matrix
@@ -229,7 +248,7 @@ class Stratification:
         self, comps: List[Compartment], comp_values: np.ndarray
     ) -> np.ndarray:
         """
-        Stratify the model compartments into sub-compartments, based on the strata names provided,
+        Stratify the model compartments into sub-compartments, based on the strata names provided.
         Split the population according to the provided proportions.
         Only compartments specified in the stratification's definition will be stratified.
         Returns the new compartment values.
@@ -250,7 +269,7 @@ class Stratification:
 
 class AgeStratification(Stratification):
     """
-    A stratification that represets a set of age groups with ageing dynamics.
+    A stratification that represents a set of age groups with ageing dynamics.
 
     Args:
         name: The name of the stratification.
@@ -265,6 +284,7 @@ class AgeStratification(Stratification):
     where the exit rate is proportional to the age group's time span. For example, in the 0-9 strata,
     there will be a flow created where 10% of occupants "age up" into the 10-19 strata each year.
     **Critically**, this feature assumes that each of the model's time steps represents a year.
+
     """
 
     _is_ageing = True
@@ -278,7 +298,7 @@ class AgeStratification(Stratification):
         try:
             _strata = sorted(map(int, strata))
         except:
-            raise AssertionError("Strata much be a int-compatible")
+            raise AssertionError("Strata must be in an int-compatible format")
 
         assert _strata[0] == 0, "First age strata must be 0"
 
@@ -288,7 +308,7 @@ class AgeStratification(Stratification):
 
 class StrainStratification(Stratification):
     """
-    A stratification that represets a set of disease strains.
+    A stratification that represents a set of disease strains.
 
     Args:
         name: The name of the stratification.
@@ -296,10 +316,11 @@ class StrainStratification(Stratification):
         compartments: The compartments which will be stratified.
 
 
-    Each supplied strata will be interpreted as a different strain of the disease being modelled.
+    Each requested stratum will be interpreted as a different strain of the disease being modelled.
     This will mean that the force of infection calculations will consider each strain separately.
 
     Strain stratifications cannot use a mixing matrix
+
     """
 
     _is_strain = True

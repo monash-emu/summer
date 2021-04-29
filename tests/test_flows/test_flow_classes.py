@@ -5,7 +5,7 @@ from summer import Compartment, adjust
 from summer.flows import (
     CrudeBirthFlow,
     DeathFlow,
-    FractionalFlow,
+    TransitionFlow,
     FunctionFlow,
     ImportFlow,
     InfectionDensityFlow,
@@ -63,8 +63,8 @@ def test_function_flow_get_net_flow_with_adjust():
     assert net_flow == 2 * 3 * 7 * 13
 
 
-def test_fractional_flow_get_net_flow():
-    flow = FractionalFlow(
+def test_transition_flow_get_net_flow():
+    flow = TransitionFlow(
         name="flow",
         source=Compartment("I"),
         dest=Compartment("R"),
@@ -77,8 +77,8 @@ def test_fractional_flow_get_net_flow():
     assert net_flow == 2 * 3 * 7
 
 
-def test_fractional_flow_get_net_flow_with_adjust():
-    flow = FractionalFlow(
+def test_transition_flow_get_net_flow_with_adjust():
+    flow = TransitionFlow(
         name="flow",
         source=Compartment("I"),
         dest=Compartment("R"),

@@ -17,7 +17,7 @@ class BaseFlow(ABC):
     """
     :meta private:
     Abstract base class for all flows.
-    A flow represents the movement of people from one compartment to another.
+    A flow represents the movement of people into, between or out of compartments.
     """
 
     name = None
@@ -56,7 +56,7 @@ class BaseFlow(ABC):
 
     def get_weight_value(self, time: float):
         """
-        Returns the flow's weight at a given time.
+        Returns the flow's 'weight' (i.e. rate to be multiplied by the value of the source compartment) at a given time.
         Applies any stratification adjustments to the base parameter.
         """
         flow_rate = self.param(time) if callable(self.param) else self.param
@@ -279,8 +279,8 @@ class BaseExitFlow(BaseFlow):
 class BaseTransitionFlow(BaseFlow):
     """
     :meta private:
-    A flow where people move from the source compartment, to the destination.
-    Eg. infection, recovery, progress of disease.
+    A flow where people move from the source compartment to the destination.
+    e.g. infection, recovery, progression of disease.
     """
 
     def __init__(
@@ -388,7 +388,11 @@ class CrudeBirthFlow(BaseEntryFlow):
 
     _is_birth_flow = True
 
-    def get_net_flow(self, compartment_values, time):
+    def get_net_flow(
+        self,
+        compartment_values: np.ndarray,
+        time: float,
+    ) -> float:
         parameter_value = self.get_weight_value(time)
         total_population = _find_sum(compartment_values)
         return parameter_value * total_population
@@ -426,7 +430,8 @@ def _find_sum(compartment_values: np.ndarray) -> float:
 class ImportFlow(BaseEntryFlow):
     """
     Calculates importation, where people enter the destination compartment from outside the system.
-    The number of people imported per timestep is independent of the population.
+    The number of people imported per timestep is independent of the source compartment, because there isn't a source
+    compartment.
 
     Args:
         name: The flow name.
@@ -448,7 +453,8 @@ class ImportFlow(BaseEntryFlow):
 
 class DeathFlow(BaseExitFlow):
     """
-    A flow representing deaths. calculated from a fractional death rate.
+    A flow representing deaths.
+    Calculated from a fractional death rate.
 
     Args:
         name: The flow name.
@@ -471,7 +477,7 @@ class DeathFlow(BaseExitFlow):
         return flow_rate
 
 
-class FractionalFlow(BaseTransitionFlow):
+class TransitionFlow(BaseTransitionFlow):
     """
     A flow that transfers people from a source to a destination based on
     the population of the source compartment and the fractional flow rate.
@@ -526,7 +532,9 @@ class SojournFlow(BaseTransitionFlow):
 class FunctionFlow(BaseTransitionFlow):
     """
     A flow that transfers people from a source to a destination based on a user-defined function.
-    This can be used to define more complex flows if requird.
+    Note that the rate is NOT multiplied by the size of the source compartment.
+    This can be used to define more complex flows if required.
+    Important to be careful that compartment sizes do not go negative with these flows, as this is not guaranteed.
 
     Args:
         name: The flow name.
@@ -593,11 +601,11 @@ class BaseInfectionFlow(BaseTransitionFlow):
 
 class InfectionDensityFlow(BaseInfectionFlow):
     """
-    An infection flow that should use the density of infectious people to calculate the force of infection factor.
+    An infection flow that should use the number of infectious people to calculate the force of infection factor.
     """
 
 
 class InfectionFrequencyFlow(BaseInfectionFlow):
     """
-    An infection flow that should use the frequency of infectious people to calculate the force of infection factor.
+    An infection flow that should use the prevalence of infectious people to calculate the force of infection factor.
     """

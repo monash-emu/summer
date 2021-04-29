@@ -110,7 +110,7 @@ def test_flow_derived_outputs():
     model.request_output_for_flow(name="importation_air", flow_name="imports_air")
 
     # Fractional transition flow
-    model.add_fractional_flow("recovery", 0.1, "I", "R")
+    model.add_transition_flow("recovery", 0.1, "I", "R")
     model.request_output_for_flow(name="recovery_raw", flow_name="recovery", raw_results=True)
     model.request_output_for_flow(name="recovery_delta", flow_name="recovery", raw_results=False)
 

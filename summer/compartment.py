@@ -66,8 +66,7 @@ class Compartment:
 
     def has_name_in_list(self, comps: list) -> bool:
         """
-        Returns True if this compartment has the same root name
-        as any compartment in the provided list.
+        Returns True if this compartment has the same root name as any compartment in the provided list.
         """
         return any(self.has_name(c) for c in comps)
 
