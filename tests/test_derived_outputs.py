@@ -123,16 +123,16 @@ def test_flow_derived_outputs():
     # Post-processed outputs reflect changes in compartment size.
     recovered_count = np.zeros_like(model.outputs[:, 2])
     recovered_count[1:] = np.diff(model.outputs[:, 2])
-    assert_allclose(dos["recovery_delta"], recovered_count, rtol=0.01)
+    assert_allclose(dos["recovery_delta"][1:], recovered_count[1:], rtol=0.01)
 
     # Good match for constant
-    assert_array_equal(dos["importation"], np.array([0, 2, 2, 2, 2, 2]))
+    assert_array_equal(dos["importation"][1:], np.array([2, 2, 2, 2, 2]))
     assert_array_equal(dos["importation_raw"], np.array([2, 2, 2, 2, 2, 2]))
 
     # Good match for linear
-    assert_allclose(dos["importation_land"], np.array([0.0, 1.5, 4.5, 7.5, 10.5, 13.5]))
+    assert_allclose(dos["importation_land"][1:], np.array([1.5, 4.5, 7.5, 10.5, 13.5]))
     # So-so match for quadratic
-    assert_allclose(dos["importation_air"], np.array([0.0, 0.5, 2.5, 6.5, 12.5, 20.5]), rtol=0.1)
+    assert_allclose(dos["importation_air"][1:], np.array([0.5, 2.5, 6.5, 12.5, 20.5]), rtol=0.1)
 
 
 def test_functional_derived_outputs():
@@ -200,7 +200,7 @@ def test_derived_outputs_with_no_save_results():
         ]
     )
     dos = model._calculate_derived_outputs()
-    assert_array_equal(dos["final_aggregate"], np.array([0, 12, 27, 47, 72, 102]))
+    assert_array_equal(dos["final_aggregate"][1:], np.array([12, 27, 47, 72, 102]))
     assert "importation" not in dos
     assert "recovered" not in dos
     assert "recovered_cumulative" not in dos
