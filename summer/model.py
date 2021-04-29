@@ -24,9 +24,11 @@ logger = logging.getLogger()
 
 FlowRateFunction = Callable[[List[Compartment], np.ndarray, np.ndarray, float], np.ndarray]
 
+
 class BackendType:
-    DEFAULT = 'default'
-    VECTORIZED = 'vectorized'
+    REFERENCE = "reference"
+    VECTORIZED = "vectorized"
+
 
 class CompartmentalModel:
     """
@@ -56,6 +58,7 @@ class CompartmentalModel:
 
     _DEFAULT_DISEASE_STRAIN = "default"
     _DEFAULT_MIXING_MATRIX = np.array([[1]])
+    _DEFAULT_BACKEND = BackendType.REFERENCE
 
     def __init__(
         self,
@@ -675,7 +678,7 @@ class CompartmentalModel:
     def run(
         self,
         solver: str = SolverType.SOLVE_IVP,
-        backend: str = BackendType.DEFAULT,
+        backend: str = _DEFAULT_BACKEND,
         backend_args: dict = None,
         **kwargs,
     ):
@@ -695,7 +698,7 @@ class CompartmentalModel:
         
         backend_args = backend_args or {}
 
-        if backend == BackendType.DEFAULT:
+        if backend == BackendType.REFERENCE:
             self._runner = self
         elif backend == BackendType.VECTORIZED:
             self._runner = VectorizedRunner(self, **backend_args)

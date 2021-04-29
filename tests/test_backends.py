@@ -1,17 +1,19 @@
 import numpy as np
 
+from summer.solver import SolverType
+
 from .model_setup import _get_test_model
 
 def test_compare_default_vectorized_outputs():
-    """Simple direct-comparison smoke test to check the vectorized backend produces
-    the same outputs as the default
+    """Simple direct-comparison acceptance test to check the vectorized backend produces
+    outputs equivalent to the reference implementation
     """
     model = _get_test_model(times=[0,5])
 
-    model.run(backend='default')
+    model.run(backend='reference', solver=SolverType.RUNGE_KUTTA)
     default_outputs = model.outputs.copy()
 
-    model.run(backend='vectorized')
+    model.run(backend='vectorized', solver=SolverType.RUNGE_KUTTA)
     vectorized_outputs = model.outputs
 
-    assert((default_outputs == vectorized_outputs).all())
+    np.testing.assert_allclose(vectorized_outputs, default_outputs)
