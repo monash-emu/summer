@@ -8,6 +8,7 @@ from typing import Callable, Dict, List, Optional, Tuple
 
 import networkx
 import numpy as np
+import numba
 
 import summer.flows as flows
 from summer import stochastic
@@ -15,11 +16,19 @@ from summer.adjust import FlowParam
 from summer.compartment import Compartment
 from summer.derived_outputs import DerivedOutputRequest, calculate_derived_outputs
 from summer.solver import SolverType, solve_ode
-from summer.stratification import Stratification, AgeStratification
+from summer.stratification import Stratification
+from summer.runner import VectorizedRunner
+from summer.compute import binary_matrix_to_sparse_pairs
+
 
 logger = logging.getLogger()
 
 FlowRateFunction = Callable[[List[Compartment], np.ndarray, np.ndarray, float], np.ndarray]
+
+
+class BackendType:
+    REFERENCE = "reference"
+    VECTORIZED = "vectorized"
 
 
 class CompartmentalModel:
@@ -50,6 +59,7 @@ class CompartmentalModel:
 
     _DEFAULT_DISEASE_STRAIN = "default"
     _DEFAULT_MIXING_MATRIX = np.array([[1]])
+    _DEFAULT_BACKEND = BackendType.REFERENCE
 
     def __init__(
         self,
@@ -692,6 +702,8 @@ class CompartmentalModel:
     def run(
         self,
         solver: str = SolverType.SOLVE_IVP,
+        backend: str = _DEFAULT_BACKEND,
+        backend_args: dict = None,
         **kwargs,
     ):
         """
@@ -707,7 +719,19 @@ class CompartmentalModel:
             **kwargs (optional): Extra arguments to supplied to the solver, see ``summer.solver`` for details.
 
         """
-        self._prepare_to_run()
+        
+        backend_args = backend_args or {}
+
+        if backend == BackendType.REFERENCE:
+            self._runner = self
+        elif backend == BackendType.VECTORIZED:
+            self._runner = VectorizedRunner(self, **backend_args)
+        else:
+            msg = f"Invalid backend: {backend}"    
+            raise ValueError(msg)
+
+        self._runner._prepare_to_run()
+
         if solver == SolverType.STOCHASTIC:
             # Run the model in 'stochastic mode'.
             seed = kwargs.get("seed")
@@ -731,10 +755,11 @@ class CompartmentalModel:
         Runs the model over the provided time span, calculating the outputs.
         Uses an ODE interpretation of flow rates.
         """
+
         # Calculate the outputs (compartment sizes) by solving the ODE defined by _get_compartment_rates().
         self.outputs = solve_ode(
             solver,
-            self._get_compartment_rates,
+            self._runner._get_compartment_rates,
             self.initial_population,
             self.times,
             solver_args,
@@ -830,7 +855,7 @@ class CompartmentalModel:
         comp_rates, _ = self._get_rates(comp_vals, time)
         return comp_rates
 
-    def _get_flow_rates(self, compartment_values: np.ndarray, time: float):
+    def _get_flow_rates(self, compartment_values: np.ndarray, time: float) -> np.ndarray:
         """
         Returns the contribution of each flow to compartment rate of change for a given state and time.
         Returns a 1D array with an entry for each flow, the value being that flow's rate.
@@ -994,15 +1019,18 @@ class CompartmentalModel:
 
         # Create a matrix that tracks which categories each compartment is in.
         # A matrix with size (num_cats x num_comps).
+        # This is a very sparse static matrix, and there's almost certainly a much
+        # faster way of using it than naive matrix multiplication
         num_comps = len(self.compartments)
-        num_categories = len(self._mixing_categories)
+        self.num_categories = len(self._mixing_categories)
         self._category_lookup = {}  # Map compartments to categories.
-        self._category_matrix = np.zeros((num_categories, num_comps))
+        self._category_matrix = np.zeros((self.num_categories, num_comps))
         for i, category in enumerate(self._mixing_categories):
             for j, comp in enumerate(self.compartments):
                 if all(comp.has_stratum(k, v) for k, v in category.items()):
                     self._category_matrix[i][j] = 1
                     self._category_lookup[j] = i
+        self._compartment_category_map = binary_matrix_to_sparse_pairs(self._category_matrix)
 
     def _get_compartment_infectiousness_for_strain(self, strain: str):
         """
@@ -1125,6 +1153,8 @@ class CompartmentalModel:
         """
         Returns the final mixing matrix for a given time.
         """
+        #+++ FIXME _DEFAULT_MIXING_MATRIX hardcoded to [[1]], meaning first kroneker product does
+        # effectively nothing...
         mixing_matrix = self._DEFAULT_MIXING_MATRIX
         for mm_func in self._mixing_matrices:
             # Assume each mixing matrix is either an np.ndarray or a function of time that returns one.
@@ -1160,7 +1190,7 @@ class CompartmentalModel:
             timestep=self.timestep,
             flows=self._flows,
             compartments=self.compartments,
-            get_flow_rates=self._get_flow_rates,
+            get_flow_rates=self._runner._get_flow_rates,
             whitelist=self._derived_outputs_whitelist,
         )
 
