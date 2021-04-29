@@ -5,6 +5,7 @@ import numpy as np
 import numba
 
 import summer.flows as flows
+from summer.compute import accumulate_flow_contributions, sparse_pairs_accum
 
 class ModelRunner(ABC):
     def __init__(self, model):
@@ -45,8 +46,10 @@ class ModelRunner(ABC):
         pass
 
 class VectorizedRunner(ModelRunner):
-    def __init__(self, model):
+    def __init__(self, model, precompute_time_flows=False, precompute_mixing=False):
         super().__init__(model)
+        self._precompute_time_flows = precompute_time_flows
+        self._precompute_mixing = precompute_mixing
 
     def _prepare_to_run(self):
         """Do all precomputation here
@@ -57,6 +60,8 @@ class VectorizedRunner(ModelRunner):
         self.infectious_flow_indices = [i for i, f in self.model._iter_non_function_flows if isinstance(f, flows.BaseInfectionFlow)]
         self.death_flow_indices = [i for i, f in self.model._iter_non_function_flows if f.is_death_flow]
         self.population_idx = np.array([f.source.idx for i, f in self.model._iter_non_function_flows], dtype=int)
+        if self._precompute_mixing:
+            self.precompute_mixing_matrices()
 
     def precompute_flow_weights(self):
         """Calculate all static flow weights before running, and build indices for time-varying weights
@@ -70,12 +75,13 @@ class VectorizedRunner(ModelRunner):
                 self.flow_weights[i] = weight
             else:
                 #+++ Not currently used; time-varying weights are generated at runtime
-                #param_vals = np.array([f.get_weight_value(t) for t in self.model.times])
-                #time_varying_flow_weights.append(param_vals)
+                if self._precompute_time_flows:
+                    param_vals = np.array([f.get_weight_value(t) for t in self.model.times])
+                    time_varying_flow_weights.append(param_vals)
                 time_varying_weight_indices.append(i)
 
         self.time_varying_weight_indices = np.array(time_varying_weight_indices, dtype=int)
-        #self.time_varying_flow_weights = np.array(time_varying_flow_weights)
+        self.time_varying_flow_weights = np.array(time_varying_flow_weights)
 
     def precompute_flow_maps(self):
         """Build fast-access arrays of flow indices
@@ -91,6 +97,58 @@ class VectorizedRunner(ModelRunner):
         self._pos_flow_map = np.array(f_pos_map, dtype=int)
         self._neg_flow_map = np.array(f_neg_map, dtype=int)
 
+    def precompute_mixing_matrices(self):
+        oversample = 10
+
+        num_cat = self.model.num_categories
+        self.mixing_matrices = np.empty((len(self.model.times)*oversample, num_cat, num_cat))
+        for i, t in enumerate(self.model.times):
+            for j in range(oversample):
+                self.mixing_matrices[(i*oversample)+j] = self.model._get_mixing_matrix(t + (j/oversample))
+
+    def _prepare_time_step(self, time: float, compartment_values: np.ndarray):
+        """
+        Pre-timestep setup. This should be run before `_get_compartment_rates`.
+        Here we set up any stateful updates that need to happen before we get the flow rates.
+        """
+
+        # Find the effective infectious population for the force of infection (FoI) calculations.
+        mixing_matrix = self._get_mixing_matrix(time)
+
+        num_cat = self.model.num_categories
+
+        # Calculate total number of people per category (for FoI).
+        # A vector with size (num_cat).
+        category_populations = sparse_pairs_accum(self.model._compartment_category_map, compartment_values, num_cat)
+
+        # Calculate infectious populations for each strain.
+        # Infection density / frequency is the infectious multiplier for each mixing category, calculated for each strain.
+        self.model._infection_density = {}
+        self.model._infection_frequency = {}
+        for strain in self.model._disease_strains:
+            strain_compartment_infectiousness = self.model._compartment_infectiousness[strain]
+
+            # Calculate total infected people per category, including adjustment factors.
+            # Returns a vector with size (num_cat).
+            infected_values = compartment_values * strain_compartment_infectiousness
+
+            infectious_populations = sparse_pairs_accum(self.model._compartment_category_map, infected_values, num_cat)
+
+            self.model._infection_density[strain] = np.matmul(mixing_matrix, infectious_populations).reshape((num_cat, 1))
+
+            # Calculate total infected person frequency per category, including adjustment factors.
+            # A vector with size (num_cat).
+            category_frequency = infectious_populations / category_populations
+            # Include reshape to maintain consistency with reference implementation
+            self.model._infection_frequency[strain] = np.matmul(mixing_matrix, category_frequency).reshape((num_cat, 1))
+    
+    def _get_mixing_matrix(self, time: float):
+        if self._precompute_mixing:
+             t = int(10 * (time - self.model.times[0]))
+             return self.mixing_matrices[t]
+        else:
+            return self.model._get_mixing_matrix(time)
+
     def apply_precomputed_flow_weights_at_time(self, time: float):
         """Fill flow weights with precomputed values
 
@@ -100,8 +158,11 @@ class VectorizedRunner(ModelRunner):
         Args:
             time (float): Time in model.times coordinates
         """
-        t = int(time - self.model.times[0])
-        self.flow_weights[self.time_varying_weight_indices] = self.time_varying_flow_weights[:,t]
+
+        # Test to see if we have any time varying weights
+        if len(self.time_varying_flow_weights):
+            t = int(time - self.model.times[0])
+            self.flow_weights[self.time_varying_weight_indices] = self.time_varying_flow_weights[:,t]
 
     def apply_flow_weights_at_time(self, time):
         """Calculate time dependent flow weights and insert them into our weights array
@@ -137,7 +198,10 @@ class VectorizedRunner(ModelRunner):
             np.ndarray: Array of all (non-function) flow rates
         """
         
-        self.apply_flow_weights_at_time(time)
+        if self._precompute_time_flows:
+            self.apply_precomputed_flow_weights_at_time(time)
+        else:
+            self.apply_flow_weights_at_time(time)
 
         populations = comp_vals[self.population_idx]
         infect_mul = self.get_infectious_multipliers()
@@ -160,12 +224,12 @@ class VectorizedRunner(ModelRunner):
                 comp_rates is the rate of change of compartments, and
                 flow_rates is the contribution of each flow to compartment rate of change
         """
-        self.model._prepare_time_step(time, comp_vals)
+        self._prepare_time_step(time, comp_vals)
     
         comp_rates = np.zeros(len(comp_vals))
         flow_rates = self.get_flow_rates(comp_vals, time)
 
-        self.model._total_deaths += flow_rates[self.death_flow_indices].sum()
+        self.model._total_deaths = flow_rates[self.death_flow_indices].sum()
 
         accumulate_flow_contributions(flow_rates, comp_rates, self._pos_flow_map, self._neg_flow_map)
 
@@ -196,20 +260,4 @@ class VectorizedRunner(ModelRunner):
         comp_vals = self.model._clean_compartment_values(compartment_values)
         _, flow_rates = self._get_rates(comp_vals, time)
         return flow_rates
-
-
-@numba.jit(nopython=True)
-def accumulate_flow_contributions(flow_rates: np.ndarray, comp_rates: np.ndarray, pos_flow_map: np.ndarray, neg_flow_map: np.ndarray):
-    """Fast accumulator for summing flow rates into their effects on compartments
-
-    Args:
-        flow_rates (np.ndarray): Flow rates to be accumulated
-        comp_rates (np.ndarray): Output array of compartment rates
-        pos_flow_map (np.ndarray): Array of src (flow), target (compartment) indices
-        neg_flow_map (np.ndarray): Array of src (flow), target (compartment) indices
-    """
-    for src, target in pos_flow_map:
-        comp_rates[target] += flow_rates[src]
-    for src, target in neg_flow_map:
-        comp_rates[target] -= flow_rates[src]
 
