@@ -18,6 +18,7 @@ from summer.derived_outputs import DerivedOutputRequest, calculate_derived_outpu
 from summer.solver import SolverType, solve_ode
 from summer.stratification import Stratification
 from summer.runner import VectorizedRunner
+from summer.compute import binary_matrix_to_sparse_pairs, sparse_pairs_accum
 
 logger = logging.getLogger()
 
@@ -675,6 +676,7 @@ class CompartmentalModel:
         self,
         solver: str = SolverType.SOLVE_IVP,
         backend: str = BackendType.DEFAULT,
+        backend_args: dict = None,
         **kwargs,
     ):
         """
@@ -691,10 +693,12 @@ class CompartmentalModel:
 
         """
         
+        backend_args = backend_args or {}
+
         if backend == BackendType.DEFAULT:
             self._runner = self
         elif backend == BackendType.VECTORIZED:
-            self._runner = VectorizedRunner(self)
+            self._runner = VectorizedRunner(self, **backend_args)
         else:
             msg = f"Invalid backend: {backend}"    
             raise ValueError(msg)
@@ -950,14 +954,15 @@ class CompartmentalModel:
         # This is a very sparse static matrix, and there's almost certainly a much
         # faster way of using it than naive matrix multiplication
         num_comps = len(self.compartments)
-        num_categories = len(self._mixing_categories)
+        self.num_categories = len(self._mixing_categories)
         self._category_lookup = {}  # Map compartments to categories.
-        self._category_matrix = np.zeros((num_categories, num_comps))
+        self._category_matrix = np.zeros((self.num_categories, num_comps))
         for i, category in enumerate(self._mixing_categories):
             for j, comp in enumerate(self.compartments):
                 if all(comp.has_stratum(k, v) for k, v in category.items()):
                     self._category_matrix[i][j] = 1
                     self._category_lookup[j] = i
+        self._compartment_category_map = binary_matrix_to_sparse_pairs(self._category_matrix)
 
     def _get_compartment_infectiousness_for_strain(self, strain: str):
         """
