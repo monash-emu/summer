@@ -23,7 +23,7 @@ Specifically, our past workflow typically followed this sequence of steps:
 5. Run the model and analyse the outputs (including calibration, validation, etc.)
 
 In our personal experience and from reviewing the results of others, we believe that this workflow produces considerable potential for errors.
-In particular, the process of first writing a system of ODEs before converting these into model code creates an additional unnecessary step in the process with its own potential for mistakes.
+In particular, the process of first writing out a system of ODEs before converting these into model code creates an additional unnecessary step in the workflow with its own opportunities for mistakes.
 
 ## The differences of our approach
 SUMMER is intended to change this paradigm, through:
@@ -37,23 +37,23 @@ The removal of the ODE step should reduce the potential for error and support th
 
 More generally, we believe that epidemiologist and modellers think about infectious disease transmission in these terms.
 That is, the intuition of an epidemic spreading through a population should and is thought of as groups of people making transitions between states.
-Converting this to ODE notation moves further away from this intuition, increases the potential for errors and may create barriers to understanding for non-modellers.
+Converting this to ODE notation moves further away from this intuition, increases the potential for errors and creates barriers to understanding for non-modellers.
 
 ## Achieving the aims
 
 ### Aim 1, more robust models
-Our codebase uses standard principles of software development, such as modularity, avoidance of repetition, clear variable naming, documention, etc.
+Our codebase uses standard principles of software development, such as modularity, avoidance of repetition, descriptive variable naming, documentation, etc.
 For each functional unit of code, we have written extensive tests to ensure predictable code behaviour wherever possible.
 
 ## Aim 2, more complicated models
-Infectious diseases were once thought to be declining towards irrelevance, but as the current pandemic has demonstrated, continue to present major challenges. 
-In particular, new technologies for control, antimicrobial resistance, newly emerging infections and other issues can make for complicated and rapidly changing policy questions.
+Infectious diseases were once thought to be declining towards irrelevance, but continue to present major challenges, as the current pandemic has demonstrated. 
+In particular, new technologies for control, antimicrobial resistance, newly emerged infections and other issues can make for complicated and rapidly changing policy questions.
 
-As the modelling questions increase in complexity, it is important that modelling tools are able to keep pace and that complex models can be quickly and reliably constructed.
+As the modelling questions increase in complexity, it is important that modelling tools are able to keep pace and that complicated models can be quickly and reliably constructed.
 As the complexity of the required models increases, the risk of errors should not scale similarly.
 
 More complicated models are also more computationally expensive.
-We aim to separate the process of model construction/definition from the back-end process of obtaining the numerical solutions to the system.
+We aimed to separate the process of model construction/definition from the back-end process of obtaining the numerical solutions to the system.
 This has permitted significant improvements in run-time, and creates the potential for further improvements in future versions.
 
 ## Aim 3, more intuitive models
