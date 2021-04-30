@@ -112,33 +112,8 @@ class VectorizedRunner(ModelRunner):
         # Find the effective infectious population for the force of infection (FoI) calculations.
         mixing_matrix = self._get_mixing_matrix(time)
 
-        num_cat = self.model.num_categories
+        self.model._calculate_strain_infection_values(time, compartment_values, mixing_matrix)
 
-        # Calculate total number of people per category (for FoI).
-        # A vector with size (num_cat).
-        category_populations = sparse_pairs_accum(self.model._compartment_category_map, compartment_values, num_cat)
-
-        # Calculate infectious populations for each strain.
-        # Infection density / frequency is the infectious multiplier for each mixing category, calculated for each strain.
-        self.model._infection_density = {}
-        self.model._infection_frequency = {}
-        for strain in self.model._disease_strains:
-            strain_compartment_infectiousness = self.model._compartment_infectiousness[strain]
-
-            # Calculate total infected people per category, including adjustment factors.
-            # Returns a vector with size (num_cat).
-            infected_values = compartment_values * strain_compartment_infectiousness
-
-            infectious_populations = sparse_pairs_accum(self.model._compartment_category_map, infected_values, num_cat)
-
-            self.model._infection_density[strain] = np.matmul(mixing_matrix, infectious_populations).reshape((num_cat, 1))
-
-            # Calculate total infected person frequency per category, including adjustment factors.
-            # A vector with size (num_cat).
-            category_frequency = infectious_populations / category_populations
-            # Include reshape to maintain consistency with reference implementation
-            self.model._infection_frequency[strain] = np.matmul(mixing_matrix, category_frequency).reshape((num_cat, 1))
-    
     def _get_mixing_matrix(self, time: float) -> np.ndarray:
         """Thin wrapper to either get the model's mixing matrix, or use our precomputed matrices
 
