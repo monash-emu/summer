@@ -69,7 +69,7 @@ class Overwrite(BaseAdjustment):
     The new parameter value is the supplied parameter, overwriting any previous values.
 
     Args:
-        param: The parameter to be multiplied with the unadjusted value.
+        param: The parameter to be used in place of the unadjusted value.
 
     Examples:
         Create an adjustment to overwrite the previous value with 1.5::

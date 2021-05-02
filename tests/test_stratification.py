@@ -67,37 +67,44 @@ def test_create_age_stratification():
 
 
 def test_create_stratification__with_pop_split():
+
+    # Default behaviour.
     strat = Stratification(name="location", strata=["rural", "urban"], compartments=["S", "I", "R"])
     assert strat.population_split == {"rural": 0.5, "urban": 0.5}
-    # Works
+
+    # Correct assignment works.
     strat.set_population_split({"rural": 0.2, "urban": 0.8})
     assert strat.population_split == {"rural": 0.2, "urban": 0.8}
 
-    # Fails coz missing a key
+    # Fails coz missing a key.
     with pytest.raises(AssertionError):
-        strat.set_population_split({"urban": 1})
+        strat.set_population_split({"urban": 1.})
 
-    # Fails coz doesn't sum to 1
+    # Fails because sum is less than one.
     with pytest.raises(AssertionError):
         strat.set_population_split({"urban": 0.2, "rural": 0.3})
 
-    # Fails coz contains negative number
+    # Fails because sum is more than one.
     with pytest.raises(AssertionError):
-        strat.set_population_split({"urban": -2, "rural": 3})
+        strat.set_population_split({"urban": 0.8, "rural": 0.8})
+
+    # Fails coz contains negative number.
+    with pytest.raises(AssertionError):
+        strat.set_population_split({"urban": -0.2, "rural": 0.8})
 
 
 def test_create_stratification__with_flow_adjustments():
     strat = Stratification(name="location", strata=["rural", "urban"], compartments=["S", "I", "R"])
     assert strat.flow_adjustments == {}
 
-    # Fail coz not all strata specified
+    # Fails coz not all strata specified.
     with pytest.raises(AssertionError):
         strat.add_flow_adjustments(
             flow_name="recovery",
             adjustments={"rural": Multiply(1.2)},
         )
 
-    # Fail coz an incorrect strata specified
+    # Fails coz an incorrect stratum was specified.
     with pytest.raises(AssertionError):
         strat.add_flow_adjustments(
             flow_name="recovery",
@@ -108,6 +115,7 @@ def test_create_stratification__with_flow_adjustments():
             },
         )
 
+    # Correct version works.
     strat.add_flow_adjustments(
         flow_name="recovery",
         adjustments={"rural": Multiply(1.2), "urban": Multiply(0.8)},
@@ -117,7 +125,7 @@ def test_create_stratification__with_flow_adjustments():
     adj, src, dst = strat.flow_adjustments["recovery"][0]
     assert adj["rural"]._is_equal(Multiply(1.2))
     assert adj["urban"]._is_equal(Multiply(0.8))
-    assert not (src or dst)
+    assert not src and not dst
 
     # Add another adjustment for the same flow.
     strat.add_flow_adjustments(
@@ -130,7 +138,7 @@ def test_create_stratification__with_flow_adjustments():
     adj, src, dst = strat.flow_adjustments["recovery"][0]
     assert adj["rural"]._is_equal(Multiply(1.2))
     assert adj["urban"]._is_equal(Multiply(0.8))
-    assert not (src or dst)
+    assert not src and not dst
     adj, src, dst = strat.flow_adjustments["recovery"][1]
     assert adj["rural"]._is_equal(Multiply(1.3))
     assert adj["urban"]._is_equal(Multiply(0.9))
@@ -151,7 +159,7 @@ def test_create_stratification__with_flow_adjustments():
     adj, src, dst = strat.flow_adjustments["infection"][0]
     assert adj["rural"]._is_equal(Multiply(urban_infection_adjustment))
     assert adj["urban"] is None
-    assert not (src or dst)
+    assert not src and not dst
 
 
 def test_get_flow_adjustments__with_no_adjustments():
@@ -209,14 +217,16 @@ def test_get_flow_adjustments__with_strata_whitelist():
         "flow", {"rural": Multiply(2), "urban": Overwrite(1)}, source_strata={"age": "20"}
     )
 
-    # No source strata
+    # Source strata shouldn't be specified for an entry flow.
     entry_flow = EntryFlow("flow", Compartment("S"), 1)
     with pytest.raises(AssertionError):
         strat.get_flow_adjustment(entry_flow)
 
+    # get_flow_adjustments returns None when adjustment doesn't apply to the flow being processed.
     other_flow = TransitionFlow("other", Compartment("S"), Compartment("I"), 1)
     assert strat.get_flow_adjustment(other_flow) is None
 
+    # Behaviour is the same for transition and exit flows, to which the adjustment should apply.
     trans_flow = TransitionFlow("flow", Compartment("S"), Compartment("I"), 1)
     exit_flow = ExitFlow("flow", Compartment("I"), 1)
     for flow in [trans_flow, exit_flow]:
@@ -224,7 +234,7 @@ def test_get_flow_adjustments__with_strata_whitelist():
         assert adj["rural"]._is_equal(Multiply(3))
         assert adj["urban"]._is_equal(Overwrite(2))
 
-    # Only flows with matching strata should get the adjustment
+    # Only flows with matching strata should get the adjustment.
     strat = Stratification(name="location", strata=["rural", "urban"], compartments=["S", "I", "R"])
     strat.add_flow_adjustments("flow", {"rural": Multiply(1), "urban": None})
     strat.add_flow_adjustments("flow", {"rural": Multiply(3), "urban": Overwrite(2)})
@@ -232,12 +242,12 @@ def test_get_flow_adjustments__with_strata_whitelist():
         "flow", {"rural": Multiply(2), "urban": Overwrite(1)}, dest_strata={"age": "20"}
     )
 
-    # No dest strata
+    # No destination stratum for the flow being stratified, but destination strata requested.
     exit_flow = ExitFlow("flow", Compartment("I"), 1)
     with pytest.raises(AssertionError):
         strat.get_flow_adjustment(exit_flow)
 
-    # No matching dest strata
+    # No matching destination stratum.
     other_flow = TransitionFlow("other", Compartment("S"), Compartment("I"), 1)
     other_flow_strat = TransitionFlow("other", Compartment("S"), Compartment("I", {"age": "20"}), 1)
     assert strat.get_flow_adjustment(other_flow) is None
@@ -326,7 +336,7 @@ def test_create_stratification__with_infectiousness_adjustments():
             adjustments={"rural": Multiply(1.2)},
         )
 
-    # Fail coz an incorrect strata specified
+    # Fail coz an incorrect stratum was specified
     with pytest.raises(AssertionError):
         strat.add_infectiousness_adjustments(
             compartment_name="S",
@@ -337,7 +347,7 @@ def test_create_stratification__with_infectiousness_adjustments():
             },
         )
 
-    # Fail coz a time-varying function was used (not allowed!)
+    # Fail coz a time-varying function was used (not currently supported!)
     with pytest.raises(AssertionError):
         strat.add_infectiousness_adjustments(
             compartment_name="S",
@@ -380,7 +390,7 @@ def test_create_stratification__with_infectiousness_adjustments():
     assert strat.infectiousness_adjustments["I"]["urban"] is None
 
 
-def test_stratify_compartments__with_no_extisting_strat():
+def test_stratify_compartments__with_no_existing_strat():
     strat = Stratification(
         name="age",
         strata=["0", "10", "20"],
@@ -403,22 +413,21 @@ def test_stratify_compartments__with_no_extisting_strat():
 
 def test_stratify_compartments__with_no_extisting_strat_and_subset_only():
     strat = Stratification(
-        name="age",
-        strata=["0", "10", "20"],
+        name="risk",
+        strata=["high", "low"],
         compartments=["S"],
     )
     comps = [Compartment("S"), Compartment("I"), Compartment("R")]
     strat_comps = strat._stratify_compartments(comps)
     assert strat_comps == [
-        Compartment("S", {"age": "0"}),
-        Compartment("S", {"age": "10"}),
-        Compartment("S", {"age": "20"}),
+        Compartment("S", {"risk": "high"}),
+        Compartment("S", {"risk": "low"}),
         Compartment("I"),
         Compartment("R"),
     ]
 
 
-def test_stratify_compartments__with_extisting_strat():
+def test_stratify_compartments__with_existing_strat():
     age_strat = Stratification(
         name="age",
         strata=["0", "10", "20"],
@@ -483,7 +492,7 @@ def test_stratify_compartment_values__with_subset_stratified():
     assert_array_equal(expected_arr, new_comp_values)
 
 
-def test_stratify_compartment_values__with_extisting_strat():
+def test_stratify_compartment_values__with_existing_strat():
     """
     Stratify compartments for the second time, expect that compartments
     are are split according to proportions and old compartments are removed.

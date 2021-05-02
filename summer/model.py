@@ -719,7 +719,7 @@ class CompartmentalModel:
             **kwargs (optional): Extra arguments to supplied to the solver, see ``summer.solver`` for details.
 
         """
-        
+
         backend_args = backend_args or {}
 
         if backend == BackendType.REFERENCE:
@@ -727,7 +727,7 @@ class CompartmentalModel:
         elif backend == BackendType.VECTORIZED:
             self._runner = VectorizedRunner(self, **backend_args)
         else:
-            msg = f"Invalid backend: {backend}"    
+            msg = f"Invalid backend: {backend}"
             raise ValueError(msg)
 
         self._runner._prepare_to_run()
@@ -1088,28 +1088,34 @@ class CompartmentalModel:
         # Calculate infection frequency/density for all disease strains
         self._calculate_strain_infection_values(time, compartment_values, mixing_matrix)
 
-    def _calculate_strain_infection_values(self, time: float, compartment_values: np.ndarray, mixing_matrix: np.ndarray):
+    def _calculate_strain_infection_values(
+        self, time: float, compartment_values: np.ndarray, mixing_matrix: np.ndarray
+    ):
 
         num_cats = self.num_categories
         # Calculate total number of people per category (for FoI).
         # A vector with size (num_cats).
-        self._category_populations = sparse_pairs_accum(self._compartment_category_map, compartment_values, num_cats)
+        self._category_populations = sparse_pairs_accum(
+            self._compartment_category_map, compartment_values, num_cats
+        )
 
         # Calculate infectious populations for each strain.
-        # Infection density / frequency is the infectious multiplier for each mixing category, calculated for each strain.
+        # Infection density/frequency is the infectious multiplier for each mixing category, calculated for each strain.
         self._infection_density = {}
         self._infection_frequency = {}
         for strain in self._disease_strains:
             strain_compartment_infectiousness = self._compartment_infectiousness[strain]
 
-            # Calculate total infected people per category, including adjustment factors.
-            # vector with size (num_cats, 1).
+            # Calculate the effective infectious people for each category, including adjustment factors.
+            # Returns a vector with size (num_cats x 1).
             infected_values = compartment_values * strain_compartment_infectiousness
-            infectious_populations = sparse_pairs_accum(self._compartment_category_map, infected_values, num_cats)
+            infectious_populations = sparse_pairs_accum(
+                self._compartment_category_map, infected_values, num_cats
+            )
             self._infection_density[strain] = np.matmul(mixing_matrix, infectious_populations)
 
-            # Calculate total infected person frequency per category, including adjustment factors.
-            # vector with size (num_cats, 1).
+            # Calculate the effective infectious person frequency for each category, including adjustment factors.
+            # A vector with size (num_cats x 1).
             category_prevalence = infectious_populations / self._category_populations
             self._infection_frequency[strain] = np.matmul(mixing_matrix, category_prevalence)
 
@@ -1157,7 +1163,7 @@ class CompartmentalModel:
         """
         Returns the final mixing matrix for a given time.
         """
-        #+++ FIXME _DEFAULT_MIXING_MATRIX hardcoded to [[1]], meaning first kroneker product does
+        # +++ FIXME _DEFAULT_MIXING_MATRIX hardcoded to [[1]], meaning first kroneker product does
         # effectively nothing...
         mixing_matrix = self._DEFAULT_MIXING_MATRIX
         for mm_func in self._mixing_matrices:

@@ -325,6 +325,8 @@ def test_stratify__age__validate_ageing_flows_added_second():
 def test_stratify_exit_flows():
     """
     Ensure exit flows are stratified correctly.
+    Death flows should remain the same after stratification, so that everyone in all of the stratified compartments
+    continues to die at the same rate as before stratification.
     """
     model = CompartmentalModel(
         times=[0, 5], compartments=["S", "I", "R"], infectious_compartments=["I"]
@@ -420,6 +422,8 @@ def test_add_exit_flows_post_stratification__with_filter():
 
     model.add_death_flow("d_S", 3, "S", source_strata={"location": "rural"}, expected_flow_count=1)
     model.add_death_flow("d_I", 5, "I", source_strata={"location": "rural"}, expected_flow_count=1)
+
+    # FIXME: Ask Matt, would it be better if this just crashed?
     model.add_death_flow("d_R", 7, "R", source_strata={"location": "rural"}, expected_flow_count=0)
 
     expected_flows = [

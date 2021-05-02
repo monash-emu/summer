@@ -80,9 +80,14 @@ def calculate_derived_outputs(
     derived_outputs = {}
     outputs_to_delete_after = []
 
-    # Calculate all flow rates and store in `flow_values` so that we can fulfill flow rate requests.
+    # Calculate all flow rates and store in `flow_values` so that we can fulfil flow rate requests.
     # We need to do this here because some solvers do not necessarily evaluate all timesteps.
     flow_values = np.zeros((len(times), len(flows)))
+
+    # FIXME: Another question for Matt - has my changes to the time requests stuffed this up?
+    # Because the timestep for the last time interval can now be different from the earlier ones.
+    # So do we need to assert that the duration is an exact multiple of the timestep?
+    # Could cause silent problems, because presumably we have previously been specifying durations as multiples of the timestep.
     for time_idx, time in enumerate(times):
         # Flow rates are instantaneous; we need to provide and integrated value over timestep
         flow_values[time_idx, :] = get_flow_rates(outputs[time_idx], time) * timestep

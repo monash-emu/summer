@@ -7,7 +7,7 @@ from typing import Dict, Optional
 class Compartment:
     """
     A single compartment in the compartmental model.
-    Each compartment is defined by its name and strata.
+    Each compartment is defined by its name and stratum/strata if stratified.
     A compartment does not store the number of occupants - this data is tracked elsewhere in ``CompartmentalModel``.
 
     Args:
@@ -52,13 +52,14 @@ class Compartment:
     def has_strata(self, strata: dict) -> bool:
         return all([self.has_stratum(k, v) for k, v in strata.items()])
 
-    def has_stratum(self, name: str, value: str) -> bool:
-        return self.strata.get(name) == value
+    def has_stratum(self, stratification: str, stratum: str) -> bool:
+        return self.strata.get(stratification) == stratum
 
     def has_name(self, comp) -> bool:
         """
         Returns True if this compartment has the same root name as another.
         """
+        # FIXME: Don't understand why these two alternatives are needed.
         if type(comp) is str:
             return self.name == comp
         else:
@@ -70,18 +71,18 @@ class Compartment:
         """
         return any(self.has_name(c) for c in comps)
 
-    def stratify(self, stratify_name: str, stratum_name: str):
+    def stratify(self, stratification_name: str, stratum_name: str):
         """
         Returns a copy of the Compartment with a new stratification applied to it.
 
         Args:
-            stratify_name: The name of the new stratification.
-            stratum_name: The name of the strata that will be given to the new Compartment.
+            stratification_name: The name (or purpose) of the new stratification.
+            stratum_name: The stratum to be assigned to the new Compartment.
         Returns:
             Compartment: The new, stratified compartment.
 
         """
-        new_strata = {**self.strata, stratify_name: stratum_name}
+        new_strata = {**self.strata, stratification_name: stratum_name}
         return Compartment(
             name=self.name,
             strata=new_strata,
@@ -98,6 +99,9 @@ class Compartment:
         parts = s.split("X")
         name = parts[0]
         strata = {}
+
+        # FIXME: Does this mean that stratum names should never have underscores in them?
+        # ... or more generally are there still strings with specific behaviours that we should be careful of?
         for strat in parts[1:]:
             stratum_parts = strat.split("_")
             s_name = stratum_parts[0]
