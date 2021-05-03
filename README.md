@@ -4,7 +4,7 @@
 
 Summer is a [compartmental](https://en.wikipedia.org/wiki/Compartmental_models_in_epidemiology) disease modelling framework, written in Python. It provides a high-level API to build and run models. Features include:
 
-- A variety of inter-compartmental flows (infections, sojourn, transitions, births, deaths, imports)
+- A variety of inter-compartmental flows (infections, transitions, births, deaths, imports)
 - Force of infection multipliers (frequency, density)
 - Post-processing of compartment sizes into derived outputs
 - Stratification of compartments, including:

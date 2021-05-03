@@ -11,7 +11,6 @@ from summer.flows import (
     InfectionDensityFlow,
     InfectionFrequencyFlow,
     ReplacementBirthFlow,
-    SojournFlow,
 )
 
 
@@ -89,34 +88,6 @@ def test_transition_flow_get_net_flow_with_adjust():
     vals = np.array([1, 3, 5])
     net_flow = flow.get_net_flow(vals, 7)
     assert net_flow == 2 * 5 * 7 * 13
-
-
-def test_sojourn_flow_get_net_flow():
-    flow = SojournFlow(
-        name="flow",
-        source=Compartment("I"),
-        dest=Compartment("R"),
-        param=lambda t: 2 * t,
-        adjustments=[],
-    )
-    flow.source.idx = 1
-    vals = np.array([1, 3, 5])
-    net_flow = flow.get_net_flow(vals, 7)
-    assert net_flow == 3 / (2 * 7)
-
-
-def test_sojourn_flow_get_net_flow_with_adjust():
-    flow = SojournFlow(
-        name="flow",
-        source=Compartment("I"),
-        dest=Compartment("R"),
-        param=lambda t: 2 * t,
-        adjustments=[adjust.Multiply(13)],
-    )
-    flow.source.idx = 2
-    vals = np.array([1, 3, 5])
-    net_flow = flow.get_net_flow(vals, 7)
-    np.testing.assert_almost_equal(net_flow, 5 / (2 * 13 * 7))
 
 
 def test_import_flow_get_net_flow():

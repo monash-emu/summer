@@ -355,42 +355,6 @@ class CompartmentalModel:
         self._flows += new_flows
         self._update_compartment_indices()
 
-    def add_sojourn_flow(
-        self,
-        name: str,
-        sojourn_time: FlowParam,
-        source: str,
-        dest: str,
-        source_strata: Optional[Dict[str, str]] = None,
-        dest_strata: Optional[Dict[str, str]] = None,
-        expected_flow_count: Optional[int] = None,
-    ):
-        """
-        Adds a flow where that models a "sojourn" through a compartment, where the flow rate
-        is proportional to the inverse of the sojourn time. For example if there is a sojourn time of 10
-        days, then the flow rate will be 10% of the occupants per time unit.
-
-        Args:
-            name: The name of the new flow.
-            sojourn_time: The mean time sojourn time for a person in the compartment.
-            source: The name of the source compartment.
-            dest: The name of the destination compartment.
-            source_strata (optional): A whitelist of strata to filter the source compartments.
-            dest_strata (optional): A whitelist of strata to filter the destination compartments.
-            expected_flow_count (optional): Used to assert that a particular number of flows are created.
-
-        """
-        self._add_transition_flow(
-            flows.SojournFlow,
-            name,
-            sojourn_time,
-            source,
-            dest,
-            source_strata,
-            dest_strata,
-            expected_flow_count,
-        )
-
     def add_infection_frequency_flow(
         self,
         name: str,
@@ -679,9 +643,10 @@ class CompartmentalModel:
 
                     source = comp.stratify(strat.name, str(start_age))
                     dest = comp.stratify(strat.name, str(end_age))
-                    self.add_sojourn_flow(
+                    ageing_rate = 1.0 / (end_age - start_age)
+                    self.add_transition_flow(
                         name=f"ageing_{source}_to_{dest}",
-                        sojourn_time=end_age - start_age,
+                        fractional_rate=ageing_rate,
                         source=source.name,
                         dest=dest.name,
                         source_strata=source.strata,
