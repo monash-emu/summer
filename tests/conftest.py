@@ -8,6 +8,7 @@ import os
 os.environ["OMP_NUM_THREADS"] = "1"
 
 import pytest
+from summer.model import BackendType
 
 IS_GITHUB_CI = os.environ.get("GITHUB_ACTION", False)
 
@@ -22,3 +23,8 @@ def pytest_runtest_setup(item):
     for _ in item.iter_markers(name="benchmark"):
         if not IS_GITHUB_CI:
             pytest.skip("Long running test: run on GitHub only.")
+
+
+@pytest.fixture(params=[BackendType.REFERENCE, BackendType.VECTORIZED])
+def backend(request):
+    return request.param
