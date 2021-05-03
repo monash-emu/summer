@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1620009660425,
+  "lastUpdate": 1620018818067,
   "repoUrl": "https://github.com/monash-emu/summer",
   "entries": {
     "Benchmark": [
@@ -2115,6 +2115,58 @@ window.BENCHMARK_DATA = {
             "unit": "iter/sec",
             "range": "stddev: 0.13826020283167015",
             "extra": "mean: 14.51310321533335 sec\nrounds: 3"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "mattdsegal@gmail.com",
+            "name": "Matt Segal",
+            "username": "MattSegal"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "f8cca347919bd062919ccd608c7d69aba78c39db",
+          "message": "Remove sojourn flows (#14)\n\n* Remove sojourn flows from codebase\r\n* Remove sojourn flows from docs, fix broken age strat notebook",
+          "timestamp": "2021-05-03T15:10:31+10:00",
+          "tree_id": "a267f131728a7c10b9add04080c2840d9d2bb7f9",
+          "url": "https://github.com/monash-emu/summer/commit/f8cca347919bd062919ccd608c7d69aba78c39db"
+        },
+        "date": 1620018817592,
+        "tool": "pytest",
+        "benches": [
+          {
+            "name": "tests/test_benchmarks.py::test_benchmark_vectorized_backend",
+            "value": 8.584878033808753,
+            "unit": "iter/sec",
+            "range": "stddev: 0.0012710498669834943",
+            "extra": "mean: 116.48389133332178 msec\nrounds: 3"
+          },
+          {
+            "name": "tests/test_benchmarks.py::test_benchmark_default_ode_solver",
+            "value": 2.2695136997855605,
+            "unit": "iter/sec",
+            "range": "stddev: 0.017896870841590612",
+            "extra": "mean: 440.62302866666414 msec\nrounds: 3"
+          },
+          {
+            "name": "tests/test_benchmarks.py::test_benchmark_rk4_ode_solver",
+            "value": 0.1568064940130791,
+            "unit": "iter/sec",
+            "range": "stddev: 0.01305979170216139",
+            "extra": "mean: 6.377286899333332 sec\nrounds: 3"
+          },
+          {
+            "name": "tests/test_benchmarks.py::test_benchmark_stochastic_solver",
+            "value": 0.09091825259538462,
+            "unit": "iter/sec",
+            "range": "stddev: 0.1598824132495761",
+            "extra": "mean: 10.998891547666679 sec\nrounds: 3"
           }
         ]
       }
