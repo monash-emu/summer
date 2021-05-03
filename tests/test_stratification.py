@@ -78,7 +78,7 @@ def test_create_stratification__with_pop_split():
 
     # Fails coz missing a key.
     with pytest.raises(AssertionError):
-        strat.set_population_split({"urban": 1.})
+        strat.set_population_split({"urban": 1.0})
 
     # Fails because sum is less than one.
     with pytest.raises(AssertionError):

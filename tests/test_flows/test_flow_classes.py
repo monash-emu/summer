@@ -5,12 +5,12 @@ from summer import Compartment, adjust
 from summer.flows import (
     CrudeBirthFlow,
     DeathFlow,
-    TransitionFlow,
     FunctionFlow,
     ImportFlow,
     InfectionDensityFlow,
     InfectionFrequencyFlow,
     ReplacementBirthFlow,
+    TransitionFlow,
 )
 
 

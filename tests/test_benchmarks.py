@@ -1,11 +1,9 @@
-import numpy as np
 import pytest
 
-from summer import CompartmentalModel, Multiply, Overwrite, Stratification
-
-from .model_setup import _get_test_model
+from .model_setup import get_test_model
 
 RANDOM_SEED = 1337
+
 
 @pytest.mark.benchmark
 def test_benchmark_vectorized_backend(benchmark):
@@ -16,8 +14,8 @@ def test_benchmark_vectorized_backend(benchmark):
     """
 
     def run_default_ode_solver_vectorized_test_model():
-        model = _get_test_model()
-        model.run(backend='vectorized')
+        model = get_test_model()
+        model.run(backend="vectorized")
 
     benchmark(run_default_ode_solver_vectorized_test_model)
 
@@ -31,7 +29,7 @@ def test_benchmark_default_ode_solver(benchmark):
     """
 
     def run_default_ode_solver_test_model():
-        model = _get_test_model()
+        model = get_test_model()
         model.run()
 
     benchmark(run_default_ode_solver_test_model)
@@ -40,7 +38,7 @@ def test_benchmark_default_ode_solver(benchmark):
 @pytest.mark.benchmark
 def test_benchmark_rk4_ode_solver(benchmark):
     def run_rk4_solver_test_model():
-        model = _get_test_model()
+        model = get_test_model()
         model.run("rk4", step_size=0.1)
 
     benchmark(run_rk4_solver_test_model)
@@ -49,7 +47,7 @@ def test_benchmark_rk4_ode_solver(benchmark):
 @pytest.mark.benchmark
 def test_benchmark_stochastic_solver(benchmark):
     def run_stochastic_solver_test_model():
-        model = _get_test_model(timestep=0.1)
+        model = get_test_model(timestep=0.1)
         model.run_stochastic(RANDOM_SEED)
 
     benchmark(run_stochastic_solver_test_model)

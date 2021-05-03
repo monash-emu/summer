@@ -7,7 +7,7 @@ import numpy as np
 
 from summer.adjust import Multiply, Overwrite
 from summer.compartment import Compartment
- 
+
 Adjustment = Union[Multiply, Overwrite]
 MixingMatrix = Union[np.ndarray, Callable[[float], np.ndarray]]
 
@@ -122,7 +122,10 @@ class Stratification:
 
         msg = "All flow adjustments must be Multiply, Overwrite or None."
         assert all(
-            [type(adj) is Overwrite or type(adj) is Multiply or adj is None for adj in adjustments.values()]
+            [
+                type(adj) is Overwrite or type(adj) is Multiply or adj is None
+                for adj in adjustments.values()
+            ]
         ), msg
 
         if flow_name not in self.flow_adjustments:
@@ -154,7 +157,9 @@ class Stratification:
 
             # Make sure that the source request applies to this flow because it has all of the requested strata.
             # Note that these can be specified in the current or any previous stratifications.
-            is_source_no_match = source_strata and flow.source and not flow.source.has_strata(source_strata)
+            is_source_no_match = (
+                source_strata and flow.source and not flow.source.has_strata(source_strata)
+            )
             is_dest_no_match = dest_strata and flow.dest and not flow.dest.has_strata(dest_strata)
             if is_source_no_match or is_dest_no_match:
                 continue

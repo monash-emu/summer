@@ -2,10 +2,9 @@ import numpy as np
 import pytest
 from numpy.testing import assert_array_equal
 
-
-from summer import stochastic, CompartmentalModel
-from summer.flows import DeathFlow, TransitionFlow
+from summer import CompartmentalModel, stochastic
 from summer.compartment import Compartment
+from summer.flows import DeathFlow, TransitionFlow
 
 ENTRY_FLOW_TESTS = [
     # timestep, flow rates, expected

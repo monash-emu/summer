@@ -3,7 +3,7 @@ import numpy as np
 from summer import CompartmentalModel, Multiply, Overwrite, Stratification
 
 
-def _get_test_model(timestep=1, times=[0, 150]):
+def get_test_model(timestep=1, times=[0, 150]):
     comps = ["S", "EE", "LE", "EA", "LA", "R"]
     infectious_comps = ["LE", "EA", "LA"]
     model = CompartmentalModel(

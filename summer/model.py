@@ -13,12 +13,11 @@ import summer.flows as flows
 from summer import stochastic
 from summer.adjust import FlowParam
 from summer.compartment import Compartment
+from summer.compute import binary_matrix_to_sparse_pairs, sparse_pairs_accum
 from summer.derived_outputs import DerivedOutputRequest, calculate_derived_outputs
+from summer.runner import VectorizedRunner
 from summer.solver import SolverType, solve_ode
 from summer.stratification import Stratification
-from summer.runner import VectorizedRunner
-from summer.compute import binary_matrix_to_sparse_pairs, sparse_pairs_accum
-
 
 logger = logging.getLogger()
 

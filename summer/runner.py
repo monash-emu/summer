@@ -1,11 +1,12 @@
 from abc import ABC, abstractmethod
 from typing import Tuple
 
-import numpy as np
 import numba
+import numpy as np
 
 import summer.flows as flows
 from summer.compute import accumulate_flow_contributions, sparse_pairs_accum
+
 
 class ModelRunner(ABC):
     def __init__(self, model):
@@ -27,7 +28,7 @@ class ModelRunner(ABC):
     @abstractmethod
     def _get_compartment_rates(self, compartment_values: np.ndarray, time: float) -> np.ndarray:
         """Interface for the ODE solver: this function is passed to solve_ode func and defines the dynamics of the model.
-        
+
 
         Args:
             compartment_values (np.ndarray): Current values of the model compartments
@@ -40,10 +41,11 @@ class ModelRunner(ABC):
     @abstractmethod
     def _prepare_to_run(self):
         """Pre-run setup.
-        
+
         Perform any setup/precomputation that can be done prior to model run
         """
         pass
+
 
 class VectorizedRunner(ModelRunner):
     def __init__(self, model, precompute_time_flows=False, precompute_mixing=False):
@@ -52,20 +54,26 @@ class VectorizedRunner(ModelRunner):
         self._precompute_mixing = precompute_mixing
 
     def _prepare_to_run(self):
-        """Do all precomputation here
-        """
+        """Do all precomputation here"""
         self.model._prepare_to_run()
         self.precompute_flow_weights()
         self.precompute_flow_maps()
-        self.infectious_flow_indices = [i for i, f in self.model._iter_non_function_flows if isinstance(f, flows.BaseInfectionFlow)]
-        self.death_flow_indices = [i for i, f in self.model._iter_non_function_flows if f.is_death_flow]
-        self.population_idx = np.array([f.source.idx for i, f in self.model._iter_non_function_flows], dtype=int)
+        self.infectious_flow_indices = [
+            i
+            for i, f in self.model._iter_non_function_flows
+            if isinstance(f, flows.BaseInfectionFlow)
+        ]
+        self.death_flow_indices = [
+            i for i, f in self.model._iter_non_function_flows if f.is_death_flow
+        ]
+        self.population_idx = np.array(
+            [f.source.idx for i, f in self.model._iter_non_function_flows], dtype=int
+        )
         if self._precompute_mixing:
             self.precompute_mixing_matrices()
 
     def precompute_flow_weights(self):
-        """Calculate all static flow weights before running, and build indices for time-varying weights
-        """
+        """Calculate all static flow weights before running, and build indices for time-varying weights"""
         self.flow_weights = np.zeros(len(self.model._iter_non_function_flows))
         time_varying_flow_weights = []
         time_varying_weight_indices = []
@@ -74,7 +82,7 @@ class VectorizedRunner(ModelRunner):
                 weight = f.get_weight_value(0)
                 self.flow_weights[i] = weight
             else:
-                #+++ Not currently used; time-varying weights are generated at runtime
+                # +++ Not currently used; time-varying weights are generated at runtime
                 if self._precompute_time_flows:
                     param_vals = np.array([f.get_weight_value(t) for t in self.model.times])
                     time_varying_flow_weights.append(param_vals)
@@ -84,8 +92,7 @@ class VectorizedRunner(ModelRunner):
         self.time_varying_flow_weights = np.array(time_varying_flow_weights)
 
     def precompute_flow_maps(self):
-        """Build fast-access arrays of flow indices
-        """
+        """Build fast-access arrays of flow indices"""
         f_pos_map = []
         f_neg_map = []
         for i, f in self.model._iter_non_function_flows:
@@ -124,8 +131,8 @@ class VectorizedRunner(ModelRunner):
             np.ndarray: Mixing matrix at time (time)
         """
         if self._precompute_mixing:
-             t = int(time - self.model.times[0])
-             return self.mixing_matrices[t]
+            t = int(time - self.model.times[0])
+            return self.mixing_matrices[t]
         else:
             return self.model._get_mixing_matrix(time)
 
@@ -142,7 +149,9 @@ class VectorizedRunner(ModelRunner):
         # Test to see if we have any time varying weights
         if len(self.time_varying_flow_weights):
             t = int(time - self.model.times[0])
-            self.flow_weights[self.time_varying_weight_indices] = self.time_varying_flow_weights[:,t]
+            self.flow_weights[self.time_varying_weight_indices] = self.time_varying_flow_weights[
+                :, t
+            ]
 
     def apply_flow_weights_at_time(self, time):
         """Calculate time dependent flow weights and insert them into our weights array
@@ -177,7 +186,7 @@ class VectorizedRunner(ModelRunner):
         Returns:
             np.ndarray: Array of all (non-function) flow rates
         """
-        
+
         if self._precompute_time_flows:
             self.apply_precomputed_flow_weights_at_time(time)
         else:
@@ -185,10 +194,10 @@ class VectorizedRunner(ModelRunner):
 
         populations = comp_vals[self.population_idx]
         infect_mul = self.get_infectious_multipliers()
-        
+
         flow_rates = self.flow_weights * populations
         flow_rates[self.infectious_flow_indices] *= infect_mul
-        
+
         return flow_rates
 
     def _get_rates(self, comp_vals: np.ndarray, time: float) -> Tuple[np.ndarray, np.ndarray]:
@@ -205,13 +214,15 @@ class VectorizedRunner(ModelRunner):
                 flow_rates is the contribution of each flow to compartment rate of change
         """
         self._prepare_time_step(time, comp_vals)
-    
+
         comp_rates = np.zeros(len(comp_vals))
         flow_rates = self.get_flow_rates(comp_vals, time)
 
         self.model._total_deaths = flow_rates[self.death_flow_indices].sum()
 
-        accumulate_flow_contributions(flow_rates, comp_rates, self._pos_flow_map, self._neg_flow_map)
+        accumulate_flow_contributions(
+            flow_rates, comp_rates, self._pos_flow_map, self._neg_flow_map
+        )
 
         if self.model._iter_function_flows:
             # Evaluate the function flows.
@@ -232,7 +243,7 @@ class VectorizedRunner(ModelRunner):
         comp_vals = self.model._clean_compartment_values(compartment_values)
         comp_rates, _ = self._get_rates(comp_vals, time)
         return comp_rates
-   
+
     def _get_flow_rates(self, compartment_values: np.ndarray, time: float):
         """
         Returns the contribution of each flow to compartment rate of change for a given state and time.
@@ -240,4 +251,3 @@ class VectorizedRunner(ModelRunner):
         comp_vals = self.model._clean_compartment_values(compartment_values)
         _, flow_rates = self._get_rates(comp_vals, time)
         return flow_rates
-
