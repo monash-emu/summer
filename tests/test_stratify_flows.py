@@ -14,7 +14,7 @@ from summer.flows import (
     DeathFlow,
     ImportFlow,
     InfectionFrequencyFlow,
-    SojournFlow,
+    TransitionFlow,
 )
 
 
@@ -212,12 +212,24 @@ def test_stratify__age__validate_ageing_flows_added():
     # Expect ageing flows amongst age group and a birth flow that only goes to age 0.
     expected_flows = [
         CrudeBirthFlow("births", C("S", {"age": "0"}), 0.02),
-        SojournFlow("ageing_SXage_0_to_SXage_5", C("S", {"age": "0"}), C("S", {"age": "5"}), 5),
-        SojournFlow("ageing_IXage_0_to_IXage_5", C("I", {"age": "0"}), C("I", {"age": "5"}), 5),
-        SojournFlow("ageing_RXage_0_to_RXage_5", C("R", {"age": "0"}), C("R", {"age": "5"}), 5),
-        SojournFlow("ageing_SXage_5_to_SXage_15", C("S", {"age": "5"}), C("S", {"age": "15"}), 10),
-        SojournFlow("ageing_IXage_5_to_IXage_15", C("I", {"age": "5"}), C("I", {"age": "15"}), 10),
-        SojournFlow("ageing_RXage_5_to_RXage_15", C("R", {"age": "5"}), C("R", {"age": "15"}), 10),
+        TransitionFlow(
+            "ageing_SXage_0_to_SXage_5", C("S", {"age": "0"}), C("S", {"age": "5"}), 0.2
+        ),
+        TransitionFlow(
+            "ageing_IXage_0_to_IXage_5", C("I", {"age": "0"}), C("I", {"age": "5"}), 0.2
+        ),
+        TransitionFlow(
+            "ageing_RXage_0_to_RXage_5", C("R", {"age": "0"}), C("R", {"age": "5"}), 0.2
+        ),
+        TransitionFlow(
+            "ageing_SXage_5_to_SXage_15", C("S", {"age": "5"}), C("S", {"age": "15"}), 0.1
+        ),
+        TransitionFlow(
+            "ageing_IXage_5_to_IXage_15", C("I", {"age": "5"}), C("I", {"age": "15"}), 0.1
+        ),
+        TransitionFlow(
+            "ageing_RXage_5_to_RXage_15", C("R", {"age": "5"}), C("R", {"age": "15"}), 0.1
+        ),
     ]
     assert len(expected_flows) == len(model._flows)
     assert all([a._is_equal(e) for e, a in zip(expected_flows, model._flows)])
@@ -245,77 +257,77 @@ def test_stratify__age__validate_ageing_flows_added_second():
     expected_flows = [
         CrudeBirthFlow("births", C("S", {"location": "urban", "age": "0"}), 0.02, [Multiply(0.5)]),
         CrudeBirthFlow("births", C("S", {"location": "rural", "age": "0"}), 0.02, [Multiply(0.5)]),
-        SojournFlow(
+        TransitionFlow(
             "ageing_SXlocation_urbanXage_0_to_SXlocation_urbanXage_5",
             C("S", {"location": "urban", "age": "0"}),
             C("S", {"location": "urban", "age": "5"}),
-            5,
+            0.2,
         ),
-        SojournFlow(
+        TransitionFlow(
             "ageing_SXlocation_ruralXage_0_to_SXlocation_ruralXage_5",
             C("S", {"location": "rural", "age": "0"}),
             C("S", {"location": "rural", "age": "5"}),
-            5,
+            0.2,
         ),
-        SojournFlow(
+        TransitionFlow(
             "ageing_IXlocation_urbanXage_0_to_IXlocation_urbanXage_5",
             C("I", {"location": "urban", "age": "0"}),
             C("I", {"location": "urban", "age": "5"}),
-            5,
+            0.2,
         ),
-        SojournFlow(
+        TransitionFlow(
             "ageing_IXlocation_ruralXage_0_to_IXlocation_ruralXage_5",
             C("I", {"location": "rural", "age": "0"}),
             C("I", {"location": "rural", "age": "5"}),
-            5,
+            0.2,
         ),
-        SojournFlow(
+        TransitionFlow(
             "ageing_RXlocation_urbanXage_0_to_RXlocation_urbanXage_5",
             C("R", {"location": "urban", "age": "0"}),
             C("R", {"location": "urban", "age": "5"}),
-            5,
+            0.2,
         ),
-        SojournFlow(
+        TransitionFlow(
             "ageing_RXlocation_ruralXage_0_to_RXlocation_ruralXage_5",
             C("R", {"location": "rural", "age": "0"}),
             C("R", {"location": "rural", "age": "5"}),
-            5,
+            0.2,
         ),
-        SojournFlow(
+        TransitionFlow(
             "ageing_SXlocation_urbanXage_5_to_SXlocation_urbanXage_15",
             C("S", {"location": "urban", "age": "5"}),
             C("S", {"location": "urban", "age": "15"}),
-            10,
+            0.1,
         ),
-        SojournFlow(
+        TransitionFlow(
             "ageing_SXlocation_ruralXage_5_to_SXlocation_ruralXage_15",
             C("S", {"location": "rural", "age": "5"}),
             C("S", {"location": "rural", "age": "15"}),
-            10,
+            0.1,
         ),
-        SojournFlow(
+        TransitionFlow(
             "ageing_IXlocation_urbanXage_5_to_IXlocation_urbanXage_15",
             C("I", {"location": "urban", "age": "5"}),
             C("I", {"location": "urban", "age": "15"}),
-            10,
+            0.1,
         ),
-        SojournFlow(
+        TransitionFlow(
             "ageing_IXlocation_ruralXage_5_to_IXlocation_ruralXage_15",
             C("I", {"location": "rural", "age": "5"}),
             C("I", {"location": "rural", "age": "15"}),
-            10,
+            0.1,
         ),
-        SojournFlow(
+        TransitionFlow(
             "ageing_RXlocation_urbanXage_5_to_RXlocation_urbanXage_15",
             C("R", {"location": "urban", "age": "5"}),
             C("R", {"location": "urban", "age": "15"}),
-            10,
+            0.1,
         ),
-        SojournFlow(
+        TransitionFlow(
             "ageing_RXlocation_ruralXage_5_to_RXlocation_ruralXage_15",
             C("R", {"location": "rural", "age": "5"}),
             C("R", {"location": "rural", "age": "15"}),
-            10,
+            0.1,
         ),
     ]
     assert len(expected_flows) == len(model._flows)
@@ -442,13 +454,13 @@ def test_stratify_transition_flows__with_source_and_dest_stratified():
         times=[0, 5], compartments=["S", "I", "R"], infectious_compartments=["I"]
     )
     model.add_infection_frequency_flow("infection", 0.03, "S", "I")
-    model.add_sojourn_flow("recovery", 7, "I", "R")
+    model.add_transition_flow("recovery", 1 / 7, "I", "R")
 
     expected_flows = [
         InfectionFrequencyFlow(
             "infection", C("S"), C("I"), 0.03, model._get_infection_frequency_multiplier
         ),
-        SojournFlow("recovery", C("I"), C("R"), 7),
+        TransitionFlow("recovery", C("I"), C("R"), 1 / 7),
     ]
     assert len(expected_flows) == len(model._flows)
     assert all([a._is_equal(e) for e, a in zip(expected_flows, model._flows)])
@@ -472,8 +484,12 @@ def test_stratify_transition_flows__with_source_and_dest_stratified():
             0.03,
             model._get_infection_frequency_multiplier,
         ),
-        SojournFlow("recovery", C("I", {"location": "urban"}), C("R", {"location": "urban"}), 7),
-        SojournFlow("recovery", C("I", {"location": "rural"}), C("R", {"location": "rural"}), 7),
+        TransitionFlow(
+            "recovery", C("I", {"location": "urban"}), C("R", {"location": "urban"}), 1 / 7
+        ),
+        TransitionFlow(
+            "recovery", C("I", {"location": "rural"}), C("R", {"location": "rural"}), 1 / 7
+        ),
     ]
     assert len(expected_flows) == len(model._flows)
     assert all([a._is_equal(e) for e, a in zip(expected_flows, model._flows)])
@@ -486,10 +502,10 @@ def test_stratify_transition_flows__with_source_only_stratified():
     model = CompartmentalModel(
         times=[0, 5], compartments=["S", "I", "R"], infectious_compartments=["I"]
     )
-    model.add_sojourn_flow("recovery", 7, "I", "R")
+    model.add_transition_flow("recovery", 1 / 7, "I", "R")
 
     expected_flows = [
-        SojournFlow("recovery", C("I"), C("R"), 7),
+        TransitionFlow("recovery", C("I"), C("R"), 1 / 7),
     ]
     assert len(expected_flows) == len(model._flows)
     assert all([a._is_equal(e) for e, a in zip(expected_flows, model._flows)])
@@ -499,8 +515,8 @@ def test_stratify_transition_flows__with_source_only_stratified():
     model.stratify_with(strat)
 
     expected_flows = [
-        SojournFlow("recovery", C("I", {"location": "urban"}), C("R"), 7),
-        SojournFlow("recovery", C("I", {"location": "rural"}), C("R"), 7),
+        TransitionFlow("recovery", C("I", {"location": "urban"}), C("R"), 1 / 7),
+        TransitionFlow("recovery", C("I", {"location": "rural"}), C("R"), 1 / 7),
     ]
     assert len(expected_flows) == len(model._flows)
     assert all([a._is_equal(e) for e, a in zip(expected_flows, model._flows)])
@@ -514,10 +530,10 @@ def test_stratify_transition_flows__with_dest_only_stratified():
     model = CompartmentalModel(
         times=[0, 5], compartments=["S", "I", "R"], infectious_compartments=["I"]
     )
-    model.add_sojourn_flow("recovery", 7, "I", "R")
+    model.add_transition_flow("recovery", 1 / 7, "I", "R")
 
     expected_flows = [
-        SojournFlow("recovery", C("I"), C("R"), 7),
+        TransitionFlow("recovery", C("I"), C("R"), 1 / 7),
     ]
     assert len(expected_flows) == len(model._flows)
     assert all([a._is_equal(e) for e, a in zip(expected_flows, model._flows)])
@@ -527,8 +543,8 @@ def test_stratify_transition_flows__with_dest_only_stratified():
     model.stratify_with(strat)
 
     expected_flows = [
-        SojournFlow("recovery", C("I"), C("R", {"location": "urban"}), 7, [Multiply(0.5)]),
-        SojournFlow("recovery", C("I"), C("R", {"location": "rural"}), 7, [Multiply(0.5)]),
+        TransitionFlow("recovery", C("I"), C("R", {"location": "urban"}), 1 / 7, [Multiply(0.5)]),
+        TransitionFlow("recovery", C("I"), C("R", {"location": "rural"}), 1 / 7, [Multiply(0.5)]),
     ]
     assert len(expected_flows) == len(model._flows)
     assert all([a._is_equal(e) for e, a in zip(expected_flows, model._flows)])
@@ -542,10 +558,10 @@ def test_stratify_transition_flows__with_dest_only_stratified__with_adjustments(
     model = CompartmentalModel(
         times=[0, 5], compartments=["S", "I", "R"], infectious_compartments=["I"]
     )
-    model.add_sojourn_flow("recovery", 7, "I", "R")
+    model.add_transition_flow("recovery", 1 / 7, "I", "R")
 
     expected_flows = [
-        SojournFlow("recovery", C("I"), C("R"), 7),
+        TransitionFlow("recovery", C("I"), C("R"), 1 / 7),
     ]
     assert len(expected_flows) == len(model._flows)
     assert all([a._is_equal(e) for e, a in zip(expected_flows, model._flows)])
@@ -556,8 +572,8 @@ def test_stratify_transition_flows__with_dest_only_stratified__with_adjustments(
     model.stratify_with(strat)
 
     expected_flows = [
-        SojournFlow("recovery", C("I"), C("R", {"location": "urban"}), 7, [Overwrite(0.7)]),
-        SojournFlow("recovery", C("I"), C("R", {"location": "rural"}), 7, [Overwrite(0.1)]),
+        TransitionFlow("recovery", C("I"), C("R", {"location": "urban"}), 1 / 7, [Overwrite(0.7)]),
+        TransitionFlow("recovery", C("I"), C("R", {"location": "rural"}), 1 / 7, [Overwrite(0.1)]),
     ]
     assert len(expected_flows) == len(model._flows)
     assert all([a._is_equal(e) for e, a in zip(expected_flows, model._flows)])
@@ -571,10 +587,10 @@ def test_stratify_transition_flows__with_dest_only_stratified__with_strains():
     model = CompartmentalModel(
         times=[0, 5], compartments=["S", "I", "R"], infectious_compartments=["I"]
     )
-    model.add_sojourn_flow("recovery", 7, "I", "R")
+    model.add_transition_flow("recovery", 1 / 7, "I", "R")
 
     expected_flows = [
-        SojournFlow("recovery", C("I"), C("R"), 7),
+        TransitionFlow("recovery", C("I"), C("R"), 1 / 7),
     ]
     assert len(expected_flows) == len(model._flows)
     assert all([a._is_equal(e) for e, a in zip(expected_flows, model._flows)])
@@ -585,8 +601,8 @@ def test_stratify_transition_flows__with_dest_only_stratified__with_strains():
 
     # No adjustments added
     expected_flows = [
-        SojournFlow("recovery", C("I"), C("R", {"location": "urban"}), 7),
-        SojournFlow("recovery", C("I"), C("R", {"location": "rural"}), 7),
+        TransitionFlow("recovery", C("I"), C("R", {"location": "urban"}), 1 / 7),
+        TransitionFlow("recovery", C("I"), C("R", {"location": "rural"}), 1 / 7),
     ]
     assert len(expected_flows) == len(model._flows)
     assert all([a._is_equal(e) for e, a in zip(expected_flows, model._flows)])
@@ -600,10 +616,10 @@ def test_stratify_transition_flows__with_dest_only_stratified__with_adjustments_
     model = CompartmentalModel(
         times=[0, 5], compartments=["S", "I", "R"], infectious_compartments=["I"]
     )
-    model.add_sojourn_flow("recovery", 7, "I", "R")
+    model.add_transition_flow("recovery", 1 / 7, "I", "R")
 
     expected_flows = [
-        SojournFlow("recovery", C("I"), C("R"), 7),
+        TransitionFlow("recovery", C("I"), C("R"), 1 / 7),
     ]
     assert len(expected_flows) == len(model._flows)
     assert all([a._is_equal(e) for e, a in zip(expected_flows, model._flows)])
@@ -614,8 +630,8 @@ def test_stratify_transition_flows__with_dest_only_stratified__with_adjustments_
     model.stratify_with(strat)
 
     expected_flows = [
-        SojournFlow("recovery", C("I"), C("R", {"location": "urban"}), 7, [Overwrite(0.7)]),
-        SojournFlow("recovery", C("I"), C("R", {"location": "rural"}), 7, [Overwrite(0.1)]),
+        TransitionFlow("recovery", C("I"), C("R", {"location": "urban"}), 1 / 7, [Overwrite(0.7)]),
+        TransitionFlow("recovery", C("I"), C("R", {"location": "rural"}), 1 / 7, [Overwrite(0.1)]),
     ]
     assert len(expected_flows) == len(model._flows)
     assert all([a._is_equal(e) for e, a in zip(expected_flows, model._flows)])

@@ -32,7 +32,7 @@ def test_model__with_two_symmetric_stratifications():
     )
     model.set_initial_population(distribution={"S": 900, "I": 100})
     model.add_infection_frequency_flow("infection", 0.2, "S", "I")
-    model.add_sojourn_flow("recovery", 10, "I", "R")
+    model.add_transition_flow("recovery", 0.1, "I", "R")
 
     # Do pre-run force of infection calcs.
     model._prepare_to_run()
@@ -51,7 +51,7 @@ def test_model__with_two_symmetric_stratifications():
     )
     stratified_model.set_initial_population(distribution={"S": 900, "I": 100})
     stratified_model.add_infection_frequency_flow("infection", 0.2, "S", "I")
-    stratified_model.add_sojourn_flow("recovery", 10, "I", "R")
+    stratified_model.add_transition_flow("recovery", 0.1, "I", "R")
     strat = Stratification("clinical", ["home", "hospital"], ["I"])
     stratified_model.stratify_with(strat)
     stratified_model.run()
@@ -76,7 +76,7 @@ def test_strains__with_two_symmetric_strains():
     )
     model.set_initial_population(distribution={"S": 900, "I": 100})
     model.add_infection_frequency_flow("infection", 0.2, "S", "I")
-    model.add_sojourn_flow("recovery", 10, "I", "R")
+    model.add_transition_flow("recovery", 0.1, "I", "R")
 
     # Do pre-run force of infection calcs.
     model._prepare_to_run()
@@ -94,7 +94,7 @@ def test_strains__with_two_symmetric_strains():
     )
     strain_model.set_initial_population(distribution={"S": 900, "I": 100})
     strain_model.add_infection_frequency_flow("infection", 0.2, "S", "I")
-    strain_model.add_sojourn_flow("recovery", 10, "I", "R")
+    strain_model.add_transition_flow("recovery", 0.1, "I", "R")
     strat = StrainStratification("strain", ["a", "b"], ["I"])
     strain_model.stratify_with(strat)
     strain_model.run()

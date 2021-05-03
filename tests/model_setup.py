@@ -16,10 +16,10 @@ def _get_test_model(timestep=1, times=[0, 150]):
 
     # Add flows
     model.add_infection_frequency_flow(name="infection", contact_rate=0.03, source="S", dest="EE")
-    model.add_sojourn_flow(name="infect_onset", sojourn_time=7, source="EE", dest="LE")
-    model.add_sojourn_flow(name="incidence", sojourn_time=7, source="LE", dest="EA")
-    model.add_sojourn_flow(name="progress", sojourn_time=7, source="EA", dest="LA")
-    model.add_sojourn_flow(name="recovery", sojourn_time=7, source="LA", dest="R")
+    model.add_transition_flow(name="infect_onset", fractional_rate=1 / 7, source="EE", dest="LE")
+    model.add_transition_flow(name="incidence", fractional_rate=1 / 7, source="LE", dest="EA")
+    model.add_transition_flow(name="progress", fractional_rate=1 / 7, source="EA", dest="LA")
+    model.add_transition_flow(name="recovery", fractional_rate=1 / 7, source="LA", dest="R")
     model.add_death_flow(name="infect_death", death_rate=0.005, source="LA")
     model.add_transition_flow(name="warning_immunity", fractional_rate=0.01, source="R", dest="S")
 

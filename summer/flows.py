@@ -501,34 +501,6 @@ class TransitionFlow(BaseTransitionFlow):
         return parameter_value * population
 
 
-class SojournFlow(BaseTransitionFlow):
-    """
-    A flow that transfers people from a source to a destination based on
-    the population of the source compartment and the sojourn time.
-
-    Args:
-        name: The flow name.
-        source: The source compartment.
-        dest: The destination compartment.
-        param: The mean time spent in the compartment by n occupant.
-        adjustments: Adjustments to the flow rate.
-
-    """
-
-    def get_weight_value(self, time: float):
-        value = super().get_weight_value(time)
-        return 1.0/value
-
-    def get_net_flow(
-        self,
-        compartment_values: np.ndarray,
-        time: float,
-    ) -> float:
-        parameter_value = self.get_weight_value(time)
-        population = compartment_values[self.source.idx]
-        return population * parameter_value
-
-
 class FunctionFlow(BaseTransitionFlow):
     """
     A flow that transfers people from a source to a destination based on a user-defined function.
