@@ -31,11 +31,10 @@ SUCCESS_TIME_REQUESTS = [
     # start_time, end_time, time_step
     [0, 5, 1],  # Regular request
     [1, 8, 1],  # Nonzero start time
-    [2, 9, 2],  # Timestep > 1
-    [2, 9, 1.2345678],  # Timestep float > 1
-    [2, 9, 3.14159265358979323846],  # Timestep < 1
-    [-10, 5, 4],  # Negative start time
-    [0, 10, 100],  # Very large timestep
+    [-10, 5, 1],  # Negative start time
+    [2, 8, 2],  # Timestep > 1
+    [2, 6.5, 1.5],  # Timestep float > 1
+    [2, 6.5, 0.5],  # Timestep float < 1
     [0.5, 3.5, 0.1],  # Non integer start and end
 ]
 
@@ -62,6 +61,9 @@ FAIL_TIME_REQUESTS = [
     # start_time, end_time, time_step
     [5, 0, 1],  # End time after start time
     [0, -5, 1],  # End time after start time
+    [2, 9, 2],  # Timestep (int) not a factor of time period
+    [2, 9, 3.141],  # Timestep (float) not a factor of time period
+    [0, 10, 100],  # Too large timestep
 ]
 
 

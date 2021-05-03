@@ -8,7 +8,6 @@ from typing import Callable, Dict, List, Optional, Tuple
 
 import networkx
 import numpy as np
-import numba
 
 import summer.flows as flows
 from summer import stochastic
@@ -70,17 +69,14 @@ class CompartmentalModel:
     ):
         start_t, end_t = times
         assert end_t > start_t, "End time must be greater than start time"
+        time_period = end_t - start_t
+        num_steps = 1 + (time_period / timestep)
+        msg = f"Time step {timestep} must be less than time period {time_period}"
+        assert num_steps >= 1, msg
+        msg = f"Time step {timestep} must be a factor of time period {time_period}"
+        assert num_steps % 1 == 0, msg
+        self.times = np.linspace(start_t, end_t, num=int(num_steps))
         self.timestep = timestep
-
-        # Get evaluation times.
-        working_time = start_t
-        times = []
-        while working_time < end_t:
-            times.append(working_time)
-            working_time += timestep
-
-        times.append(end_t)
-        self.times = np.array(times, dtype=np.float)
 
         error_msg = "Infectious compartments must be a subset of compartments"
         assert all(n in compartments for n in infectious_compartments), error_msg
