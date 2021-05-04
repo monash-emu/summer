@@ -76,7 +76,7 @@ class Stratification:
         assert set(list(proportions.keys())) == set(self.strata), msg
         msg = f"All proportions must be >= 0 when setting population split: {proportions}"
         assert all([v >= 0 for v in proportions.values()]), msg
-        msg = f"All proportions sum to 1+/-0.01 when setting population split: {proportions}"
+        msg = f"All proportions sum to 1+/-{COMP_SPLIT_REQUEST_ERROR} when setting population split: {proportions}"
         assert abs(1 - sum(proportions.values())) < COMP_SPLIT_REQUEST_ERROR, msg
         self.population_split = proportions
 
