@@ -339,7 +339,7 @@ class BaseTransitionFlow(BaseFlow):
 
             # Should we apply an adjustment to conserve the flow rate?
             should_apply_conservation_split = (
-                # If the destination has been stratified by the source hasn't been.
+                # If the destination has been stratified but the source hasn't been.
                 (is_dest_compartment_stratified and not is_source_compartment_stratified)
                 # Don't conserve flow rates for disease strain stratifications.
                 and (not strat.is_strain())
