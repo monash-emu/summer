@@ -96,7 +96,7 @@ class Stratification:
 
         Args:
             flow_name: The name of the flow to adjust.
-            adjustments: An dict of adjustments to apply to the flow.
+            adjustments: A dict of adjustments to apply to the flow.
             source_strata (optional): A whitelist of strata to filter the target flow's source compartments.
             dest_strata (optional): A whitelist of strata to filter the target flow's destination compartments.
 
