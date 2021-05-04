@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1620021398562,
+  "lastUpdate": 1620105090850,
   "repoUrl": "https://github.com/monash-emu/summer",
   "entries": {
     "Benchmark": [
@@ -2323,6 +2323,58 @@ window.BENCHMARK_DATA = {
             "unit": "iter/sec",
             "range": "stddev: 0.13061962565752475",
             "extra": "mean: 9.98990298033334 sec\nrounds: 3"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "romain.ragonnet@monash.edu",
+            "name": "Romain Ragonnet",
+            "username": "romain-ragonnet"
+          },
+          "committer": {
+            "email": "romain.ragonnet@monash.edu",
+            "name": "Romain Ragonnet",
+            "username": "romain-ragonnet"
+          },
+          "distinct": true,
+          "id": "f7a489e2111c38fcf25aca90313a5ac7b7269cc6",
+          "message": "Remove inconsistency in population split error message",
+          "timestamp": "2021-05-04T15:08:07+10:00",
+          "tree_id": "4f84b91ef031ea55b129c13187adb3280b810593",
+          "url": "https://github.com/monash-emu/summer/commit/f7a489e2111c38fcf25aca90313a5ac7b7269cc6"
+        },
+        "date": 1620105089935,
+        "tool": "pytest",
+        "benches": [
+          {
+            "name": "tests/test_benchmarks.py::test_benchmark_vectorized_backend",
+            "value": 8.717313586402181,
+            "unit": "iter/sec",
+            "range": "stddev: 0.0027867287219110405",
+            "extra": "mean: 114.71423966666332 msec\nrounds: 3"
+          },
+          {
+            "name": "tests/test_benchmarks.py::test_benchmark_default_ode_solver",
+            "value": 2.2135314648229265,
+            "unit": "iter/sec",
+            "range": "stddev: 0.02703372913909158",
+            "extra": "mean: 451.7667880000052 msec\nrounds: 3"
+          },
+          {
+            "name": "tests/test_benchmarks.py::test_benchmark_rk4_ode_solver",
+            "value": 0.15442356344278896,
+            "unit": "iter/sec",
+            "range": "stddev: 0.04990816320546634",
+            "extra": "mean: 6.475695662666671 sec\nrounds: 3"
+          },
+          {
+            "name": "tests/test_benchmarks.py::test_benchmark_stochastic_solver",
+            "value": 0.0854362763712212,
+            "unit": "iter/sec",
+            "range": "stddev: 0.42557133172555817",
+            "extra": "mean: 11.704629959000007 sec\nrounds: 3"
           }
         ]
       }
