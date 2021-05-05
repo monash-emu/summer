@@ -1,15 +1,36 @@
-from typing import List
 from abc import ABC
 
-import networkx as nx
+from .fields import BaseField, NetworkField
 
 
-class BaseNetwork(ABC):
-    def __init__(self, network_id: int, agent_ids: List[int] = []):
-        self.id = network_id
-        self.graph = nx.Graph()
-        for agent_id in agent_ids:
-            self.add_agent(agent_id)
+class EntityMetaclass(type):
+    pass
+
+
+class BaseEntity(metaclass=EntityMetaclass):
+    @classmethod
+    def get_fields(cls):
+        """
+        Returns and iterator of all the fields.
+        """
+        for name, field in cls.__dict__.items():
+            if issubclass(field.__class__, BaseField):
+                yield name, field
+
+    def __str__(self):
+        return f"<{self.__class__.__name__}>"
+
+
+class BaseAgent(BaseEntity):
+    pass
+
+
+class BaseNetwork(BaseEntity):
+    graph = NetworkField()
+
+    @property
+    def agents_ids(self):
+        return self.graph.nodes
 
     def add_agent(self, agent_id: int):
         """
@@ -21,7 +42,8 @@ class BaseNetwork(ABC):
         self.graph.add_node(agent_id)
         edges = []
         for dest_id in self.graph.nodes:
-            edges.append((agent_id, dest_id))
+            if dest_id != agent_id:
+                edges.append((agent_id, dest_id))
 
         self.graph.add_edges_from(edges)
 
@@ -33,19 +55,8 @@ class BaseNetwork(ABC):
         self.graph.remove_node(agent_id)
 
     @property
-    def agents(self):
-        return self.graph.nodes
-
-    @property
     def size(self):
         return self.graph.number_of_nodes()
 
-    @property
-    def has_capacity(self):
-        return True
-
     def get_contacts(self, agent_id: int):
         return self.graph.neighbors(agent_id)
-
-    def __str__(self):
-        return f"<BaseNetwork {self.id}>"
