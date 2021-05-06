@@ -55,7 +55,7 @@ class CompartmentalModel:
 
     _DEFAULT_DISEASE_STRAIN = "default"
     _DEFAULT_MIXING_MATRIX = np.array([[1]])
-    _DEFAULT_BACKEND = BackendType.REFERENCE
+    _DEFAULT_BACKEND = BackendType.VECTORIZED
 
     def __init__(
         self,
