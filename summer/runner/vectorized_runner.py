@@ -38,16 +38,18 @@ class VectorizedRunner(ModelRunner):
         # Store indices of flows that are not population dependent
         self._non_pop_flow_idx = np.array([i for i, f in self._iter_non_function_flows \
             if (type(f) in (flows.ReplacementBirthFlow, flows.ImportFlow))], dtype=int)
+        self._has_non_pop_flows = bool(len(self._non_pop_flow_idx))
 
         # Crude birth flows use population sum rather than a compartment; store indices here
         self._crude_birth_idx = np.array([i for i, f in self._iter_non_function_flows \
             if type(f) == flows.CrudeBirthFlow], dtype=int)
+        self._has_crude_birth = bool(len(self._crude_birth_idx))
 
-        self.has_replacement = False
+        self._has_replacement = False
         # Replacement flows must be calculated after death flows, store indices here
         for i, f in self._iter_non_function_flows:
             if type(f) == flows.ReplacementBirthFlow:
-                self.has_replacement = True
+                self._has_replacement = True
                 self._replacement_flow_idx = i
 
         self._precompute_flow_weights()
@@ -182,8 +184,10 @@ class VectorizedRunner(ModelRunner):
         # These will be filled in afterwards
         populations = comp_vals[self.population_idx]
         # Update for special cases (population-independent and CrudeBirth)
-        populations[self._non_pop_flow_idx] = 1.0
-        populations[self._crude_birth_idx] = flows._find_sum(comp_vals)
+        if self._has_non_pop_flows:
+            populations[self._non_pop_flow_idx] = 1.0
+        if self._has_crude_birth:
+            populations[self._crude_birth_idx] = flows._find_sum(comp_vals)
 
         flow_rates = self.flow_weights * populations
 
@@ -196,7 +200,7 @@ class VectorizedRunner(ModelRunner):
         self._timestep_deaths = flow_rates[self.death_flow_indices].sum()
         
         # ReplacementBirthFlow depends on death flows already being calculated; update here
-        if self.has_replacement:
+        if self._has_replacement:
             flow_rates[self._replacement_flow_idx] = self._timestep_deaths
 
         return flow_rates
