@@ -19,45 +19,6 @@ class Agent(BaseAgent):
     recovery_date = fields.IntegerField(default=-1)
     disease = fields.IntegerField(default=Disease.SUSCEPTIBLE)
 
-agent = Agent(
-    recovery_date=-1,
-    disease=Disease.SUSCEPTIBLE
-)
-
-   
-
-
-#1 save
-agent = querything.get_agent(1)
-agent.disease = 2
-agent.save()
-
-#2 override setters n getters
-agent = querything.get_agent(1)
-agent.disease = 2
-
-#3 post operation bulk update thingy
-agent = querything.get_agent(1)
-agent.disease = 2
-querything.update_all([agent])
-
-# All agents due to recover today should recover
-model.agents.filter(recovery_date=time).update(disease=3)
-
-
-
-
-
-# Agent proxy
-agent = Agent(
-    recovery_date=-1,
-    disease=Disease.SUSCEPTIBLE
-)
-agent = agent.rsqdqwdqwd
-agent.id
-
-
-
 
 class TribeNetwork(BaseNetwork):
     capacity = fields.IntegerField(distribution=np.random.poisson)

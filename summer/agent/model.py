@@ -1,9 +1,8 @@
-from typing import List, Callable, Any, Set, Dict
 import numpy as np
 import random
 
 from .entities import BaseAgent, BaseNetwork
-from .query import Query
+from .registry import Registry
 
 
 class AgentModel:
@@ -24,18 +23,11 @@ class AgentModel:
         self._times = np.linspace(start_time, end_time, num=int(num_steps))
         self._timestep = timestep
 
-        # Setup initial networks
-        self._network_cls = None
-        self._network_vals = {}
-        self._network_max_id = 0
-
-        # Setup agents
-        self._agent_cls = None
-        self._agent_vals = {}
-        self._agent_max_id = 0
-
         self._setup_systems = []
         self._runtime_systems = []
+
+        self.agents = None
+        self.networks = None
 
     def setup_step(self):
         def decorator(f):
@@ -51,27 +43,11 @@ class AgentModel:
 
         return decorator
 
-    @property
-    def agents(self):
-        return Query(self, self._agent_field_names, self._agent_vals, self._agent_max_id)
-
-    @property
-    def networks(self):
-        return Query(self, self._network_field_names, self._network_vals, self._network_max_id)
-
     def set_agent_class(self, agent_class: BaseAgent, expected_number: int = 0):
-        self._agent_cls = agent_class
-        self._agent_count = expected_number
-        for name, field in agent_class.fields:
-            self._agent_field_names.add(name)
-            self._agent_vals[name] = field.setup(expected_number)
+        self.agents = Registry("agents", agent_class, expected_number)
 
     def set_network_class(self, network_class: BaseNetwork, expected_number: int = 0):
-        self._network_cls = network_class
-        self._network_count = expected_number
-        for name, field in network_class.fields:
-            self._network_field_names.add(name)
-            self._network_vals[name] = field.setup(expected_number)
+        self.agents = Registry("networks", network_class, expected_number)
 
     def run(self):
         assert self._agent_cls, "An agent class must be set before running the model."

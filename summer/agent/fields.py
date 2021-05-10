@@ -6,17 +6,23 @@ import networkx as nx
 
 
 class BaseField(ABC):
-    pass
-    # @abstractmethod
-    # def clean(self, value):
-    #     pass
-
-    # @abstractmethod
-    # def validate(self, value):
-    #     pass
+    """
+    A data field representing a component, which can be attached to an entity.
+    Eg. the age (component/field) of a person (entity).
+    """
 
     @abstractmethod
     def setup(self, expected_number: int):
+        """
+        Create the initial data store for that field.
+        """
+        pass
+
+    @abstractmethod
+    def validate(self, value):
+        """
+        Asserts that the value is of the correct type for the field.
+        """
         pass
 
 
@@ -28,13 +34,13 @@ class IntegerField(BaseField):
         assert not (
             distribution and default
         ), "Cannot specify both a default and a distribution for an IntegerField."
-        if distribution:
-            assert type(distribution()) is int, "Distribution value for IntegerField must be an int"
-        else:
-            assert type(default) is int, "Default value for IntegerField must be an int"
-
+        validate_value = distribution() if distribution else default
+        self.validate(validate_value)
         self.default = default
         self.distribution = distribution
+
+    def validate(self, value):
+        assert type(value) in (int, np.int64), "IntegerField values must be of int type."
 
     def setup(self, expected_number: int):
         if self.default:
@@ -55,3 +61,6 @@ class NetworkField(BaseField):
             arr[i] = nx.Graph()
 
         return arr
+
+    def validate(self, value):
+        assert type(value) is nx.Graph, "NetworkField values must be a Networkx Graph."

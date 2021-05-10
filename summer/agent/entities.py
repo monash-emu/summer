@@ -1,24 +1,46 @@
 from abc import ABC
+from typing import Dict
 
 from .fields import BaseField, NetworkField
 
 
-class EntityMetaclass(type):
-    pass
-
-
-class BaseEntity(metaclass=EntityMetaclass):
-    @classmethod
-    def get_fields(cls):
+class EntityMeta(type):
+    def __new__(cls, name, bases, dct):
         """
-        Returns and iterator of all the fields.
+        Annotate new Entity class with 'fields' attributes.
         """
-        for name, field in cls.__dict__.items():
+        new_cls = super().__new__(cls, name, bases, dct)
+        fields = {}
+        for name, field in dct.items():
             if issubclass(field.__class__, BaseField):
-                yield name, field
+                fields[name] = field
 
-    def __str__(self):
-        return f"<{self.__class__.__name__}>"
+        new_cls.fields = fields
+        return new_cls
+
+
+class BaseEntity(metaclass=EntityMeta):
+    fields: Dict[str, BaseField]
+
+    def __init__(self, **kwargs):
+        for field_name, field in self.fields.items():
+            field_val = kwargs.get(field_name)
+            if not field_val and field.default:
+                field_val = field.default
+            elif not field_val and field.distribution:
+                field_val = field.distribution()
+            elif not field_val:
+                raise ValueError(f"Field {field_name} does not have a value.")
+
+            assert field_val is not None
+            field.validate(field_val)
+            setattr(self, field_name, field_val)
+
+    @classmethod
+    def assert_fieldname(cls, field_name):
+        assert (
+            field_name in cls.fields.keys()
+        ), f"Could not find field {field_name} in entity {cls}."
 
 
 class BaseAgent(BaseEntity):
