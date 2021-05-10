@@ -6,6 +6,9 @@ from .registry import Registry
 
 
 class AgentModel:
+    agents: Registry
+    networks: Registry
+
     def __init__(
         self,
         start_time: float,
@@ -50,8 +53,8 @@ class AgentModel:
         self.agents = Registry("networks", network_class, expected_number)
 
     def run(self):
-        assert self._agent_cls, "An agent class must be set before running the model."
-        assert self._network_cls, "A network class must be set before running the model."
+        assert self.agents, "An agent class must be set before running the model."
+        assert self.networks, "A network class must be set before running the model."
         self._run_setup()
         for time in self._times:
             self._run_timestep(time)
@@ -62,32 +65,4 @@ class AgentModel:
 
     def _run_timestep(self, time):
         for setup_step in self._setup_systems:
-            setup_step(self)
-
-        # Run recoveries
-        # TODO: Turn into a system
-        for agent in self._agents:
-            if agent.disease == 2 and agent.recovery_date <= time:
-                print(f"Agent {agent.id} recovered at time {time}.")
-                agent.recovery_date = None
-                agent.disease = 3  # Recovered
-
-        # Run infections
-        # TODO: Turn into a system
-        for network in self._networks:
-            for agent_id in network.agents:
-                agent = self.get_agent(agent_id)
-                if not agent.disease == 2:  # Infected
-                    continue
-
-                contact_ids = network.get_contacts(agent_id)
-                for contact_id in contact_ids:
-                    contact = self.get_agent(contact_id)
-                    if not contact.disease == 1:  # Susceptible
-                        continue
-
-                    transmission_pr = 0.3
-                    if random.random() <= transmission_pr:
-                        contact.disease = 2
-                        contact.recovery_date = time + round(random.random() * 10)
-                        print(f"Agent {agent_id} infected agent {contact_id} in {network}")
+            setup_step(self, time)

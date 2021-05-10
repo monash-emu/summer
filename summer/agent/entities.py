@@ -51,7 +51,7 @@ class BaseNetwork(BaseEntity):
     graph = NetworkField()
 
     @property
-    def agents_ids(self):
+    def agent_ids(self):
         return self.graph.nodes
 
     def add_agent(self, agent_id: int):

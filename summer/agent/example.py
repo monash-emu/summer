@@ -31,54 +31,33 @@ model.set_network_class(TribeNetwork)
 
 @model.setup_step
 def setup_tribes(model: AgentModel):
-    for _ in range(NUM_PEOPLE):
-        agent = Agent(model.next_agent_id, Disease.SUSCEPTIBLE)
-        model.add_agent(agent)
+    # Create some tribe networks and assign each agent to a tribe.
+    for agent_id in model.agents.ids():
         for network in model._networks:
             if network.size < network.capacity:
-                network.add_agent(agent.id)
+                network.add_agent(agent_id)
                 break
         else:
-            network = TribeNetwork(model.next_network_id)
-            network.add_agent(agent.id)
-            model.add_network(network)
-
-
-    @summer.array_friendly
-    def myfunc():
-        sqswq
+            network = TribeNetwork()
+            network.add_agent(agent_id)
+            model.networks.add(network)
 
     # Randomly set three people to infected
-    model.agents
-        .choose_random(3)
-        .update(disease=Disease.INFECTED, recovery_date=myfunc)
-
-    # deep in backend
-    if just_a_reg_function:
-        for
-    elif myfunc.is_parallel:
-
-
-
-    inf_agents = random.choices(model._agents, k=3)
-    for agent in inf_agents:
-        agent.disease = Disease.INFECTED
-        agent.recovery_date = round(random.random() * 10)
+    get_recovery_date = lambda: round(random.random() * 10)
+    model.agents.query.choose(3).update(disease=Disease.INFECTED, recovery_date=get_recovery_date)
 
 
 @model.runtime_step
 def recovery_system(model: AgentModel, time: float):
-    for agent in model._agents:
-        if agent.disease == 2 and agent.recovery_date <= time:
-            print(f"Agent {agent.id} recovered at time {time}.")
-            agent.recovery_date = None
-            agent.disease = 3  # Recovered
+    model.agents.query.filter(disease=Disease.INFECTED, recovery_date__lte=time).update(
+        disease=Disease.RECOVERED
+    )
 
 
 @model.runtime_step
 def infection_system(model: AgentModel, time: float):
-    for network in model._networks:
-        for agent_id in network.agents:
+    for network in model.networks.query.entities():
+        for agent_id in network.agent_ids:
             agent = model.get_agent(agent_id)
             if not agent.disease == 2:  # Infected
                 continue

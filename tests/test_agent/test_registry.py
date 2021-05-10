@@ -40,6 +40,19 @@ def test_registry_get():
     assert reg.get(2).id == 2 and reg.get(2).age == 3 and reg.get(2).weight == 6
 
 
+def test_regsitry_add():
+    reg = _get_dummy_registry(3)
+    reg.count == 3
+    assert_array_equal(reg.vals["age"], np.array([1, 2, 3]))
+    assert_array_equal(reg.vals["weight"], np.array([4, 5, 6]))
+
+    reg.add(DummyEntity(age=7, weight=13))
+
+    reg.count == 4
+    assert_array_equal(reg.vals["age"], np.array([1, 2, 3, 7]))
+    assert_array_equal(reg.vals["weight"], np.array([4, 5, 6, 13]))
+
+
 def test_registry_write():
     reg = _get_dummy_registry(3)
     reg.write(0, "age", 31)

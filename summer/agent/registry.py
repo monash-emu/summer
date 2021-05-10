@@ -20,6 +20,16 @@ class Registry:
     def query(self):
         return Query(self)
 
+    def add(self, entity: BaseEntity, id: Optional[int] = None) -> int:
+        assert getattr(entity, "id", None) is None, "Cannot create an entity with an existing ID."
+        entity_id = self.count
+        entity.id = entity_id
+        self.count += 1
+        for field_name in self.cls.fields.keys():
+            self.vals[field_name] = np.append(self.vals[field_name], [getattr(entity, field_name)])
+
+        return entity_id
+
     def get(self, entity_id: int) -> BaseEntity:
         """
         Returns an instance of the entity's class, populated with the data form its compoenent.
@@ -101,6 +111,26 @@ class Query:
         new_ids = np.intersect1d(self._ids, filtered_ids)
         return Query(self._registry, new_ids)
 
+    def when(self, func):
+        """
+        Returns the agent ids where the provided func evalutates to True.
+        Function may be vectorized or request entity specific arguments.
+        """
+        arg_names = getattr(func, "_arg_names", [])
+        if getattr(func, "_vectorized", None):
+            # Get the mask with the vectorized function.
+            args = [self._registry.vals[n][self._ids] for n in arg_names]
+            mask = func(*args)
+        else:
+            # Get the mask with the scalar function.
+            mask = np.empty(len(self._ids), dtype=np.bool)
+            for idx, entity_id in enumerate(self._ids):
+                args = [self._registry.vals[n][entity_id] for n in arg_names]
+                mask[idx] = func(*args)
+
+        new_ids = self._ids[mask]
+        return Query(self._registry, new_ids)
+
     def choose(self, num_choices: int):
         """
         Returns a Query with entities filtered down to `num_choices` randomly chosen entities.
@@ -111,19 +141,19 @@ class Query:
     def update(self, **kwargs):
         """
         Update all selected entries with provided data.
+        Function may be vectorized or request entity specific arguments.
         """
         for field_name, value in kwargs.items():
             self._registry.cls.assert_fieldname(field_name)
+            arg_names = getattr(value, "_arg_names", [])
             if callable(value) and getattr(value, "_vectorized", None):
                 # Update the fields according to the function, which takes
                 # its requested input values as vectors.
-                arg_names = getattr(value, "_arg_names", [])
                 args = [self._registry.vals[n][self._ids] for n in arg_names]
                 update_values = value(*args)
             elif callable(value):
                 # Update the fields according to the function, which takes
                 # its requested input values as scalars (in a for loop).
-                arg_names = getattr(value, "_arg_names", [])
                 update_values = np.empty(
                     len(self._ids), dtype=self._registry.vals[field_name].dtype
                 )
