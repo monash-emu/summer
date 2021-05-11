@@ -32,25 +32,17 @@ class AgentModel:
         self.agents = None
         self.networks = None
 
-    def setup_step(self):
-        def decorator(f):
-            self._setup_systems.append(f)
-            return f
+    def add_setup_step(self, func):
+        self._setup_systems.append(func)
 
-        return decorator
+    def add_runtime_step(self, func):
+        self._runtime_systems.append(func)
 
-    def runtime_step(self):
-        def decorator(f):
-            self._systems.append(f)
-            return f
+    def set_agent_class(self, agent_class: BaseAgent, initial_number: int = 0):
+        self.agents = Registry(agent_class, initial_number)
 
-        return decorator
-
-    def set_agent_class(self, agent_class: BaseAgent, expected_number: int = 0):
-        self.agents = Registry("agents", agent_class, expected_number)
-
-    def set_network_class(self, network_class: BaseNetwork, expected_number: int = 0):
-        self.agents = Registry("networks", network_class, expected_number)
+    def set_network_class(self, network_class: BaseNetwork, initial_number: int = 0):
+        self.networks = Registry(network_class, initial_number)
 
     def run(self):
         assert self.agents, "An agent class must be set before running the model."
@@ -64,5 +56,5 @@ class AgentModel:
             setup_step(self)
 
     def _run_timestep(self, time):
-        for setup_step in self._setup_systems:
-            setup_step(self, time)
+        for runtime_step in self._runtime_systems:
+            runtime_step(self, time)

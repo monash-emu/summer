@@ -1,4 +1,4 @@
-from typing import Callable
+from typing import Callable, Any, Optional
 from abc import ABC, abstractmethod
 
 import numpy as np
@@ -11,8 +11,16 @@ class BaseField(ABC):
     Eg. the age (component/field) of a person (entity).
     """
 
+    default: Optional[Any]
+    distribution: Optional[Callable[[], Any]]
+
     @abstractmethod
-    def setup(self, expected_number: int):
+    def __init__(self):
+        self.default = None
+        self.distribution = None
+
+    @abstractmethod
+    def setup(self, initial_number: int):
         """
         Create the initial data store for that field.
         """
@@ -28,13 +36,15 @@ class BaseField(ABC):
 
 class IntegerField(BaseField):
     def __init__(self, default: int = None, distribution: Callable[[], int] = None):
+        has_dist = distribution is not None
+        has_default = default is not None
         assert (
-            distribution or default
+            has_dist or has_default
         ), "Must specify a default or a distribution for an IntegerField."
         assert not (
-            distribution and default
+            has_dist and has_default
         ), "Cannot specify both a default and a distribution for an IntegerField."
-        validate_value = distribution() if distribution else default
+        validate_value = distribution() if has_dist else default
         self.validate(validate_value)
         self.default = default
         self.distribution = distribution
@@ -42,25 +52,36 @@ class IntegerField(BaseField):
     def validate(self, value):
         assert type(value) in (int, np.int64), "IntegerField values must be of int type."
 
-    def setup(self, expected_number: int):
+    def setup(self, initial_number: int):
         if self.default:
-            arr = np.ones(expected_number, dtype=np.int)
+            arr = np.ones(initial_number, dtype=np.int)
             arr *= self.default
         else:
-            arr = np.zeros(expected_number, dtype=np.int)
-            for i in range(expected_number):
+            arr = np.zeros(initial_number, dtype=np.int)
+            for i in range(initial_number):
                 arr[i] = self.distribution()
 
         return arr
 
 
-class NetworkField(BaseField):
-    def setup(self, expected_number: int):
-        arr = np.empty(expected_number, dtype=np.object)
-        for i in range(expected_number):
-            arr[i] = nx.Graph()
+class GraphField(BaseField):
+    """
+    Represents an undirected graph using a NetworkX Graph object.
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.distribution = self._get_default
+
+    def _get_default(self):
+        return nx.Graph()
+
+    def setup(self, initial_number: int):
+        arr = np.empty(initial_number, dtype=np.object)
+        for i in range(initial_number):
+            arr[i] = self._get_default()
 
         return arr
 
     def validate(self, value):
-        assert type(value) is nx.Graph, "NetworkField values must be a Networkx Graph."
+        assert type(value) is nx.Graph, "GraphField values must be a Networkx Graph."

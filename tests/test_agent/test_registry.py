@@ -1,3 +1,16 @@
+"""
+TODO:
+
+    - test Registry.add_node
+    - test Registry.remove_node
+    - test Registry.get_nodes
+    - test Registry.get_node_contacts
+    - test Query.exclude
+    - test Query.deselect
+    - test Query.only
+    - test Query.id
+
+"""
 import numpy as np
 from numpy.testing import assert_array_equal
 
@@ -12,14 +25,14 @@ class DummyEntity(BaseEntity):
     weight = IntegerField(distribution=lambda: 70)
 
 
-def test_regsitry_init__with_no_expected_entities():
+def test_regsitry_init__with_no_expected_all():
     reg = Registry(DummyEntity)
     reg.count == 0
     assert_array_equal(reg.vals["age"], np.array([]))
     assert_array_equal(reg.vals["weight"], np.array([]))
 
 
-def test_regsitry_init__with_expected_entities():
+def test_regsitry_init__with_expected_all():
     reg = Registry(DummyEntity, 3)
     reg.count == 3
     assert_array_equal(reg.vals["age"], np.array([30, 30, 30]))
@@ -74,9 +87,9 @@ def test_registry_query_ids():
     assert reg.query.ids() == [0, 1, 2]
 
 
-def test_registry_query_entities():
+def test_registry_query_all():
     reg = _get_dummy_registry(3)
-    ents = reg.query.entities()
+    ents = reg.query.all()
     assert ents[0].id == 0 and ents[0].age == 1 and ents[0].weight == 4
     assert ents[1].id == 1 and ents[1].age == 2 and ents[1].weight == 5
     assert ents[2].id == 2 and ents[2].age == 3 and ents[2].weight == 6
@@ -109,7 +122,18 @@ def test_registry_query_filter():
     assert reg.query.filter(age__ne=2).ids() == [0, 2]
 
 
-def test_registry_choose(monkeypatch):
+def test_registry_query_select():
+    reg = _get_dummy_registry(10)
+    # Nothing provided
+    assert reg.query.select([]).ids() == []
+    # Ids are selected
+    assert reg.query.select([0, 5, 8]).ids() == [0, 5, 8]
+    # Only intersection of currently selected ids and requested selection are selected.
+    assert reg.query.filter(age__gte=6).ids() == [5, 6, 7, 8, 9]
+    assert reg.query.filter(age__gte=6).select([0, 5, 8]).ids() == [5, 8]
+
+
+def test_registry_query_choose(monkeypatch):
     # Random version
     reg = _get_dummy_registry(3)
     assert len(reg.query.choose(0).ids()) == 0
@@ -125,6 +149,79 @@ def test_registry_choose(monkeypatch):
     assert reg.query.choose(1).ids() == [0]
     assert reg.query.choose(2).ids() == [0, 1]
     assert reg.query.choose(3).ids() == [0, 1, 2]
+
+
+def test_registry_query_where__with_scalar_arguments():
+    reg = _get_dummy_registry(10)
+
+    # Pick nothing
+    assert reg.query.where(lambda: False).ids() == []
+    # Pick everything
+    assert reg.query.where(lambda: True).ids() == [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+    # Pick every second item
+    @arguments("id")
+    def id_func(entity_id):
+        assert type(entity_id) is np.int64
+        return entity_id % 2 == 0
+
+    assert reg.query.where(id_func).ids() == [0, 2, 4, 6, 8]
+
+    # Pick items where age and weight
+    @arguments("id")
+    def id_func(entity_id):
+        assert type(entity_id) is np.int64
+        return entity_id % 2 == 0
+
+    # weight:           11 12 13 14 15 16 17 18 19 20
+    # age:              1  2  3  4  5  6  7  8  9  10
+    # weight / age:     11 6  -  -  3  -  -  -  -  2
+    # expected ids:     0  1  -  -  4  -  -  -  -  9
+    # Pick items where some function age and weight is True.
+    @arguments("age", "weight")
+    def id_func(age, weight):
+        assert type(age) is np.int64
+        assert type(weight) is np.int64
+        return (weight / age) % 1 == 0
+
+    assert reg.query.where(id_func).ids() == [0, 1, 4, 9]
+
+
+def test_registry_query_where__with_vectorized_arguments():
+    reg = _get_dummy_registry(10)
+
+    # Pick nothing
+    assert reg.query.where(lambda: False).ids() == []
+    # Pick everything
+    assert reg.query.where(lambda: True).ids() == [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+    # Pick every second item
+    @vectorized
+    @arguments("id")
+    def id_func(entity_id):
+        assert type(entity_id) is np.ndarray
+        return entity_id % 2 == 0
+
+    assert reg.query.where(id_func).ids() == [0, 2, 4, 6, 8]
+
+    # Pick items where age and weight
+    @vectorized
+    @arguments("id")
+    def id_func(entity_id):
+        assert type(entity_id) is np.ndarray
+        return entity_id % 2 == 0
+
+    # weight:           11 12 13 14 15 16 17 18 19 20
+    # age:              1  2  3  4  5  6  7  8  9  10
+    # weight / age:     11 6  -  -  3  -  -  -  -  2
+    # expected ids:     0  1  -  -  4  -  -  -  -  9
+    # Pick items where some function age and weight is True.
+    @vectorized
+    @arguments("age", "weight")
+    def id_func(age, weight):
+        assert type(age) is np.ndarray
+        assert type(weight) is np.ndarray
+        return (weight / age) % 1 == 0
+
+    assert reg.query.where(id_func).ids() == [0, 1, 4, 9]
 
 
 def test_registry_query_update__with_static_values():
@@ -157,10 +254,13 @@ def test_registry_query_update__with_basic_function_values__with_arguments():
 
     @arguments("age")
     def age_func(age):
+        assert type(age) is np.int64
         return age + 1
 
     @arguments("weight", "age")
     def weight_func(weight, age):
+        assert type(age) is np.int64
+        assert type(age) is np.int64
         return weight + age
 
     assert age_func._arg_names == ("age",)
@@ -182,11 +282,14 @@ def test_registry_query_update__with_basic_function_values__with_vectorized_argu
     @vectorized
     @arguments("age")
     def age_func(age):
+        assert type(age) is np.ndarray
         return age + 1
 
     @vectorized
     @arguments("weight", "age")
     def weight_func(weight, age):
+        assert type(weight) is np.ndarray
+        assert type(age) is np.ndarray
         return weight + age
 
     assert age_func._arg_names == ("age",)
