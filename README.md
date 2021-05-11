@@ -82,6 +82,8 @@ Releases are numbered using [Semantic Versioning](https://semver.org/)
   - Rename fractional flow to transition flow
   - Remove sojourn flow
   - Add vectorized backend and other performance improvements
+- 2.0.0b (released)
+  - As 2.0.0 with vectorized backend set as default
 
 ## Release process
 

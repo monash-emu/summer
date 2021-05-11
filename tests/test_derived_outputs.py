@@ -4,25 +4,24 @@ from numpy.testing import assert_allclose, assert_array_equal
 from summer.model import CompartmentalModel
 
 
-def test_no_derived_outputs():
-
+def test_no_derived_outputs(backend):
     model = CompartmentalModel(
         times=[0, 5], compartments=["S", "I", "R"], infectious_compartments=["I"]
     )
     model.set_initial_population(distribution={"S": 990, "I": 10})
-    model.run()
+    model.run(backend=backend)
     # 6 timesteps, 3 compartments.
     assert model.outputs.shape == (6, 3)
     assert model.derived_outputs == {}
 
 
-def test_compartment_size_derived_outputs():
+def test_compartment_size_derived_outputs(backend):
 
     model = CompartmentalModel(
         times=[0, 5], compartments=["S", "I", "R"], infectious_compartments=["I"]
     )
     model.set_initial_population(distribution={"S": 990, "I": 10})
-    model.run()
+    model.run(backend=backend)
     model.outputs = np.array(
         [
             [990, 10, 0],
@@ -42,12 +41,12 @@ def test_compartment_size_derived_outputs():
     assert_array_equal(dos["total_population"], np.array([1000, 1000, 1000, 1000, 1000, 1000]))
 
 
-def test_aggregate_derived_outputs():
+def test_aggregate_derived_outputs(backend):
     model = CompartmentalModel(
         times=[0, 5], compartments=["S", "I", "R"], infectious_compartments=["I"]
     )
     model.set_initial_population(distribution={"S": 990, "I": 10})
-    model.run()
+    model.run(backend=backend)
     model.outputs = np.array(
         [
             [990, 10, 0],
@@ -66,12 +65,12 @@ def test_aggregate_derived_outputs():
     assert_array_equal(dos["my_aggregate"], np.array([1000, 1005, 1010, 1015, 1020, 1025]))
 
 
-def test_cumulative_derived_outputs():
+def test_cumulative_derived_outputs(backend):
     model = CompartmentalModel(
         times=[0, 5], compartments=["S", "I", "R"], infectious_compartments=["I"]
     )
     model.set_initial_population(distribution={"S": 990, "I": 10})
-    model.run()
+    model.run(backend=backend)
     model.outputs = np.array(
         [
             [990, 10, 0],
@@ -90,7 +89,7 @@ def test_cumulative_derived_outputs():
     assert_array_equal(dos["recoved_cumulative_2"], np.array([0, 0, 10, 25, 45, 70]))
 
 
-def test_flow_derived_outputs():
+def test_flow_derived_outputs(backend):
     model = CompartmentalModel(
         times=[0, 5], compartments=["S", "I", "R"], infectious_compartments=["I"]
     )
@@ -114,7 +113,7 @@ def test_flow_derived_outputs():
     model.request_output_for_flow(name="recovery_raw", flow_name="recovery", raw_results=True)
     model.request_output_for_flow(name="recovery_delta", flow_name="recovery", raw_results=False)
 
-    model.run()
+    model.run(backend=backend)
     dos = model.derived_outputs
 
     # Raw outputs are the instantaneous flow rate at a given time.
@@ -135,12 +134,12 @@ def test_flow_derived_outputs():
     assert_allclose(dos["importation_air"][1:], np.array([0.5, 2.5, 6.5, 12.5, 20.5]), rtol=0.1)
 
 
-def test_functional_derived_outputs():
+def test_functional_derived_outputs(backend):
     model = CompartmentalModel(
         times=[0, 5], compartments=["S", "I", "R"], infectious_compartments=["I"]
     )
     model.set_initial_population(distribution={"S": 990, "I": 10})
-    model.run()
+    model.run(backend=backend)
     model.outputs = np.array(
         [
             [990, 10, 0],
@@ -163,7 +162,7 @@ def test_functional_derived_outputs():
     assert_array_equal(dos["recovered_prop"], np.array([0, 0.005, 0.01, 0.015, 0.020, 0.025]))
 
 
-def test_derived_outputs_with_no_save_results():
+def test_derived_outputs_with_no_save_results(backend):
     model = CompartmentalModel(
         times=[0, 5], compartments=["S", "I", "R"], infectious_compartments=["I"]
     )
@@ -187,7 +186,7 @@ def test_derived_outputs_with_no_save_results():
         name="final_aggregate", sources=["some_aggregate", "recovered_cumulative"]
     )
 
-    model.run()
+    model.run(backend=backend)
     # Override outputs so the test is easier to write
     model.outputs = np.array(
         [
@@ -207,12 +206,12 @@ def test_derived_outputs_with_no_save_results():
     assert "some_aggregate" not in dos
 
 
-def test_derived_outputs_whitelist():
+def test_derived_outputs_whitelist(backend):
     model = CompartmentalModel(
         times=[0, 5], compartments=["S", "I", "R"], infectious_compartments=["I"]
     )
     model.set_initial_population(distribution={"S": 990, "I": 10})
-    model.run()
+    model.run(backend=backend)
     model.outputs = np.array(
         [
             [990, 10, 0],

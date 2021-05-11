@@ -1,24 +1,41 @@
+"""
+Optimized 'hot' functions used by CompartmentalModel and its runners.
+"""
 import numba
 import numpy as np
 
 
 @numba.jit(nopython=True)
-def accumulate_flow_contributions(
+def accumulate_positive_flow_contributions(
     flow_rates: np.ndarray,
     comp_rates: np.ndarray,
     pos_flow_map: np.ndarray,
-    neg_flow_map: np.ndarray,
 ):
-    """Fast accumulator for summing flow rates into their effects on compartments
+    """
+    Fast accumulator for summing positive flow rates into their effects on compartments
 
     Args:
         flow_rates (np.ndarray): Flow rates to be accumulated
         comp_rates (np.ndarray): Output array of compartment rates
         pos_flow_map (np.ndarray): Array of src (flow), target (compartment) indices
-        neg_flow_map (np.ndarray): Array of src (flow), target (compartment) indices
     """
     for src, target in pos_flow_map:
         comp_rates[target] += flow_rates[src]
+
+
+@numba.jit(nopython=True)
+def accumulate_negative_flow_contributions(
+    flow_rates: np.ndarray,
+    comp_rates: np.ndarray,
+    neg_flow_map: np.ndarray,
+):
+    """Fast accumulator for summing negative flow rates into their effects on compartments
+
+    Args:
+        flow_rates (np.ndarray): Flow rates to be accumulated
+        comp_rates (np.ndarray): Output array of compartment rates
+        neg_flow_map (np.ndarray): Array of src (flow), target (compartment) indices
+    """
     for src, target in neg_flow_map:
         comp_rates[target] -= flow_rates[src]
 
