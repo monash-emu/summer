@@ -83,36 +83,6 @@ class BaseFlow(ABC):
         if self.dest:
             self.dest.idx = mapping[self.dest]
 
-    def optimize_adjustments(self):
-        """
-        Rearrange adjustments so that they produce the same result but run faster.
-        This does not seem to actually impact runtime much.
-        """
-        # Start from the last Overwrite, no point calculating anything before that.
-        last_overwrite_idx = None
-        for idx in reversed(range(len(self.adjustments))):
-            adj = self.adjustments[idx]
-            if type(adj) is Overwrite:
-                last_overwrite_idx = idx
-                break
-
-        if last_overwrite_idx:
-            new_adjustments = self.adjustments[last_overwrite_idx:]
-        else:
-            new_adjustments = self.adjustments
-
-        # Combine all constant multiplications into one constant.
-        overwrites = [a for a in new_adjustments if type(a) is Overwrite]
-        consts = [a for a in new_adjustments if type(a) is Multiply and not callable(a.param)]
-        funcs = [a for a in new_adjustments if type(a) is Multiply and callable(a.param)]
-
-        if consts:
-            # Reduce multiple constants into one.
-            const = np.prod([a.param for a in consts])
-            consts = [Multiply(const)]
-
-        self.adjustments = overwrites + consts + funcs
-
     @abstractmethod
     def get_net_flow(
         self,
@@ -545,7 +515,7 @@ class BaseInfectionFlow(BaseTransitionFlow):
         assert type(source) is Compartment
         assert type(dest) is Compartment
         self.name = name
-        self.adjustments = adjustments or []
+        self.adjustments = [a for a in (adjustments or []) if a and a.param is not None]
         self.source = source
         self.dest = dest
         self.param = param

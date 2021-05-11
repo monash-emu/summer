@@ -9,7 +9,7 @@ from summer import Compartment as C
 from summer import CompartmentalModel, StrainStratification, Stratification, adjust
 
 
-def test_strat_infectiousness__with_adjustments():
+def test_strat_infectiousness__with_adjustments(backend):
     """
     Ensure multiply infectiousness adjustment is applied.
     """
@@ -17,6 +17,7 @@ def test_strat_infectiousness__with_adjustments():
     model = CompartmentalModel(
         times=[0, 5], compartments=["S", "I", "R"], infectious_compartments=["I"]
     )
+    model._set_backend(backend)
     model.set_initial_population(distribution={"S": 900, "I": 100})
     strat = Stratification("age", ["baby", "child", "adult"], ["S", "I", "R"])
     strat.set_population_split({"baby": 0.1, "child": 0.3, "adult": 0.6})
@@ -30,14 +31,14 @@ def test_strat_infectiousness__with_adjustments():
     )
 
     # Do pre-run force of infection calcs.
-    model._prepare_to_run()
+    model._backend.prepare_to_run()
     assert_array_equal(
-        model._compartment_infectiousness["default"],
+        model._backend._compartment_infectiousness["default"],
         np.array([0, 0, 0, 1, 3, 0.5, 0, 0, 0]),
     )
 
     # Do pre-iteration force of infection calcs
-    model._prepare_time_step(0, model.initial_population)
+    model._backend._prepare_time_step(0, model.initial_population)
 
     # Get multipliers
     infectees = model.compartments[0:3]
@@ -63,13 +64,13 @@ def test_strat_infectiousness__with_adjustments():
     )
 
     # Do pre-run force of infection calcs.
-    model._prepare_to_run()
+    model._backend.prepare_to_run()
     assert_array_equal(
-        model._compartment_infectiousness["default"],
+        model._backend._compartment_infectiousness["default"],
         np.array([0, 0, 0, 0, 0, 0, 1, 7, 1, 21, 1, 3.5, 0, 0, 0, 0, 0, 0]),
     )
     # Do pre-iteration force of infection calcs
-    model._prepare_time_step(0, model.initial_population)
+    model._backend._prepare_time_step(0, model.initial_population)
 
     # Get multipliers
     infectees = model.compartments[0:6]
