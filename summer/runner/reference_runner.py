@@ -88,6 +88,7 @@ class ReferenceRunner(ModelRunner):
                 net_flow = flow.get_net_flow(
                     self.model.compartments, comp_vals, self.model._flows, flow_rates, time
                 )
+                flow_rates[flow_idx] = net_flow
                 comp_rates[flow.source.idx] -= net_flow
                 comp_rates[flow.dest.idx] += net_flow
 

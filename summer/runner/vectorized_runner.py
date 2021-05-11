@@ -31,9 +31,15 @@ class VectorizedRunner(ModelRunner):
         self.death_flow_indices = [i for i, f in self._iter_non_function_flows if f.is_death_flow]
         
         # Include dummy values in population_idx to account for Entry flows
-        self.population_idx = np.array(
+        non_func_pops = np.array(
             [f.source.idx if f.source else 0 for i, f in self._iter_non_function_flows], dtype=int
         )
+
+        func_pops = np.array(
+            [f.source.idx if f.source else 0 for i, f in self._iter_function_flows], dtype=int
+        )
+
+        self.population_idx = np.concatenate((non_func_pops, func_pops))
 
         # Store indices of flows that are not population dependent
         self._non_pop_flow_idx = np.array([i for i, f in self._iter_non_function_flows \
@@ -60,8 +66,7 @@ class VectorizedRunner(ModelRunner):
 
     def _precompute_flow_weights(self):
         """Calculate all static flow weights before running, and build indices for time-varying weights"""
-        # +++ Make this equal to all flows (account for function flows)
-        self.flow_weights = np.zeros(len(self._iter_non_function_flows))
+        self.flow_weights = np.zeros(len(self.model._flows))
         time_varying_flow_weights = []
         time_varying_weight_indices = []
         for i, f in self._iter_non_function_flows:
@@ -82,6 +87,11 @@ class VectorizedRunner(ModelRunner):
         f_pos_map = []
         f_neg_map = []
         for i, f in self._iter_non_function_flows:
+            if f.source:
+                f_neg_map.append((i, f.source.idx))
+            if f.dest:
+                f_pos_map.append((i, f.dest.idx))
+        for i, f in self._iter_function_flows:
             if f.source:
                 f_neg_map.append((i, f.source.idx))
             if f.dest:
@@ -190,8 +200,6 @@ class VectorizedRunner(ModelRunner):
             populations[self._crude_birth_idx] = flows._find_sum(comp_vals)
 
         flow_rates = self.flow_weights * populations
-
-
         
         # Calculate infection flows
         infect_mul = self._get_infectious_multipliers()
@@ -202,6 +210,14 @@ class VectorizedRunner(ModelRunner):
         # ReplacementBirthFlow depends on death flows already being calculated; update here
         if self._has_replacement:
             flow_rates[self._replacement_flow_idx] = self._timestep_deaths
+
+        if self._iter_function_flows:
+            # Evaluate the function flows.
+            for flow_idx, flow in self._iter_function_flows:
+                net_flow = flow.get_net_flow(
+                    self.model.compartments, comp_vals, self.model._flows, flow_rates, time
+                )
+                flow_rates[flow_idx] = net_flow
 
         return flow_rates
 
@@ -228,15 +244,6 @@ class VectorizedRunner(ModelRunner):
 
         if self._neg_flow_map.size > 0:
             accumulate_negative_flow_contributions(flow_rates, comp_rates, self._neg_flow_map)
-
-        if self._iter_function_flows:
-            # Evaluate the function flows.
-            for _, flow in self._iter_function_flows:
-                net_flow = flow.get_net_flow(
-                    self.model.compartments, comp_vals, self.model._flows, flow_rates, time
-                )
-                comp_rates[flow.source.idx] -= net_flow
-                comp_rates[flow.dest.idx] += net_flow
 
         return comp_rates, flow_rates
 
