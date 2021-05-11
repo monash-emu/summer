@@ -78,7 +78,7 @@ Releases are numbered using [Semantic Versioning](https://semver.org/)
 
 - 1.0.0/1: Initial release
 - 1.1.0: Add stochastic integrator
-- 2.0.1:
+- 2.0.2:
   - Rename fractional flow to transition flow
   - Remove sojourn flow
   - Add vectorized backend and other performance improvements
