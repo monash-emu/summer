@@ -7,25 +7,14 @@ from summer.agent.registry import arguments, vectorized
 from summer.agent.entities import BaseAgent, BaseNetwork
 from summer.agent.model import AgentModel
 
-NUM_PEOPLE = 20
-INTIIAL_INFECTED = 3
-
-
-def test_example_model__smoke_test_run():
-    model = build_example_model(NUM_PEOPLE, INTIIAL_INFECTED)
-    model.run()
-
-
-def build_example_model(num_people: int, initial_infected: int):
-    model = AgentModel(start_time=0, end_time=10, timestep=1)
-    model.set_agent_class(Agent, initial_number=num_people)
-    model.set_network_class(TribeNetwork)
-    model.add_setup_step(setup_tribes)
-    model.add_setup_step(get_seed_infection(initial_infected))
-    model.add_runtime_step(recovery_system)
-    model.add_runtime_step(death_system)
-    model.add_runtime_step(infection_system)
-    return model
+NUM_PEOPLE = 100
+INTIIAL_INFECTED = 10
+MEAN_TRIBE_SIZE = 12
+NO_DATE = -1
+RECOVERY_LIMIT = 5
+DEATH_LIMIT = 4
+INFECTION_PR = 0.3
+RECOVERY_PR = 0.8
 
 
 class Disease:
@@ -35,17 +24,30 @@ class Disease:
     DEAD = 4
 
 
-NO_DATE = -1
+class NetworkType:
+    TRIBE = 0
+    TRADE = 1
 
 
-class Agent(BaseAgent):
-    """
-    An individual who is a part of a tribe.
-    """
+def test_example_model__smoke_test_run():
+    model = build_example_model(NUM_PEOPLE, INTIIAL_INFECTED)
+    model.run()
 
-    death_date = fields.IntegerField(default=NO_DATE)
-    recovery_date = fields.IntegerField(default=NO_DATE)
-    disease = fields.IntegerField(default=Disease.SUSCEPTIBLE)
+
+def build_example_model(
+    num_people: int,
+    initial_infected: int,
+):
+
+    model = AgentModel(start_time=0, end_time=10, timestep=1)
+    model.set_agent_class(Agent, initial_number=num_people)
+    model.set_network_class(Network)
+    model.add_setup_step(setup_tribes)
+    model.add_setup_step(get_seed_infection(initial_infected))
+    model.add_runtime_step(recovery_system)
+    model.add_runtime_step(death_system)
+    model.add_runtime_step(infection_system)
+    return model
 
 
 def poisson_with_floor(lam, floor):
@@ -63,12 +65,23 @@ def poisson_with_floor(lam, floor):
     return poisson
 
 
-class TribeNetwork(BaseNetwork):
+class Agent(BaseAgent):
+    """
+    An individual who is a part of a tribe.
+    """
+
+    death_date = fields.IntegerField(default=NO_DATE)
+    recovery_date = fields.IntegerField(default=NO_DATE)
+    disease = fields.IntegerField(default=Disease.SUSCEPTIBLE)
+
+
+class Network(BaseNetwork):
     """
     A tribe of individuals
     """
 
-    capacity = fields.IntegerField(distribution=poisson_with_floor(6, 2))
+    type = fields.IntegerField(default=NetworkType.TRIBE)
+    capacity = fields.IntegerField(distribution=poisson_with_floor(MEAN_TRIBE_SIZE, 2))
 
 
 def setup_tribes(model: AgentModel):
@@ -82,8 +95,20 @@ def setup_tribes(model: AgentModel):
                 model.networks.add_node(network.id, agent_id)
                 break
         else:
-            network_id = model.networks.add(TribeNetwork())
+            network_id = model.networks.add(Network())
             model.networks.add_node(network_id, agent_id)
+
+    # Randomly add some inter tribe connections - "trade connections"
+    # Each model is has 2 trade networks with 2 other random tribes
+    for src_tribe in model.networks.query.all():
+        dest_tribes = model.networks.query.choose(2).all()
+        for dest_tribe in dest_tribes:
+            trade_network = Network(type=NetworkType.TRADE, capacity=2)
+            network_id = model.networks.add(trade_network)
+            src_tribe_agent_id = random.choice(model.networks.get_nodes(src_tribe.id))
+            dest_tribe_agent_id = random.choice(model.networks.get_nodes(dest_tribe.id))
+            model.networks.add_node(network_id, src_tribe_agent_id)
+            model.networks.add_node(network_id, dest_tribe_agent_id)
 
 
 def get_seed_infection(initial_infected: int):
@@ -145,7 +170,7 @@ def build_choose_recovery_date(time):
         """
         A person randomly recovers 0-3 days after they get infected.
         """
-        return time + np.round(np.random.random(len(ids)) * 3)
+        return time + np.round(np.random.random(len(ids)) * RECOVERY_LIMIT)
 
     return choose_recovery_date
 
@@ -157,7 +182,7 @@ def build_choose_death_date(time):
         """
         A person randomly dies 0-2 days after they get infected.
         """
-        return time + np.round(np.random.random(len(ids)) * 2)
+        return time + np.round(np.random.random(len(ids)) * DEATH_LIMIT)
 
     return choose_death_date
 
@@ -169,7 +194,7 @@ def choose_infected(ids):
     Returns an array of bools to select who gets infected
     """
     infection_pr = 0.3
-    return np.random.random(len(ids)) <= infection_pr
+    return np.random.random(len(ids)) <= INFECTION_PR
 
 
 @vectorized
@@ -178,5 +203,4 @@ def choose_recovered(ids):
     """
     Returns an array of bools to select who recoveres
     """
-    recovery_pr = 0.8
-    return np.random.random(len(ids)) <= recovery_pr
+    return np.random.random(len(ids)) <= RECOVERY_PR
