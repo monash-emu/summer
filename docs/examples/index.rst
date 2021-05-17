@@ -18,5 +18,6 @@ See below for some examples on how to use Summer:
    9-mixing-matrices
    10-derived-outputs-stratified
    11-flows-between-strata
+   12-agent-based-model
 
 You can run the code in these examples by following `these instructions <https://github.com/monash-emu/summer/blob/master/docs/dev-setup.md>`_.

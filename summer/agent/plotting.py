@@ -1,17 +1,84 @@
-from unittest import mock
-
-from typing import Callable, Optional
 import random
+import base64
+from io import BytesIO
+from typing import Callable, Optional, List
 
 import igraph as ig
 import networkx as nx
 from networkx import drawing
 import matplotlib.pyplot as plt
-
+from PIL import Image
 
 from .model import AgentModel
 
 NodeFunc = Callable[[AgentModel, int], str]
+
+
+def figure_to_buffer(fig) -> BytesIO:
+    buf = BytesIO()
+    fig.savefig(buf, format="png", bbox_inches="tight", pad_inches=0)
+    return buf
+
+
+def plots_to_gif_buf(bufs: List[BytesIO], duration: int) -> BytesIO:
+    """
+    Duration is time per frame, in ms.
+    Use Gif Compressor if you want to share:
+
+        https://gifcompressor.com/
+
+    """
+    images = [Image.open(buf) for buf in bufs]
+    buf = BytesIO()
+    images[0].save(
+        buf,
+        format="gif",
+        save_all=True,
+        append_images=images,
+        optimize=False,
+        duration=duration,
+        loop=0,
+    )
+    buf.seek(0)
+    return buf
+
+
+def ipython_display_gif_buf(buf: BytesIO):
+    """
+    Displays a GIF buffer in Jupyter notebooks.
+    """
+    from IPython.display import display, HTML
+
+    buf.seek(0)
+    gif_base64_str = base64.b64encode(buf.read()).decode("utf-8")
+    buf.seek(0)
+    img_tag = f"<img src='data:image/gif;base64,{gif_base64_str}'>"
+    display(HTML(img_tag))
+
+
+def ipython_display_plot_buf(buf: BytesIO):
+    """
+    Displays a plots buffer in Jupyter notebooks.
+    """
+    from IPython.display import display
+
+    buf.seek(0)
+    img = Image.open(buf)
+    display(img)
+
+
+def ipython_display_plot_bufs(bufs: List[BytesIO]):
+    """
+    Displays an list of plots generated with `ipython_plot_model`
+    display in Jupyter notebooks.
+    """
+    # Imported because not in release version
+    import ipywidgets as wg
+
+    def plot_timeslice(i):
+        ipython_display_plot_buf(bufs[i])
+
+    wg.interact(plot_timeslice, i=wg.IntSlider(min=0, max=len(bufs) - 1, step=1))
 
 
 def plot_model_networks(
@@ -48,78 +115,8 @@ def plot_model_networks(
 
         kwargs["node_color"] = colors
 
-    with_labels = draw_kwargs.pop("with_labels", True)
+    with_labels = draw_kwargs.pop("with_labels", False)
     arrows = draw_kwargs.pop("arrows", True)
     kwargs = {**kwargs, **draw_kwargs}
-
-    # Draw the network to the axis.
-    # Copied from NetworkX because we can't override their plt.draw_if_interactive() code
-    # inside of drawing.draw_networkx
-    if any([k not in VALID_KWDS for k in kwargs]):
-        invalid_args = ", ".join([k for k in kwargs if k not in VALID_KWDS])
-        raise ValueError(f"Received invalid argument(s): {invalid_args}")
-
-    node_kwds = {k: v for k, v in kwargs.items() if k in VALID_NODE_KWDS}
-    edge_kwds = {k: v for k, v in kwargs.items() if k in VALID_EDGE_KWDS}
-    label_kwds = {k: v for k, v in kwargs.items() if k in VALID_LABEL_KWDS}
-
-    drawing.draw_networkx_nodes(graph, layout, **node_kwds)
-    drawing.draw_networkx_edges(graph, layout, arrows=arrows, **edge_kwds)
-    if with_labels:
-        drawing.draw_networkx_labels(graph, layout, **label_kwds)
-
+    drawing.draw_networkx(graph, layout, arrows=arrows, with_labels=with_labels, **kwargs)
     return fig
-
-
-# Copied from NetworkX because we can't override their plt.draw_if_interactive() code
-# inside of drawing.draw_networkx
-VALID_NODE_KWDS = (
-    "nodelist",
-    "node_size",
-    "node_color",
-    "node_shape",
-    "alpha",
-    "cmap",
-    "vmin",
-    "vmax",
-    "ax",
-    "linewidths",
-    "edgecolors",
-    "label",
-)
-
-VALID_EDGE_KWDS = (
-    "edgelist",
-    "width",
-    "edge_color",
-    "style",
-    "alpha",
-    "arrowstyle",
-    "arrowsize",
-    "edge_cmap",
-    "edge_vmin",
-    "edge_vmax",
-    "ax",
-    "label",
-    "node_size",
-    "nodelist",
-    "node_shape",
-    "connectionstyle",
-    "min_source_margin",
-    "min_target_margin",
-)
-
-VALID_LABEL_KWDS = (
-    "labels",
-    "font_size",
-    "font_color",
-    "font_family",
-    "font_weight",
-    "alpha",
-    "bbox",
-    "ax",
-    "horizontalalignment",
-    "verticalalignment",
-)
-
-VALID_KWDS = VALID_NODE_KWDS + VALID_EDGE_KWDS + VALID_LABEL_KWDS

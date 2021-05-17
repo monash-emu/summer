@@ -1,6 +1,8 @@
 import random
-import numpy as np
 from typing import List, Optional
+
+import numpy as np
+
 from .entities import BaseEntity, BaseNetwork
 
 
@@ -12,10 +14,17 @@ class Registry:
     def __init__(self, cls: BaseEntity, initial_number: int = 0):
         self.cls = cls
         self.vals = {}
-        self.count = initial_number
         self._is_network = issubclass(cls, BaseNetwork)
-        for field_name, field in cls.fields.items():
-            self.vals[field_name] = field.setup(initial_number)
+        self._initial_number = initial_number
+        self.reset()
+
+    def reset(self):
+        """
+        Reset all fields
+        """
+        self.count = self._initial_number
+        for field_name, field in self.cls.fields.items():
+            self.vals[field_name] = field.setup(self._initial_number)
 
     @property
     def query(self):
@@ -79,7 +88,7 @@ class Registry:
         assert entity_id < self.count, f"Entity ID {entity_id} out of range"
         # Add the node to the graph
         graph = self.vals["graph"][entity_id]
-        assert not node_id in graph, f"Agent {node_id} already in {self.cls} {entity_id}"
+        assert not node_id in graph, f"Agent {node_id} already in {self.cls.__name__} {entity_id}"
         graph.add_node(node_id)
         edges = []
         for dest_id in graph.nodes:

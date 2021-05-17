@@ -32,6 +32,9 @@ class AgentModel:
         self.agents = None
         self.networks = None
 
+        self._post_setup_hook = None
+        self._post_timestep_hook = None
+
     def add_setup_step(self, func):
         self._setup_systems.append(func)
 
@@ -44,12 +47,34 @@ class AgentModel:
     def set_network_class(self, network_class: BaseNetwork, initial_number: int = 0):
         self.networks = Registry(network_class, initial_number)
 
+    def add_setup_hook(self, hook):
+        """
+        Register a function which will be run on the model just after setup
+        """
+        self._post_setup_hook = hook
+
+    def add_timestep_hook(self, hook):
+        """
+        Register a function which will be run on the model after each timestep
+        """
+        self._post_timestep_hook = hook
+
     def run(self):
         assert self.agents, "An agent class must be set before running the model."
         assert self.networks, "A network class must be set before running the model."
+        self._reset()
         self._run_setup()
+        if self._post_setup_hook:
+            self._post_setup_hook(self)
+
         for time in self._times:
             self._run_timestep(time)
+            if self._post_timestep_hook:
+                self._post_timestep_hook(self, time)
+
+    def _reset(self):
+        self.agents.reset()
+        self.networks.reset()
 
     def _run_setup(self):
         for setup_step in self._setup_systems:
