@@ -16,6 +16,7 @@ from summer.derived_outputs import DerivedOutputRequest, calculate_derived_outpu
 from summer.runner import ReferenceRunner, VectorizedRunner
 from summer.solver import SolverType, solve_ode
 from summer.stratification import Stratification
+from summer.utils import get_scenario_start_index
 
 logger = logging.getLogger()
 
@@ -96,6 +97,9 @@ class CompartmentalModel:
         self._derived_output_graph = networkx.DiGraph()
         # Whitelist of 'derived outputs' to evaluate
         self._derived_outputs_whitelist = []
+
+        # Init baseline model to None; can be set via set_baseline if running as a scenario
+        self._baseline = None
 
         # Mixing matrices: a list of square arrays, or functions, used to calculate force of infection.
         self._mixing_matrices = []
@@ -835,6 +839,19 @@ class CompartmentalModel:
         """
         self._derived_outputs_whitelist = whitelist
 
+    def set_baseline(self, baseline):
+        """Set a baseline model to be used for this (scenario) run
+        Sets initial population values to the baseline values for this model's start time
+        Cumulative and relative outputs will refer to the baseline
+
+        Args:
+            baseline (CompartmentalModel): The baseline model to be used as reference
+        """
+        start_index = get_scenario_start_index(baseline.times, self.times[0])
+        init_compartments = baseline.outputs[start_index, :]
+        self.initial_population = init_compartments
+        self._baseline = baseline
+
     def _calculate_derived_outputs(self):
         return calculate_derived_outputs(
             requests=self._derived_output_requests,
@@ -846,6 +863,7 @@ class CompartmentalModel:
             compartments=self.compartments,
             get_flow_rates=self._backend.get_flow_rates,
             whitelist=self._derived_outputs_whitelist,
+            baseline=self._baseline
         )
 
     def request_output_for_flow(

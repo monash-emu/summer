@@ -17,6 +17,7 @@ import numpy as np
 
 from summer.compartment import Compartment
 from summer.flows import BaseFlow
+from summer.utils import get_scenario_start_index
 
 logger = logging.getLogger()
 
@@ -39,6 +40,7 @@ def calculate_derived_outputs(
     compartments: List[Compartment],
     get_flow_rates: Callable[[np.ndarray, float], np.ndarray],
     whitelist: Optional[List[str]],
+    baseline = None,
 ) -> Dict[str, np.ndarray]:
     """
     Calculates all requested derived outputs from the calculated compartment sizes.
@@ -53,6 +55,7 @@ def calculate_derived_outputs(
         compartments: The compartments used by the model.
         get_flow_rates: A function that gets the model flow rates for a given state and time.
         whitelist: An optional subset of requests to evaluate.
+        baseline: Optional CompartmentalModel object to be used as a reference
 
     Returns:
         Dict[str, np.ndarray]: The timeseries results for each requested output.
@@ -79,6 +82,10 @@ def calculate_derived_outputs(
 
     derived_outputs = {}
     outputs_to_delete_after = []
+
+    # If we have a baseline for comparison, get some basic information re offsets
+    if baseline:
+        baseline_start_index = get_scenario_start_index(baseline.times, times[0])
 
     # Calculate all flow rates and store in `flow_values` so that we can fulfil flow rate requests.
     # We need to do this here because some solvers do not necessarily evaluate all timesteps.
@@ -116,7 +123,11 @@ def calculate_derived_outputs(
             output = _get_aggregate_output(request, derived_outputs)
         elif request_type == DerivedOutputRequest.CUMULATIVE:
             # User wants to track cumulative value of an output over time.
-            output = _get_cumulative_output(request, name, times, derived_outputs)
+            if baseline:
+                baseline_offset = baseline.derived_outputs[name][baseline_start_index]
+            else:
+                baseline_offset = None
+            output = _get_cumulative_output(request, name, times, derived_outputs, baseline_offset)
         elif request_type == DerivedOutputRequest.FUNCTION:
             # User wants to track the results of a function of other outputs over time.
             output = _get_func_output(request, derived_outputs)
@@ -171,7 +182,7 @@ def _get_aggregate_output(request, derived_outputs):
     return sum([derived_outputs[s] for s in source_names])
 
 
-def _get_cumulative_output(request, name, times, derived_outputs):
+def _get_cumulative_output(request, name, times, derived_outputs,baseline_offset=None):
     source_name = request["source"]
     start_time = request["start_time"]
     max_time = times.max()
@@ -189,6 +200,9 @@ def _get_cumulative_output(request, name, times, derived_outputs):
         output = np.zeros_like(times)
         output[start_idx:] = np.cumsum(derived_outputs[source_name][start_idx:])
 
+    if baseline_offset:
+        output += baseline_offset
+
     return output
 
 
@@ -197,3 +211,18 @@ def _get_func_output(request, derived_outputs):
     source_names = request["sources"]
     inputs = [derived_outputs[s] for s in source_names]
     return func(*inputs)
+
+def get_scenario_start_index(base_times, start_time):
+    """
+    Returns the index of the closest time step that is at, or before the scenario start time.
+    """
+    assert (
+        base_times[0] <= start_time
+    ), f"Scenario start time {start_time} is before baseline has started"
+    indices_after_start_index = [idx for idx, time in enumerate(base_times) if time > start_time]
+    if not indices_after_start_index:
+        raise ValueError(f"Scenario start time {start_time} is set after the baseline time range")
+
+    index_after_start_index = min(indices_after_start_index)
+    start_index = max([0, index_after_start_index - 1])
+    return start_index
