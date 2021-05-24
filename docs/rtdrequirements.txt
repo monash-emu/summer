@@ -1,1 +1,2 @@
 sphinxcontrib-napoleon >= 0.7
+nbsphinx >= 0.8.2
