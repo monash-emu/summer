@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1621824302194,
+  "lastUpdate": 1623034465231,
   "repoUrl": "https://github.com/monash-emu/summer",
   "entries": {
     "Benchmark": [
@@ -3155,6 +3155,58 @@ window.BENCHMARK_DATA = {
             "unit": "iter/sec",
             "range": "stddev: 0.05450627701789147",
             "extra": "mean: 5.265223660666673 sec\nrounds: 3"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "mattdsegal@gmail.com",
+            "name": "Matthew Segal",
+            "username": "MattSegal"
+          },
+          "committer": {
+            "email": "mattdsegal@gmail.com",
+            "name": "Matthew Segal",
+            "username": "MattSegal"
+          },
+          "distinct": true,
+          "id": "59c66dc0a005831ea1dcb210c18bb0f9bdd1af1a",
+          "message": "Release 2.0.3 - set IVP solver max step size",
+          "timestamp": "2021-06-07T12:51:57+10:00",
+          "tree_id": "bdf62de9e316b9adab3046b8da0b5e8258d3b35f",
+          "url": "https://github.com/monash-emu/summer/commit/59c66dc0a005831ea1dcb210c18bb0f9bdd1af1a"
+        },
+        "date": 1623034464233,
+        "tool": "pytest",
+        "benches": [
+          {
+            "name": "tests/test_benchmarks.py::test_benchmark_vectorized_backend",
+            "value": 3.628787673385496,
+            "unit": "iter/sec",
+            "range": "stddev: 0.004467495270614507",
+            "extra": "mean: 275.5741283333464 msec\nrounds: 3"
+          },
+          {
+            "name": "tests/test_benchmarks.py::test_benchmark_default_ode_solver",
+            "value": 3.6741535616374055,
+            "unit": "iter/sec",
+            "range": "stddev: 0.004523891381947462",
+            "extra": "mean: 272.1715310000121 msec\nrounds: 4"
+          },
+          {
+            "name": "tests/test_benchmarks.py::test_benchmark_rk4_ode_solver",
+            "value": 0.9489243589391572,
+            "unit": "iter/sec",
+            "range": "stddev: 0.011404324733985217",
+            "extra": "mean: 1.053824775999999 sec\nrounds: 3"
+          },
+          {
+            "name": "tests/test_benchmarks.py::test_benchmark_stochastic_solver",
+            "value": 0.17112888432658377,
+            "unit": "iter/sec",
+            "range": "stddev: 0.21226254957859605",
+            "extra": "mean: 5.843548877999997 sec\nrounds: 3"
           }
         ]
       }
