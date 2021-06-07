@@ -82,6 +82,8 @@ Releases are numbered using [Semantic Versioning](https://semver.org/)
   - Rename fractional flow to transition flow
   - Remove sojourn flow
   - Add vectorized backend and other performance improvements
+- 2.0.3:
+  - Set default IVP solver to use a maximum step size of 1 timestep
 
 ## Release process
 
