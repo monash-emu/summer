@@ -64,10 +64,6 @@ class VectorizedRunner(ModelRunner):
         if self._precompute_mixing:
             self._precompute_mixing_matrices()
 
-        self._derived_processors = {}
-        for k, v in self.model._derived_value_processor_cls.items():
-            self._derived_processors[k] = v(self.model.compartments, self.model._flows)
-
     def _precompute_flow_weights(self):
         """Calculate all static flow weights before running, and build indices for time-varying weights"""
         self.flow_weights = np.zeros(len(self.model._flows))
@@ -226,13 +222,6 @@ class VectorizedRunner(ModelRunner):
                 flow_rates[flow_idx] = net_flow
 
         return flow_rates
-
-    def _calc_derived_values(self, comp_vals: np.ndarray, flow_rates: np.ndarray, time: float) -> dict:
-        out_vals = {}
-        for k, proc in self._derived_processors.items():
-            out_vals[k] = proc.process(comp_vals, flow_rates, time)
-        
-        return out_vals
 
     def _get_rates(self, comp_vals: np.ndarray, time: float) -> Tuple[np.ndarray, np.ndarray]:
         """Calculates inter-compartmental flow rates for a given state and time, as well
