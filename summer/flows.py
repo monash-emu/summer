@@ -11,6 +11,7 @@ from numba import jit
 from summer.adjust import BaseAdjustment, FlowParam, Multiply, Overwrite
 from summer.compartment import Compartment
 from summer.stratification import Stratification
+from summer.compute import find_sum
 
 
 class BaseFlow(ABC):
@@ -364,7 +365,7 @@ class CrudeBirthFlow(BaseEntryFlow):
         time: float,
     ) -> float:
         parameter_value = self.get_weight_value(time)
-        total_population = _find_sum(compartment_values)
+        total_population = find_sum(compartment_values)
         return parameter_value * total_population
 
 
@@ -389,12 +390,6 @@ class ReplacementBirthFlow(BaseEntryFlow):
         time: float,
     ) -> float:
         return self.get_weight_value(time)
-
-
-# Use Numba to speed up the calculation of the population.
-@jit(nopython=True)
-def _find_sum(compartment_values: np.ndarray) -> float:
-    return compartment_values.sum()
 
 
 class ImportFlow(BaseEntryFlow):
@@ -493,9 +488,10 @@ class FunctionFlow(BaseTransitionFlow):
         compartment_values: np.ndarray,
         flows: List[BaseFlow],
         flow_rates: np.ndarray,
+        derived_values: dict,
         time: float,
     ) -> float:
-        flow_rate = self.param(self, compartments, compartment_values, flows, flow_rates, time)
+        flow_rate = self.param(self, compartments, compartment_values, flows, flow_rates, derived_values, time)
         for adjustment in self.adjustments:
             flow_rate = adjustment.get_new_value(flow_rate, time)
 

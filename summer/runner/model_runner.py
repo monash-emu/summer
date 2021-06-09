@@ -176,6 +176,10 @@ class ModelRunner(ABC):
                     self._category_lookup[j] = i
         self._compartment_category_map = binary_matrix_to_sparse_pairs(self._category_matrix)
 
+        self._derived_processors = {}
+        for k, v in self.model._derived_value_processor_cls.items():
+            self._derived_processors[k] = v(self.model.compartments, self.model._flows)
+
     def _get_compartment_infectiousness_for_strain(self, strain: str):
         """
         Returns a vector of floats, each representing the relative infectiousness of each compartment.
@@ -291,3 +295,10 @@ class ModelRunner(ABC):
         idx = self._get_force_idx(source)
         strain = dest.strata.get("strain", self.model._DEFAULT_DISEASE_STRAIN)
         return self._infection_density[strain][idx]
+
+    def _calc_derived_values(self, comp_vals: np.ndarray, flow_rates: np.ndarray, time: float) -> dict:
+        out_vals = {}
+        for k, proc in self._derived_processors.items():
+            out_vals[k] = proc.process(comp_vals, flow_rates, time)
+        
+        return out_vals

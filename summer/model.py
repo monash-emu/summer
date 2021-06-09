@@ -98,6 +98,9 @@ class CompartmentalModel:
         # Whitelist of 'derived outputs' to evaluate
         self._derived_outputs_whitelist = []
 
+        # Map of (runtime) derived values
+        self._derived_value_processor_cls = {}
+
         # Init baseline model to None; can be set via set_baseline if running as a scenario
         self._baseline = None
 
@@ -1054,3 +1057,6 @@ class CompartmentalModel:
             "sources": sources,
             "save_results": save_results,
         }
+
+    def add_derived_value_process(self, name, processor):
+        self._derived_value_processor_cls[name] = processor

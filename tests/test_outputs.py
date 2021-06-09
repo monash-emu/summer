@@ -378,7 +378,7 @@ def test_model__with_single_function_flow(backend):
     model = CompartmentalModel(times=[0, 10], compartments=["S", "I", "R"], infectious_compartments=["I"])
     model.set_initial_population(distribution={"S": 650, "I": 100, "R": 0})
 
-    def get_vaccination_flow_rate(flow, comp_names, comp_vals, flows, flow_rates, time):
+    def get_vaccination_flow_rate(flow, comp_names, comp_vals, flows, flow_rates, derived_values, time):
         if time < 2:
             # Vaccinate 10 people per day until day 5
             return 10

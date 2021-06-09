@@ -82,11 +82,13 @@ class ReferenceRunner(ModelRunner):
                 # Track total deaths for any later birth replacement flows.
                 self._timestep_deaths += net_flow
 
+        derived_values = self._calc_derived_values(comp_vals, flow_rates, time)
+
         if self._iter_function_flows:
             # Evaluate the function flows.
             for flow_idx, flow in self._iter_function_flows:
                 net_flow = flow.get_net_flow(
-                    self.model.compartments, comp_vals, self.model._flows, flow_rates, time
+                    self.model.compartments, comp_vals, self.model._flows, flow_rates, derived_values, time
                 )
                 flow_rates[flow_idx] = net_flow
                 comp_rates[flow.source.idx] -= net_flow
