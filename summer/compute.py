@@ -11,7 +11,11 @@ class DerivedValueProcessor(ABC):
     Base class for computing (runtime) derived values
     """
     @abstractmethod
-    def __init__(self, compartments, flows):
+    def __init__(self):
+        pass
+
+    @abstractmethod
+    def prepare_to_run(self, compartments, flows):
         pass
 
     @abstractmethod
