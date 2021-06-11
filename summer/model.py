@@ -3,6 +3,7 @@ This module contains the main disease modelling class.
 """
 import copy
 import logging
+from summer.compute import DerivedValueProcessor
 from typing import Callable, Dict, List, Optional, Tuple
 
 import networkx
@@ -97,6 +98,9 @@ class CompartmentalModel:
         self._derived_output_graph = networkx.DiGraph()
         # Whitelist of 'derived outputs' to evaluate
         self._derived_outputs_whitelist = []
+
+        # Map of (runtime) derived values
+        self._derived_value_processors = {}
 
         # Init baseline model to None; can be set via set_baseline if running as a scenario
         self._baseline = None
@@ -1054,3 +1058,6 @@ class CompartmentalModel:
             "sources": sources,
             "save_results": save_results,
         }
+
+    def add_derived_value_process(self, name: str, processor: DerivedValueProcessor):
+        self._derived_value_processors[name] = processor

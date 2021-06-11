@@ -1,9 +1,31 @@
 """
 Optimized 'hot' functions used by CompartmentalModel and its runners.
 """
+from abc import ABC, abstractmethod
+
 import numba
 import numpy as np
 
+class DerivedValueProcessor(ABC):
+    """
+    Base class for computing (runtime) derived values
+    """
+    @abstractmethod
+    def __init__(self):
+        pass
+
+    @abstractmethod
+    def prepare_to_run(self, compartments, flows):
+        pass
+
+    @abstractmethod
+    def process(self, comp_vals, flow_rates, time):
+        pass
+
+# Use Numba to speed up the calculation of the population.
+@numba.jit(nopython=True)
+def find_sum(compartment_values: np.ndarray) -> float:
+    return compartment_values.sum()
 
 @numba.jit(nopython=True)
 def accumulate_positive_flow_contributions(

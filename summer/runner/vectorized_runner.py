@@ -6,6 +6,7 @@ import summer.flows as flows
 from summer.compute import (
     accumulate_positive_flow_contributions,
     accumulate_negative_flow_contributions,
+    find_sum
 )
 
 from .model_runner import ModelRunner
@@ -197,7 +198,7 @@ class VectorizedRunner(ModelRunner):
         if self._has_non_pop_flows:
             populations[self._non_pop_flow_idx] = 1.0
         if self._has_crude_birth:
-            populations[self._crude_birth_idx] = flows._find_sum(comp_vals)
+            populations[self._crude_birth_idx] = find_sum(comp_vals)
 
         flow_rates = self.flow_weights * populations
         
@@ -211,11 +212,13 @@ class VectorizedRunner(ModelRunner):
         if self._has_replacement:
             flow_rates[self._replacement_flow_idx] = self._timestep_deaths
 
+        derived_values = self._calc_derived_values(comp_vals, flow_rates, time)
+
         if self._iter_function_flows:
             # Evaluate the function flows.
             for flow_idx, flow in self._iter_function_flows:
                 net_flow = flow.get_net_flow(
-                    self.model.compartments, comp_vals, self.model._flows, flow_rates, time
+                    self.model.compartments, comp_vals, self.model._flows, flow_rates, derived_values, time
                 )
                 flow_rates[flow_idx] = net_flow
 
