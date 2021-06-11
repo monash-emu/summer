@@ -84,6 +84,8 @@ Releases are numbered using [Semantic Versioning](https://semver.org/)
   - Add vectorized backend and other performance improvements
 - 2.0.3:
   - Set default IVP solver to use a maximum step size of 1 timestep
+- 2.0.4:
+  - Add runtime derived values
 
 ## Release process
 
