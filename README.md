@@ -66,8 +66,10 @@ isort . --profile black
 
 Releases are numbered using [Semantic Versioning](https://semver.org/)
 
-- 1.0.0/1: Initial release
-- 1.1.0: Add stochastic integrator
+- 1.0.0/1:
+  - Initial release
+- 1.1.0:
+  - Add stochastic integrator
 - 2.0.2:
   - Rename fractional flow to transition flow
   - Remove sojourn flow
@@ -78,7 +80,6 @@ Releases are numbered using [Semantic Versioning](https://semver.org/)
   - Add runtime derived values
 - 2.0.5:
   - Remove legacy Summer implementation
-  - Fix bug in derived output calculations for timesteps other than '1'.
 
 ## Release process
 
