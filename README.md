@@ -76,6 +76,9 @@ Releases are numbered using [Semantic Versioning](https://semver.org/)
   - Set default IVP solver to use a maximum step size of 1 timestep
 - 2.0.4:
   - Add runtime derived values
+- 2.0.5:
+  - Remove legacy Summer implementation
+  - Fix bug in derived output calculations for timesteps other than '1'.
 
 ## Release process
 
