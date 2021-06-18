@@ -88,6 +88,10 @@ class CompartmentalModel:
         self._stratifications = []
         # Flows to be applied to the model compartments
         self._flows = []
+        
+        # hfunc is the 'hacking function' run after prepare_to_run that can manipulate model runner internals
+        # Use with extreme caution (or preferably not at all)
+        self._hfunc = None
 
         # The results calculated using the model: no outputs exist until the model has been run.
         self.outputs = None
@@ -557,7 +561,8 @@ class CompartmentalModel:
         expected_count: Optional[int], new_flows: List[flows.BaseFlow]
     ):
         """
-        Ensure the number of new flows created is the expected amount
+        Ensure the number of new flows created is the expected amountmodel
+
         """
         if expected_count is not None:
             # Check that we added the expected number of flows.
@@ -685,6 +690,9 @@ class CompartmentalModel:
 
         self._set_backend(backend, backend_args)
         self._backend.prepare_to_run()
+
+        if self._hfunc:
+            self._hfunc(self)
 
         if solver == SolverType.STOCHASTIC:
             # Run the model in 'stochastic mode'.
@@ -1061,3 +1069,6 @@ class CompartmentalModel:
 
     def add_derived_value_process(self, name: str, processor: DerivedValueProcessor):
         self._derived_value_processors[name] = processor
+
+    def set_hacking_function(self, hfunc):
+        self._hack_func = hfunc
