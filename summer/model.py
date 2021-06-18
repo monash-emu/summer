@@ -1071,4 +1071,4 @@ class CompartmentalModel:
         self._derived_value_processors[name] = processor
 
     def set_hacking_function(self, hfunc):
-        self._hack_func = hfunc
+        self._hfunc = hfunc
