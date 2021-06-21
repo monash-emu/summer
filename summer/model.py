@@ -874,6 +874,7 @@ class CompartmentalModel:
             flows=self._flows,
             compartments=self.compartments,
             get_flow_rates=self._backend.get_flow_rates,
+            model = self,
             whitelist=self._derived_outputs_whitelist,
             baseline=self._baseline
         )
@@ -1067,8 +1068,42 @@ class CompartmentalModel:
             "save_results": save_results,
         }
 
+    def request_derived_value_output(
+        self,
+        name: str,
+        save_results: bool = True
+    ):
+        """
+        Save a derived value process output to derived outputs
+
+        Args:
+            name (str): Name (key) of derived value process
+            save_results (bool, optional): Save outputs (or discard if False)
+        """
+        msg = f"A derived output named {name} already exists."
+        assert name not in self._derived_output_requests, msg
+
+        self._derived_output_graph.add_node(name)
+        self._derived_output_requests[name] = {
+            "request_type": DerivedOutputRequest.DERIVED_VALUE,
+            "name": name,
+            "save_results": save_results,
+        }
+
     def add_derived_value_process(self, name: str, processor: DerivedValueProcessor):
+        """
+        Calculate (at runtime) values derived from the compartment values and flow rates; these can be used by function flows
+
+        Args:
+            name (str): Name (key) of derived value
+            processor (DerivedValueProcessor): Object providing computation
+        """
         self._derived_value_processors[name] = processor
 
-    def set_hacking_function(self, hfunc):
+    def set_hacking_function(self, hfunc: Callable):
+        """
+        Set a function to interact with model internals; will be called after model backend is instantiated (but before run)
+        Args:
+            hfunc (Callable[CompartmentalModel]): Function taking model as argument 
+        """
         self._hfunc = hfunc
