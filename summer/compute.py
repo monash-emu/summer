@@ -10,16 +10,14 @@ class DerivedValueProcessor(ABC):
     """
     Base class for computing (runtime) derived values
     """
-    @abstractmethod
     def __init__(self):
         pass
 
-    @abstractmethod
     def prepare_to_run(self, compartments, flows):
         pass
 
     @abstractmethod
-    def process(self, comp_vals, flow_rates, time):
+    def process(self, comp_vals, flow_rates, derived_values, time):
         pass
 
 # Use Numba to speed up the calculation of the population.

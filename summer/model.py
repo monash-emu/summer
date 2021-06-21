@@ -3,7 +3,7 @@ This module contains the main disease modelling class.
 """
 import copy
 import logging
-from summer.compute import DerivedValueProcessor
+from collections import OrderedDict
 from typing import Callable, Dict, List, Optional, Tuple
 
 import networkx
@@ -13,6 +13,7 @@ import summer.flows as flows
 from summer import stochastic
 from summer.adjust import FlowParam
 from summer.compartment import Compartment
+from summer.compute import DerivedValueProcessor
 from summer.derived_outputs import DerivedOutputRequest, calculate_derived_outputs
 from summer.runner import ReferenceRunner, VectorizedRunner
 from summer.solver import SolverType, solve_ode
@@ -104,7 +105,7 @@ class CompartmentalModel:
         self._derived_outputs_whitelist = []
 
         # Map of (runtime) derived values
-        self._derived_value_processors = {}
+        self._derived_value_processors = OrderedDict()
 
         # Init baseline model to None; can be set via set_baseline if running as a scenario
         self._baseline = None

@@ -298,6 +298,6 @@ class ModelRunner(ABC):
     def _calc_derived_values(self, comp_vals: np.ndarray, flow_rates: np.ndarray, time: float) -> dict:
         out_vals = {}
         for k, proc in self.model._derived_value_processors.items():
-            out_vals[k] = proc.process(comp_vals, flow_rates, time)
+            out_vals[k] = proc.process(comp_vals, flow_rates, out_vals, time)
         
         return out_vals
