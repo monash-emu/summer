@@ -80,19 +80,21 @@ class ModelRunner(ABC):
                 if adj and callable(adj.param):
                     funcs.add(adj.param)
 
-        # Cache return values to prevent re-computation. This will cause a little memory leak, which is (mostly) fine.
-        funcs_cached = {}
-        for func in funcs:
-            # Floating point return type is 8 bytes, meaning 2**17 values is ~1MB of memory.
-            funcs_cached[func] = lru_cache(maxsize=2 ** 17)(func)
+        
+        if self.model._enable_cache:
+            # Cache return values to prevent re-computation. This will cause a little memory leak, which is (mostly) fine.
+            funcs_cached = {}
+            for func in funcs:
+                # Floating point return type is 8 bytes, meaning 2**17 values is ~1MB of memory.
+                funcs_cached[func] = lru_cache(maxsize=2 ** 17)(func)
 
-        # Finally, replace original functions with cached ones
-        for flow in self.model._flows:
-            if flow.param in funcs_cached:
-                flow.param = funcs_cached[flow.param]
-            for adj in flow.adjustments:
-                if adj and adj.param in funcs_cached:
-                    adj.param = funcs_cached[adj.param]
+            # Finally, replace original functions with cached ones
+            for flow in self.model._flows:
+                if flow.param in funcs_cached:
+                    flow.param = funcs_cached[flow.param]
+                for adj in flow.adjustments:
+                    if adj and adj.param in funcs_cached:
+                        adj.param = funcs_cached[adj.param]
 
         # Re-order flows so that they are executed in the correct order:
         #   - exit flows

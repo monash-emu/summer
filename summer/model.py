@@ -119,6 +119,8 @@ class CompartmentalModel:
 
         self._update_compartment_indices()
 
+        self._enable_cache = True
+
     def _update_compartment_indices(self):
         """
         Update the mapping of compartment name to idx for quicker lookups.
