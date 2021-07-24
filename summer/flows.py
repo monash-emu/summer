@@ -55,14 +55,14 @@ class BaseFlow(ABC):
             and ((not dest_strata) or (not self.dest) or self.dest.has_strata(dest_strata))
         )
 
-    def get_weight_value(self, time: float):
+    def get_weight_value(self, time: float, input_values: dict):
         """
         Returns the flow's 'weight' (i.e. rate to be multiplied by the value of the source compartment) at a given time.
         Applies any stratification adjustments to the base parameter.
         """
         flow_rate = self.param(time) if callable(self.param) else self.param
         for adjustment in self.adjustments:
-            flow_rate = adjustment.get_new_value(flow_rate, time)
+            flow_rate = adjustment.get_new_value(flow_rate, input_values, time)
 
         return flow_rate
 
@@ -88,6 +88,7 @@ class BaseFlow(ABC):
     def get_net_flow(
         self,
         compartment_values: np.ndarray,
+        input_values: dict,
         time: float,
     ) -> float:
         """
@@ -362,9 +363,10 @@ class CrudeBirthFlow(BaseEntryFlow):
     def get_net_flow(
         self,
         compartment_values: np.ndarray,
+        input_values: dict,
         time: float,
     ) -> float:
-        parameter_value = self.get_weight_value(time)
+        parameter_value = self.get_weight_value(time, input_values)
         total_population = find_sum(compartment_values)
         return parameter_value * total_population
 
@@ -387,6 +389,7 @@ class ReplacementBirthFlow(BaseEntryFlow):
     def get_net_flow(
         self,
         compartment_values: np.ndarray,
+        input_values: dict,
         time: float,
     ) -> float:
         return self.get_weight_value(time)
@@ -411,9 +414,10 @@ class ImportFlow(BaseEntryFlow):
     def get_net_flow(
         self,
         compartment_values: np.ndarray,
+        input_values: dict,
         time: float,
     ) -> float:
-        return self.get_weight_value(time)
+        return self.get_weight_value(time, input_values)
 
 
 class DeathFlow(BaseExitFlow):
@@ -434,9 +438,10 @@ class DeathFlow(BaseExitFlow):
     def get_net_flow(
         self,
         compartment_values: np.ndarray,
+        input_values: dict,
         time: float,
     ) -> float:
-        parameter_value = self.get_weight_value(time)
+        parameter_value = self.get_weight_value(time, input_values)
         population = compartment_values[self.source.idx]
         flow_rate = parameter_value * population
         return flow_rate
@@ -459,9 +464,10 @@ class TransitionFlow(BaseTransitionFlow):
     def get_net_flow(
         self,
         compartment_values: np.ndarray,
+        input_values: dict,
         time: float,
     ) -> float:
-        parameter_value = self.get_weight_value(time)
+        parameter_value = self.get_weight_value(time, input_values)
         population = compartment_values[self.source.idx]
         return parameter_value * population
 
@@ -488,12 +494,13 @@ class FunctionFlow(BaseTransitionFlow):
         compartment_values: np.ndarray,
         flows: List[BaseFlow],
         flow_rates: np.ndarray,
+        input_values: dict,
         derived_values: dict,
         time: float,
     ) -> float:
         flow_rate = self.param(self, compartments, compartment_values, flows, flow_rates, derived_values, time)
         for adjustment in self.adjustments:
-            flow_rate = adjustment.get_new_value(flow_rate, time)
+            flow_rate = adjustment.get_new_value(flow_rate, input_values, time)
 
         return flow_rate
 
@@ -520,10 +527,11 @@ class BaseInfectionFlow(BaseTransitionFlow):
     def get_net_flow(
         self,
         compartment_values: np.ndarray,
+        input_values: dict,
         time: float,
     ) -> float:
         multiplier = self.find_infectious_multiplier(self.source, self.dest)
-        parameter_value = self.get_weight_value(time)
+        parameter_value = self.get_weight_value(time, input_values)
         population = compartment_values[self.source.idx]
         return parameter_value * population * multiplier
 

@@ -16,7 +16,7 @@ class BaseAdjustment(ABC):
         self.param = param
 
     @abstractmethod
-    def get_new_value(self, prev_value: float, time: float):
+    def get_new_value(self, value: float, input_values: dict, time: float) -> float:
         pass
 
     def _is_equal(self, adj):
@@ -48,7 +48,7 @@ class Multiply(BaseAdjustment):
 
     """
 
-    def get_new_value(self, value: float, time: float) -> float:
+    def get_new_value(self, value: float, input_values: dict, time: float) -> float:
         """
         Returns the adjusted value for a given time.
 
@@ -60,7 +60,7 @@ class Multiply(BaseAdjustment):
             float: The new, adjusted value.
 
         """
-        return self.param(time) * value if callable(self.param) else self.param * value
+        return self.param(time, input_values) * value if callable(self.param) else self.param * value
 
 
 class Overwrite(BaseAdjustment):
@@ -83,7 +83,7 @@ class Overwrite(BaseAdjustment):
 
     """
 
-    def get_new_value(self, value: float, time: float) -> float:
+    def get_new_value(self, value: float, input_values: dict, time: float) -> float:
         """
         Returns the adjusted value for a given time.
 
@@ -95,4 +95,4 @@ class Overwrite(BaseAdjustment):
             float: The new, adjusted value.
 
         """
-        return self.param(time) if callable(self.param) else self.param
+        return self.param(time, input_values) if callable(self.param) else self.param

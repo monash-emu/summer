@@ -1,7 +1,8 @@
 from abc import ABC, abstractmethod
 
 import numpy as np
-from functools import lru_cache
+#from functools import lru_cache
+import cachetools
 
 import summer.flows as flows
 from summer.compute import binary_matrix_to_sparse_pairs, sparse_pairs_accum
@@ -86,7 +87,8 @@ class ModelRunner(ABC):
             funcs_cached = {}
             for func in funcs:
                 # Floating point return type is 8 bytes, meaning 2**17 values is ~1MB of memory.
-                funcs_cached[func] = lru_cache(maxsize=2 ** 17)(func)
+                #funcs_cached[func] = lru_cache(maxsize=2 ** 17)(func)
+                funcs_cached[func] = cachetools.cached(cachetools.LRUCache(maxsize=2 ** 17), key=timekey)(func)
 
             # Finally, replace original functions with cached ones
             for flow in self.model._flows:
@@ -211,7 +213,7 @@ class ModelRunner(ABC):
                         if should_apply_adjustment:
                             # Cannot use time-varying functions for infectiousness adjustments,
                             # because this is calculated before the model starts running.
-                            inf_value = adjustment.get_new_value(inf_value, None)
+                            inf_value = adjustment.get_new_value(inf_value, None, None)
 
             compartment_infectiousness[idx] = inf_value
 
@@ -297,9 +299,20 @@ class ModelRunner(ABC):
         strain = dest.strata.get("strain", self.model._DEFAULT_DISEASE_STRAIN)
         return self._infection_density[strain][idx]
 
-    def _calc_derived_values(self, comp_vals: np.ndarray, flow_rates: np.ndarray, time: float) -> dict:
+    def _calc_derived_values(self, comp_vals: np.ndarray, flow_rates: np.ndarray, input_values: dict, time: float) -> dict:
         out_vals = {}
         for k, proc in self.model._derived_value_processors.items():
-            out_vals[k] = proc.process(comp_vals, flow_rates, out_vals, time)
+            out_vals[k] = proc.process(comp_vals, flow_rates, input_values, out_vals, time)
         
         return out_vals
+
+    def _calc_input_values(self, time: float) -> dict:
+        out_vals = {}
+        for k, proc in self.model._input_value_processors.items():
+            out_vals[k] = proc.process(out_vals, time)
+        
+        return out_vals
+
+
+def timekey(time, *args, **kwargs):
+    return cachetools.keys.hashkey(time)

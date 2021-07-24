@@ -31,6 +31,7 @@ class DerivedOutputRequest:
     CUMULATIVE = "cum"
     FUNCTION = "func"
     DERIVED_VALUE = "derived_value"
+    INPUT_VALUE = "input_value"
 
 
 def calculate_derived_outputs(
@@ -95,6 +96,7 @@ def calculate_derived_outputs(
     # We need to do this here because some solvers do not necessarily evaluate all timesteps.
     flow_values = np.zeros((len(times), len(flows)))
 
+    input_values = pd.DataFrame(columns=model._input_value_processors.keys(), index=times)
     derived_values = pd.DataFrame(columns=model._derived_value_processors.keys(), index=times)
 
     # FIXME: Another question for Matt - has my changes to the time requests stuffed this up?
@@ -105,7 +107,8 @@ def calculate_derived_outputs(
         # Flow rates are instantaneous; we need to provide and integrated value over timestep
         flow_rates = get_flow_rates(outputs[time_idx], time)
         flow_values[time_idx, :] = flow_rates * timestep
-        derived_values.iloc[time_idx] = model._backend._calc_derived_values(outputs[time_idx], flow_rates, time)
+        input_values.iloc[time_idx] = model._backend._calc_input_values(time)
+        derived_values.iloc[time_idx] = model._backend._calc_derived_values(outputs[time_idx], flow_rates, input_values, time)
 
     # Convert tracked flow values into a matrix where the 1st dimension is flow type, 2nd is time
     flow_values = np.array(flow_values).T
@@ -141,6 +144,9 @@ def calculate_derived_outputs(
             output = _get_func_output(request, derived_outputs)
         elif request_type == DerivedOutputRequest.DERIVED_VALUE:
             output = _get_derived_value_output(request, derived_values)
+        elif request_type == DerivedOutputRequest.INPUT_VALUE:
+            output = _get_input_value_output(request, input_values)
+
 
 
         derived_outputs[name] = output
@@ -226,6 +232,10 @@ def _get_func_output(request, derived_outputs):
 def _get_derived_value_output(request, derived_values):
     name = request["name"]
     return derived_values[name].to_numpy(dtype=float)
+
+def _get_input_value_output(request, input_values):
+    name = request["name"]
+    return input_values[name].to_numpy(dtype=float)
 
 def get_scenario_start_index(base_times, start_time):
     """

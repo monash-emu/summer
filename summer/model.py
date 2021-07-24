@@ -13,7 +13,7 @@ import summer.flows as flows
 from summer import stochastic
 from summer.adjust import FlowParam
 from summer.compartment import Compartment
-from summer.compute import DerivedValueProcessor
+from summer.compute import DerivedValueProcessor, InputValueProcessor
 from summer.derived_outputs import DerivedOutputRequest, calculate_derived_outputs
 from summer.runner import ReferenceRunner, VectorizedRunner
 from summer.solver import SolverType, solve_ode
@@ -105,6 +105,7 @@ class CompartmentalModel:
         self._derived_outputs_whitelist = []
 
         # Map of (runtime) derived values
+        self._input_value_processors = OrderedDict()
         self._derived_value_processors = OrderedDict()
 
         # Init baseline model to None; can be set via set_baseline if running as a scenario
@@ -1092,6 +1093,41 @@ class CompartmentalModel:
             "name": name,
             "save_results": save_results,
         }
+
+
+    def request_input_value_output(
+        self,
+        name: str,
+        save_results: bool = True
+    ):
+        """
+        Save an input value process output to derived outputs
+
+        Args:
+            name (str): Name (key) of derived value process
+            save_results (bool, optional): Save outputs (or discard if False)
+        """
+        msg = f"A derived output named {name} already exists."
+        assert name not in self._derived_output_requests, msg
+
+        self._derived_output_graph.add_node(name)
+        self._derived_output_requests[name] = {
+            "request_type": DerivedOutputRequest.INPUT_VALUE,
+            "name": name,
+            "save_results": save_results,
+        }
+
+    def add_input_value_process(self, name: str, processor: InputValueProcessor):
+        """
+        Provide time-varying input values at time(t), that are not dependant on model state
+        Can be used to provide input timeseries from data sources, or computed values
+
+        Args:
+            name (str): Name (key) of input value
+            processor (InputValueProcessor): Object providing computation
+        """
+        self._input_value_processors[name] = processor
+
 
     def add_derived_value_process(self, name: str, processor: DerivedValueProcessor):
         """

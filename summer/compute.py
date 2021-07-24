@@ -17,8 +17,20 @@ class DerivedValueProcessor(ABC):
         pass
 
     @abstractmethod
-    def process(self, comp_vals, flow_rates, derived_values, time):
+    def process(self, comp_vals, flow_rates, input_values, derived_values, time):
         pass
+
+class InputValueProcessor(ABC):
+    """
+    Base class for supplying input values (time varying but independant of model values)
+    """
+    def __init__(self):
+        pass
+
+    @abstractmethod
+    def process(self, input_values, time):
+        pass
+
 
 # Use Numba to speed up the calculation of the population.
 @numba.jit(nopython=True)

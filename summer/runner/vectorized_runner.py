@@ -72,10 +72,11 @@ class VectorizedRunner(ModelRunner):
         time_varying_weight_indices = []
         for i, f in self._iter_non_function_flows:
             if f.weight_is_static():
-                weight = f.get_weight_value(0)
+                weight = f.get_weight_value(0,None)
                 self.flow_weights[i] = weight
             else:
                 if self._precompute_time_flows:
+                    #FIXME This will fail, but keep it broken for now since we don't really support it and want to know if it gets called...
                     param_vals = np.array([f.get_weight_value(t) for t in self.model.times])
                     time_varying_flow_weights.append(param_vals)
                 time_varying_weight_indices.append(i)
@@ -153,7 +154,7 @@ class VectorizedRunner(ModelRunner):
                 :, t
             ]
 
-    def _apply_flow_weights_at_time(self, time):
+    def _apply_flow_weights_at_time(self, time, input_values):
         """Calculate time dependent flow weights and insert them into our weights array
 
         Args:
@@ -162,7 +163,7 @@ class VectorizedRunner(ModelRunner):
         t = time
         for i in self.time_varying_weight_indices:
             f = self.model._flows[i]
-            self.flow_weights[i] = f.get_weight_value(t)
+            self.flow_weights[i] = f.get_weight_value(t, input_values)
 
     def _get_infectious_multipliers(self) -> np.ndarray:
         """Get multipliers for all infectious flows
@@ -186,10 +187,13 @@ class VectorizedRunner(ModelRunner):
         Returns:
             np.ndarray: Array of all (non-function) flow rates
         """
+
+        input_values = self._calc_input_values(time)
+
         if self._precompute_time_flows:
             self._apply_precomputed_flow_weights_at_time(time)
         else:
-            self._apply_flow_weights_at_time(time)
+            self._apply_flow_weights_at_time(time, input_values)
 
         
         # These will be filled in afterwards
@@ -212,13 +216,13 @@ class VectorizedRunner(ModelRunner):
         if self._has_replacement:
             flow_rates[self._replacement_flow_idx] = self._timestep_deaths
 
-        derived_values = self._calc_derived_values(comp_vals, flow_rates, time)
+        derived_values = self._calc_derived_values(comp_vals, flow_rates, input_values, time)
 
         if self._iter_function_flows:
             # Evaluate the function flows.
             for flow_idx, flow in self._iter_function_flows:
                 net_flow = flow.get_net_flow(
-                    self.model.compartments, comp_vals, self.model._flows, flow_rates, derived_values, time
+                    self.model.compartments, comp_vals, self.model._flows, flow_rates, input_values, derived_values, time
                 )
                 flow_rates[flow_idx] = net_flow
 
