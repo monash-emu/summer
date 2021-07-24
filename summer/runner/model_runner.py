@@ -8,6 +8,18 @@ import summer.flows as flows
 from summer.compute import binary_matrix_to_sparse_pairs, sparse_pairs_accum
 from summer.compartment import Compartment
 
+def cached(func):
+    cache = dict()
+    
+    def func_t(t, *args, **kwargs):
+        res = cache.get(t)
+        if res is None:
+            cache[t] = f = func(t, *args, **kwargs)
+            return f
+        else:
+            return res
+    
+    return func_t
 
 class ModelRunner(ABC):
     """
@@ -88,8 +100,9 @@ class ModelRunner(ABC):
             for func in funcs:
                 # Floating point return type is 8 bytes, meaning 2**17 values is ~1MB of memory.
                 #funcs_cached[func] = lru_cache(maxsize=2 ** 17)(func)
-                funcs_cached[func] = cachetools.cached(cachetools.LRUCache(maxsize=2 ** 17), key=timekey)(func)
-
+                #funcs_cached[func] = cachetools.cached(cachetools.LRUCache(maxsize=2 ** 17), key=timekey)(func)
+                funcs_cached[func] = cached(func)
+                
             # Finally, replace original functions with cached ones
             for flow in self.model._flows:
                 if flow.param in funcs_cached:

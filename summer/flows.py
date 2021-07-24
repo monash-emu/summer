@@ -55,6 +55,9 @@ class BaseFlow(ABC):
             and ((not dest_strata) or (not self.dest) or self.dest.has_strata(dest_strata))
         )
 
+    def _adj_call(self, time, input_values):
+        return self.adjustments[0].param(time, input_values)
+
     def get_weight_value(self, time: float, input_values: dict):
         """
         Returns the flow's 'weight' (i.e. rate to be multiplied by the value of the source compartment) at a given time.
