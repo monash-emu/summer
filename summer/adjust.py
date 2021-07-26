@@ -96,3 +96,29 @@ class Overwrite(BaseAdjustment):
 
         """
         return self.param(time, input_values) if callable(self.param) else self.param
+
+class AdjustmentComponent:
+    def __init__(self, system: str, data):
+        """Adjustment is a component of an AdjustmentSystem
+        The component does not compute a value directly, rather it contains
+        the data that the system can use to compute all its values
+        in a vectorized fashion
+
+        Args:
+            system (str): Name matching a system registered via add_adjustment_system
+            data ([type]): Data of any type matching the system's interface 
+        """
+        self.system = system
+        self.data = data
+
+class AdjustmentSystem:
+    def __init__(self):
+        pass
+
+    @abstractmethod
+    def prepare_to_run(self, component_data: list):
+        pass
+
+    @abstractmethod
+    def get_weights_at_time(self, time, input_values):
+        pass

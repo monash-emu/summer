@@ -8,7 +8,7 @@ from typing import Callable, Dict, List
 import numpy as np
 from numba import jit
 
-from summer.adjust import BaseAdjustment, FlowParam, Multiply, Overwrite
+from summer.adjust import AdjustmentComponent, BaseAdjustment, FlowParam, Multiply, Overwrite
 from summer.compartment import Compartment
 from summer.stratification import Stratification
 from summer.compute import find_sum
@@ -55,9 +55,6 @@ class BaseFlow(ABC):
             and ((not dest_strata) or (not self.dest) or self.dest.has_strata(dest_strata))
         )
 
-    def _adj_call(self, time, input_values):
-        return self.adjustments[0].param(time, input_values)
-
     def get_weight_value(self, time: float, input_values: dict):
         """
         Returns the flow's 'weight' (i.e. rate to be multiplied by the value of the source compartment) at a given time.
@@ -75,7 +72,8 @@ class BaseFlow(ABC):
         Returns:
             bool: False if weight is time-varying, otherwise True
         """
-        time_varying = callable(self.param) or sum([callable(a.param) for a in self.adjustments])
+        time_varying = callable(self.param) or sum([callable(a.param) for a in self.adjustments]) \
+            or sum([isinstance(a.param, AdjustmentComponent) for a in self.adjustments])
         return not time_varying
 
     def update_compartment_indices(self, mapping: Dict[str, float]):

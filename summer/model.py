@@ -11,7 +11,7 @@ import numpy as np
 
 import summer.flows as flows
 from summer import stochastic
-from summer.adjust import FlowParam
+from summer.adjust import FlowParam, AdjustmentSystem
 from summer.compartment import Compartment
 from summer.compute import DerivedValueProcessor, InputValueProcessor
 from summer.derived_outputs import DerivedOutputRequest, calculate_derived_outputs
@@ -103,6 +103,9 @@ class CompartmentalModel:
         self._derived_output_graph = networkx.DiGraph()
         # Whitelist of 'derived outputs' to evaluate
         self._derived_outputs_whitelist = []
+
+        # Adjustment systems
+        self._adjustment_systems = {}
 
         # Map of (runtime) derived values
         self._input_value_processors = OrderedDict()
@@ -1146,3 +1149,6 @@ class CompartmentalModel:
             hfunc (Callable[CompartmentalModel]): Function taking model as argument 
         """
         self._hfunc = hfunc
+
+    def add_adjustment_system(self, name: str, system: AdjustmentSystem):
+        self._adjustment_systems[name] = system

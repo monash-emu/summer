@@ -50,6 +50,9 @@ class Stratification:
         # No heterogeneous mixing matrix by default.
         self.mixing_matrix = None
 
+    def __repr__(self):
+        return f"Stratification: {self.name}"
+
     def is_ageing(self) -> bool:
         """Returns ``True`` if this stratification represents a set of age groups with ageing dynamics"""
         return self._is_ageing
@@ -131,6 +134,7 @@ class Stratification:
         if flow_name not in self.flow_adjustments:
             self.flow_adjustments[flow_name] = []
 
+        #FIXME Turn this into class or named tuple or something... we want to know what's going on
         self.flow_adjustments[flow_name].append((adjustments, source_strata, dest_strata))
 
     def get_flow_adjustment(self, flow) -> dict:

@@ -5,6 +5,7 @@ import numpy as np
 import cachetools
 
 import summer.flows as flows
+from summer.adjust import Overwrite, AdjustmentComponent
 from summer.compute import binary_matrix_to_sparse_pairs, sparse_pairs_accum
 from summer.compartment import Compartment
 
@@ -132,6 +133,14 @@ class ModelRunner(ABC):
         self.model._flows = _exit_flows + _entry_flows + _transition_flows + _function_flows
         # Check we didn't miss any flows
         assert len(self.model._flows) == num_flows, "Some flows were lost when preparing to run."
+        
+        # Simplify adjustments; if there are any overwrites, we can discard the previous
+        # adjustments
+        # FIXME: Currently only works if the last adjustment is an Overwrite
+        for f in self.model._flows:
+            if len(f.adjustments) and isinstance(f.adjustments[-1], Overwrite):
+                f.adjustments = [f.adjustments[-1]]
+        
         # Split flows into two groups for runtime.
         self._iter_function_flows = [
             (i, f) for i, f in enumerate(self.model._flows) if isinstance(f, flows.FunctionFlow)
@@ -193,8 +202,32 @@ class ModelRunner(ABC):
                     self._category_lookup[j] = i
         self._compartment_category_map = binary_matrix_to_sparse_pairs(self._category_matrix)
 
+        # Initialize the components of processing subsystems
+
+        # Derived value processors - compute values based on current model state,
+        # but cannot manipulate flows or change compartment values
         for k, proc in self.model._derived_value_processors.items():
              proc.prepare_to_run(self.model.compartments, self.model._flows)
+
+        # Adjustment systems - calculate adjusted flow weights for multiple flows
+        # in a vectorized fashion
+        # We need to aggregate all the flows sharing a common adjustment system
+        # into lists of data used for initialization, and also provide an array of
+        # flow indices for mapping back into the overall model
+        self._adjustment_system_flow_maps = []
+        for k, s in self.model._adjustment_systems.items():
+            flow_idx = []
+            components = []
+            for i, f in enumerate(self.model._flows):
+                for a in f.adjustments:
+                    if isinstance(a.param, AdjustmentComponent):
+                        if a.param.system == k:
+                            flow_idx.append(i)
+                            components.append(a.param.data)
+            s.prepare_to_run(components)
+            flow_idx = np.array(flow_idx, dtype=int)
+            self._adjustment_system_flow_maps.append((s, flow_idx))
+
 
     def _get_compartment_infectiousness_for_strain(self, strain: str):
         """
@@ -328,4 +361,4 @@ class ModelRunner(ABC):
 
 
 def timekey(time, *args, **kwargs):
-    return cachetools.keys.hashkey(time)
+    return time

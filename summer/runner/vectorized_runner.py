@@ -161,9 +161,14 @@ class VectorizedRunner(ModelRunner):
             time (float): Time in model.times coordinates
         """
         t = time
-        for i in self.time_varying_weight_indices:
-            f = self.model._flows[i]
-            self.flow_weights[i] = f.get_weight_value(t, input_values)
+
+        if self.model._USE_SYSTEMS:
+            for (s,flow_idx) in self._adjustment_system_flow_maps:
+                self.flow_weights[flow_idx] = s.get_weights_at_time(time, input_values)
+        else:
+            for i in self.time_varying_weight_indices:
+                f = self.model._flows[i]
+                self.flow_weights[i] = f.get_weight_value(t, input_values)
 
     def _get_infectious_multipliers(self) -> np.ndarray:
         """Get multipliers for all infectious flows
@@ -218,6 +223,19 @@ class VectorizedRunner(ModelRunner):
 
         derived_values = self._calc_derived_values(comp_vals, flow_rates, input_values, time)
 
+        #if self._iter_function_flows:
+        #    # Evaluate the function flows.
+        #    for flow_idx, flow in self._iter_function_flows:
+        #        net_flow = flow.get_net_flow(
+        #            self.model.compartments, comp_vals, self.model._flows, flow_rates, input_values, derived_values, time
+        #        )
+        #        flow_rates[flow_idx] = net_flow
+
+        self._apply_function_flow_rates(comp_vals, flow_rates, input_values, derived_values, time)
+
+        return flow_rates
+
+    def _apply_function_flow_rates(self, comp_vals, flow_rates, input_values, derived_values, time):
         if self._iter_function_flows:
             # Evaluate the function flows.
             for flow_idx, flow in self._iter_function_flows:
@@ -226,7 +244,6 @@ class VectorizedRunner(ModelRunner):
                 )
                 flow_rates[flow_idx] = net_flow
 
-        return flow_rates
 
     def _get_rates(self, comp_vals: np.ndarray, time: float) -> Tuple[np.ndarray, np.ndarray]:
         """Calculates inter-compartmental flow rates for a given state and time, as well
