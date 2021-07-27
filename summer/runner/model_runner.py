@@ -224,9 +224,10 @@ class ModelRunner(ABC):
                         if a.param.system == k:
                             flow_idx.append(i)
                             components.append(a.param.data)
-            s.prepare_to_run(components)
-            flow_idx = np.array(flow_idx, dtype=int)
-            self._adjustment_system_flow_maps.append((s, flow_idx))
+            if len(components):
+                s.prepare_to_run(components)
+                flow_idx = np.array(flow_idx, dtype=int)
+                self._adjustment_system_flow_maps.append((s, flow_idx))
 
 
     def _get_compartment_infectiousness_for_strain(self, strain: str):

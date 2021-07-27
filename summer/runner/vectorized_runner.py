@@ -71,15 +71,18 @@ class VectorizedRunner(ModelRunner):
         time_varying_flow_weights = []
         time_varying_weight_indices = []
         for i, f in self._iter_non_function_flows:
-            if f.weight_is_static():
+            weight_type = f.weight_type()
+            if weight_type == flows.WeightType.STATIC:
                 weight = f.get_weight_value(0,None)
                 self.flow_weights[i] = weight
-            else:
+            elif weight_type == flows.WeightType.FUNCTION:
                 if self._precompute_time_flows:
                     #FIXME This will fail, but keep it broken for now since we don't really support it and want to know if it gets called...
                     param_vals = np.array([f.get_weight_value(t) for t in self.model.times])
                     time_varying_flow_weights.append(param_vals)
                 time_varying_weight_indices.append(i)
+            # else: Is system, these are calculated in a separate process
+            # FIXME Refactor so all in one place, maybe?
 
         self.time_varying_weight_indices = np.array(time_varying_weight_indices, dtype=int)
         self.time_varying_flow_weights = np.array(time_varying_flow_weights)
@@ -162,13 +165,11 @@ class VectorizedRunner(ModelRunner):
         """
         t = time
 
-        if self.model._USE_SYSTEMS:
-            for (s,flow_idx) in self._adjustment_system_flow_maps:
-                self.flow_weights[flow_idx] = s.get_weights_at_time(time, input_values)
-        else:
-            for i in self.time_varying_weight_indices:
-                f = self.model._flows[i]
-                self.flow_weights[i] = f.get_weight_value(t, input_values)
+        for (s,flow_idx) in self._adjustment_system_flow_maps:
+            self.flow_weights[flow_idx] = s.get_weights_at_time(time, input_values)
+        for i in self.time_varying_weight_indices:
+            f = self.model._flows[i]
+            self.flow_weights[i] = f.get_weight_value(t, input_values)
 
     def _get_infectious_multipliers(self) -> np.ndarray:
         """Get multipliers for all infectious flows

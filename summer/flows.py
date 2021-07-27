@@ -13,6 +13,11 @@ from summer.compartment import Compartment
 from summer.stratification import Stratification
 from summer.compute import find_sum
 
+class WeightType:
+    STATIC = 'static'
+    SYSTEM = 'system'
+    FUNCTION = 'function'
+
 
 class BaseFlow(ABC):
     """
@@ -66,15 +71,25 @@ class BaseFlow(ABC):
 
         return flow_rate
 
-    def weight_is_static(self) -> bool:
-        """Determine whether get_weight_value is static (const over model lifetime), or time-varying
+    def weight_type(self) -> str:
+        """Returns a WeightType enum value
+
+            'static': Fixed floating point value
+            'system': Calculated using an AdjustmentSystem
+            'function': Calculated from a callable function
 
         Returns:
             bool: False if weight is time-varying, otherwise True
         """
-        time_varying = callable(self.param) or sum([callable(a.param) for a in self.adjustments]) \
+        is_system = sum([isinstance(a.param, AdjustmentComponent) for a in self.adjustments])
+        is_time_varying = callable(self.param) or sum([callable(a.param) for a in self.adjustments]) \
             or sum([isinstance(a.param, AdjustmentComponent) for a in self.adjustments])
-        return not time_varying
+        if not is_time_varying:
+            return WeightType.STATIC
+        elif is_system:
+            return WeightType.SYSTEM
+        else:
+            return WeightType.FUNCTION 
 
     def update_compartment_indices(self, mapping: Dict[str, float]):
         """
