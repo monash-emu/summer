@@ -96,20 +96,26 @@ def calculate_derived_outputs(
     # We need to do this here because some solvers do not necessarily evaluate all timesteps.
     flow_values = np.zeros((len(times), len(flows)))
 
-    input_values = pd.DataFrame(columns=model._input_value_processors.keys(), index=times)
-    derived_values = pd.DataFrame(columns=model._derived_value_processors.keys(), index=times)
+    # These are 'extra' values computed by requested processes, and need to be tracked separately
+    input_values = []
+    derived_values = []
 
     # FIXME: Another question for Matt - has my changes to the time requests stuffed this up?
     # Because the timestep for the last time interval can now be different from the earlier ones.
     # So do we need to assert that the duration is an exact multiple of the timestep?
     # Could cause silent problems, because presumably we have previously been specifying durations as multiples of the timestep.
     for time_idx, time in enumerate(times):
-        # Flow rates are instantaneous; we need to provide and integrated value over timestep
+        # Flow rates are instantaneous; we need to provide an integrated value over timestep
         flow_rates = get_flow_rates(outputs[time_idx], time)
         flow_values[time_idx, :] = flow_rates * timestep
-        input_values.iloc[time_idx] = model._backend._calc_input_values(time)
-        derived_values.iloc[time_idx] = model._backend._calc_derived_values(outputs[time_idx], flow_rates, input_values, time)
-
+        # Collect these as lists then build DataFrames afterwards
+        input_values.append(model._backend._calc_input_values(time))
+        derived_values.append(model._backend._calc_derived_values(outputs[time_idx], flow_rates, input_values, time))
+    
+    # Collate list values into DataFrames
+    input_values = pd.DataFrame(columns=model._input_value_processors.keys(), data = input_values, index=times)
+    derived_values = pd.DataFrame(columns=model._derived_value_processors.keys(), data = input_values, index=times)
+    
     # Convert tracked flow values into a matrix where the 1st dimension is flow type, 2nd is time
     flow_values = np.array(flow_values).T
 
@@ -142,12 +148,11 @@ def calculate_derived_outputs(
         elif request_type == DerivedOutputRequest.FUNCTION:
             # User wants to track the results of a function of other outputs over time.
             output = _get_func_output(request, derived_outputs)
+        # FIXME DerivedValue and InputValue should probably be combined
         elif request_type == DerivedOutputRequest.DERIVED_VALUE:
             output = _get_derived_value_output(request, derived_values)
         elif request_type == DerivedOutputRequest.INPUT_VALUE:
             output = _get_input_value_output(request, input_values)
-
-
 
         derived_outputs[name] = output
 
