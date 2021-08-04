@@ -4,6 +4,8 @@ This module contains classes which define adjustments to model parameters.
 from abc import ABC, abstractmethod
 from typing import Callable, Union
 
+import numpy as np
+
 FlowParam = Union[float, Callable[[float], float]]
 
 
@@ -25,6 +27,12 @@ class BaseAdjustment(ABC):
 
     def __repr__(self):
         return f"<{self.__class__.__name__} '{self.param}'>"
+
+    def __hash__(self):
+        return hash((type(self),self.param))
+
+    def __eq__(self, o: object) -> bool:
+        return self._is_equal(o)
 
 
 class Multiply(BaseAdjustment):
@@ -120,5 +128,11 @@ class AdjustmentSystem:
         pass
 
     @abstractmethod
-    def get_weights_at_time(self, time, input_values):
+    def get_weights_at_time(self, time: float, input_values: dict) -> np.ndarray:
+        """[summary]
+
+        Args:
+            time ([type]): [description]
+            input_values ([type]): [description]
+        """
         pass
