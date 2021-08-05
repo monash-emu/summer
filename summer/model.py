@@ -13,7 +13,7 @@ import summer.flows as flows
 from summer import stochastic
 from summer.adjust import FlowParam, AdjustmentSystem
 from summer.compartment import Compartment
-from summer.compute import DerivedValueProcessor, InputValueProcessor
+from summer.compute import ComputedValueProcessor
 from summer.derived_outputs import DerivedOutputRequest, calculate_derived_outputs
 from summer.runner import ReferenceRunner, VectorizedRunner
 from summer.solver import SolverType, solve_ode
@@ -89,10 +89,6 @@ class CompartmentalModel:
         self._stratifications = []
         # Flows to be applied to the model compartments
         self._flows = []
-        
-        # hfunc is the 'hacking function' run after prepare_to_run that can manipulate model runner internals
-        # Use with extreme caution (or preferably not at all)
-        self._hfunc = None
 
         # The results calculated using the model: no outputs exist until the model has been run.
         self.outputs = None
@@ -107,9 +103,8 @@ class CompartmentalModel:
         # Adjustment systems
         self._adjustment_systems = {}
 
-        # Map of (runtime) derived values
-        self._input_value_processors = OrderedDict()
-        self._derived_value_processors = OrderedDict()
+        # Map of (runtime) computed values
+        self._computed_value_processors = OrderedDict()
 
         # Init baseline model to None; can be set via set_baseline if running as a scenario
         self._baseline = None
@@ -177,7 +172,6 @@ class CompartmentalModel:
             expected_flow_count (optional): Used to assert that a particular number of flows are created.
 
         """
-        self._validate_param(name, birth_rate)
         is_already_birth_flow = any(
             [
                 type(f) is flows.CrudeBirthFlow or type(f) is flows.ReplacementBirthFlow
@@ -255,7 +249,6 @@ class CompartmentalModel:
             expected_flow_count (optional): Used to assert that a particular number of flows are created.
 
         """
-        self._validate_param(name, num_imported)
         self._add_entry_flow(
             flows.ImportFlow, name, num_imported, dest, dest_strata, expected_flow_count
         )
@@ -357,7 +350,6 @@ class CompartmentalModel:
         expected_flow_count: Optional[int],
     ):
         source_strata = source_strata or {}
-        self._validate_param(name, param)
         source_comps = [c for c in self.compartments if c.is_match(source, source_strata)]
         new_flows = []
         for source_comp in source_comps:
@@ -524,9 +516,6 @@ class CompartmentalModel:
     ):
         source_strata = source_strata or {}
         dest_strata = dest_strata or {}
-        if flow_cls is not flows.FunctionFlow:
-            # Non standard param for FunctionFlow so cannot use this validation method.
-            self._validate_param(name, param)
 
         dest_comps = [c for c in self.compartments if c.is_match(dest, dest_strata)]
         source_comps = [c for c in self.compartments if c.is_match(source, source_strata)]
@@ -552,16 +541,6 @@ class CompartmentalModel:
         self._validate_expected_flow_count(expected_flow_count, new_flows)
         self._flows += new_flows
         self._update_compartment_indices()
-
-    def _validate_param(self, flow_name: str, param: FlowParam):
-        """
-        Ensure that the supplied parameter produces sensible results for all timesteps.
-        """
-        is_all_positive = (
-            all(map(lambda t: param(t) >= 0, self.times)) if callable(param) else param >= 0
-        )
-        error_msg = f"Parameter for {flow_name} must be >= 0 for all timesteps: {param}"
-        assert is_all_positive, error_msg
 
     @staticmethod
     def _validate_expected_flow_count(
@@ -697,9 +676,6 @@ class CompartmentalModel:
 
         self._set_backend(backend, backend_args)
         self._backend.prepare_to_run()
-
-        if self._hfunc:
-            self._hfunc(self)
 
         if solver == SolverType.STOCHASTIC:
             # Run the model in 'stochastic mode'.
@@ -1075,16 +1051,16 @@ class CompartmentalModel:
             "save_results": save_results,
         }
 
-    def request_derived_value_output(
+    def request_computed_value_output(
         self,
         name: str,
         save_results: bool = True
     ):
         """
-        Save a derived value process output to derived outputs
+        Save a computed value process output to derived outputs
 
         Args:
-            name (str): Name (key) of derived value process
+            name (str): Name (key) of computed value process
             save_results (bool, optional): Save outputs (or discard if False)
         """
         msg = f"A derived output named {name} already exists."
@@ -1092,63 +1068,29 @@ class CompartmentalModel:
 
         self._derived_output_graph.add_node(name)
         self._derived_output_requests[name] = {
-            "request_type": DerivedOutputRequest.DERIVED_VALUE,
+            "request_type": DerivedOutputRequest.COMPUTED_VALUE,
             "name": name,
             "save_results": save_results,
         }
 
-
-    def request_input_value_output(
-        self,
-        name: str,
-        save_results: bool = True
-    ):
+    def add_computed_value_process(self, name: str, processor: ComputedValueProcessor):
         """
-        Save an input value process output to derived outputs
+        Calculate (at runtime) values derived from the current compartment values and/or functions/input data
+        providing time varying shared values.  The output values of these processes can be used by function 
+        parameters, adjustments, and function flows.
 
         Args:
-            name (str): Name (key) of derived value process
-            save_results (bool, optional): Save outputs (or discard if False)
+            name (str): Name (key) of derived value (use this when referencing it in functions)
+            processor (DerivedValueProcessor): Object providing implementation
         """
-        msg = f"A derived output named {name} already exists."
-        assert name not in self._derived_output_requests, msg
-
-        self._derived_output_graph.add_node(name)
-        self._derived_output_requests[name] = {
-            "request_type": DerivedOutputRequest.INPUT_VALUE,
-            "name": name,
-            "save_results": save_results,
-        }
-
-    def add_input_value_process(self, name: str, processor: InputValueProcessor):
-        """
-        Provide time-varying input values at time(t), that are not dependant on model state
-        Can be used to provide input timeseries from data sources, or computed values
-
-        Args:
-            name (str): Name (key) of input value
-            processor (InputValueProcessor): Object providing computation
-        """
-        self._input_value_processors[name] = processor
-
-
-    def add_derived_value_process(self, name: str, processor: DerivedValueProcessor):
-        """
-        Calculate (at runtime) values derived from the compartment values and flow rates; these can be used by function flows
-
-        Args:
-            name (str): Name (key) of derived value
-            processor (DerivedValueProcessor): Object providing computation
-        """
-        self._derived_value_processors[name] = processor
-
-    def set_hacking_function(self, hfunc: Callable):
-        """
-        Set a function to interact with model internals; will be called after model backend is instantiated (but before run)
-        Args:
-            hfunc (Callable[CompartmentalModel]): Function taking model as argument 
-        """
-        self._hfunc = hfunc
+        self._computed_value_processors[name] = processor
 
     def add_adjustment_system(self, name: str, system: AdjustmentSystem):
+        """Add an AdjustmentSystem that will process common adjustments in parallel
+        These provide equivalent functionality to individual flow adjustments (adjust.py)
+       
+        Args:
+            name (str): The name of the system used for lookup purpsoes
+            system (AdjustmentSystem): AdjustmentSystem object containing the implementation details
+        """
         self._adjustment_systems[name] = system
