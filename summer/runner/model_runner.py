@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from typing import Tuple
 
 import numpy as np
 #from functools import lru_cache
@@ -81,27 +82,30 @@ class ModelRunner(ABC):
         Pre-run setup.
         Here we do any calculations/preparation are possible to do before the model runs.
         """
-        # Functions will often be called multiple times per timestep, so we cache any time-varying functions.
-        # First we find all time varying functions.
-        funcs = set()
-        for flow in self.model._flows:
-            if isinstance(flow, flows.FunctionFlow):
-                # Don't cache these, the input arguments cannot be stored in a dict ("non hashable")
-                continue
-            elif callable(flow.param):
-                funcs.add(flow.param)
-            for adj in flow.adjustments:
-                if adj and callable(adj.param):
-                    funcs.add(adj.param)
 
         
         if self.model._enable_cache:
+            # +++ This functionality is largely deprecated and only used for the ReferenceRunner, which is slow
+            # anyway.  Caching obscures functions when debugging and is thus a bit irritating to work with,
+            # and no longer required for the VectorizedRunner
+
+            # Functions will often be called multiple times per timestep, so we cache any time-varying functions.
+            # First we find all time varying functions.
+            funcs = set()
+            for flow in self.model._flows:
+                if isinstance(flow, flows.FunctionFlow):
+                    # Don't cache these, the input arguments cannot be stored in a dict ("non hashable")
+                    continue
+                elif callable(flow.param):
+                    funcs.add(flow.param)
+                for adj in flow.adjustments:
+                    if adj and callable(adj.param):
+                        funcs.add(adj.param)
+
             # Cache return values to prevent re-computation. This will cause a little memory leak, which is (mostly) fine.
             funcs_cached = {}
             for func in funcs:
-                # Floating point return type is 8 bytes, meaning 2**17 values is ~1MB of memory.
-                #funcs_cached[func] = lru_cache(maxsize=2 ** 17)(func)
-                #funcs_cached[func] = cachetools.cached(cachetools.LRUCache(maxsize=2 ** 17), key=timekey)(func)
+                # We use a custom cache since lru_cache cannot handle custom hash functions
                 funcs_cached[func] = cached(func)
                 
             # Finally, replace original functions with cached ones
@@ -137,6 +141,7 @@ class ModelRunner(ABC):
         # Simplify adjustments; if there are any overwrites, we can discard the previous
         # adjustments
         # FIXME: Currently only works if the last adjustment is an Overwrite
+        # Probably expand this to an optimizations module
         for f in self.model._flows:
             if len(f.adjustments) and isinstance(f.adjustments[-1], Overwrite):
                 f.adjustments = [f.adjustments[-1]]
@@ -204,9 +209,10 @@ class ModelRunner(ABC):
 
         # Initialize the components of processing subsystems
 
-        # Derived value processors - compute values based on current model state,
-        # but cannot manipulate flows or change compartment values
-        for k, proc in self.model._derived_value_processors.items():
+        # Computed value processors - these compute values based on time and current model state (compartment values)
+        # Cannot manipulate state or access model flows
+        # This step initialises the processors based on model structure
+        for k, proc in self.model._computed_value_processors.items():
              proc.prepare_to_run(self.model.compartments, self.model._flows)
 
         # Adjustment systems - calculate adjusted flow weights for multiple flows
@@ -279,6 +285,7 @@ class ModelRunner(ABC):
         self, compartment_values: np.ndarray, mixing_matrix: np.ndarray
     ):
         num_cats = self.num_categories
+        num_strains = len(self.model._disease_strains)
         # Calculate total number of people per category (for FoI).
         # A vector with size (num_cats).
         self._category_populations = sparse_pairs_accum(
@@ -289,7 +296,14 @@ class ModelRunner(ABC):
         # Infection density/frequency is the infectious multiplier for each mixing category, calculated for each strain.
         self._infection_density = {}
         self._infection_frequency = {}
-        for strain in self.model._disease_strains:
+        # Flat indices are used for fast vectorized lookups
+        # These are pure arrays rather than <dict, ndarray> types
+        #FIXME+++ We should eventually move everything to these, but the originals are maintained because
+        #they are much better tested, and we can demonstrate equivalence
+        self._infection_density_flat = np.empty((num_strains, num_cats), dtype=float)
+        self._infection_frequency_flat = np.empty((num_strains, num_cats), dtype=float)
+
+        for strain_idx, strain in enumerate(self.model._disease_strains):
             strain_compartment_infectiousness = self._compartment_infectiousness[strain]
 
             # Calculate the effective infectious people for each category, including adjustment factors.
@@ -299,11 +313,12 @@ class ModelRunner(ABC):
                 self._compartment_category_map, infected_values, num_cats
             )
             self._infection_density[strain] = np.matmul(mixing_matrix, infectious_populations)
-
+            self._infection_density_flat[strain_idx] = self._infection_density[strain]
             # Calculate the effective infectious person frequency for each category, including adjustment factors.
             # A vector with size (num_cats x 1).
             category_prevalence = infectious_populations / self._category_populations
             self._infection_frequency[strain] = np.matmul(mixing_matrix, category_prevalence)
+            self._infection_frequency_flat[strain_idx] = self._infection_frequency[strain]
 
     def _get_mixing_matrix(self, time: float) -> np.ndarray:
         """
@@ -328,13 +343,19 @@ class ModelRunner(ABC):
         assert self._timestep_deaths is not None, "Total deaths has not been set."
         return self._timestep_deaths
 
+    def _get_infection_multiplier_indices(self, source: Compartment, dest: Compartment) -> Tuple[str, int]:
+        """Return indices for infection frequency lookups
+        """
+        idx = self._get_force_idx(source)
+        strain = dest.strata.get("strain", self.model._DEFAULT_DISEASE_STRAIN)
+        return idx, strain
+
     def _get_infection_frequency_multiplier(self, source: Compartment, dest: Compartment) -> float:
         """
         Get force of infection multiplier for a given compartment,
         using the 'infection frequency' calculation.
         """
-        idx = self._get_force_idx(source)
-        strain = dest.strata.get("strain", self.model._DEFAULT_DISEASE_STRAIN)
+        idx, strain = self._get_infection_multiplier_indices(source, dest)
         return self._infection_frequency[strain][idx]
 
     def _get_infection_density_multiplier(self, source: Compartment, dest: Compartment):
@@ -342,24 +363,13 @@ class ModelRunner(ABC):
         Get force of infection multiplier for a given compartment,
         using the 'infection density' calculation.
         """
-        idx = self._get_force_idx(source)
-        strain = dest.strata.get("strain", self.model._DEFAULT_DISEASE_STRAIN)
+        idx, strain = self._get_infection_multiplier_indices(source, dest)
         return self._infection_density[strain][idx]
 
-    def _calc_derived_values(self, comp_vals: np.ndarray, flow_rates: np.ndarray, input_values: dict, time: float) -> dict:
-        out_vals = {}
-        for k, proc in self.model._derived_value_processors.items():
-            out_vals[k] = proc.process(comp_vals, flow_rates, input_values, out_vals, time)
+    def _calc_computed_values(self, compartment_vals: np.ndarray, time: float) -> dict:
+        computed_values = {}
+        for k, proc in self.model._computed_value_processors.items():
+            computed_values[k] = proc.process(compartment_vals, computed_values, time)
         
-        return out_vals
+        return computed_values
 
-    def _calc_input_values(self, time: float) -> dict:
-        out_vals = {}
-        for k, proc in self.model._input_value_processors.items():
-            out_vals[k] = proc.process(out_vals, time)
-        
-        return out_vals
-
-
-def timekey(time, *args, **kwargs):
-    return time

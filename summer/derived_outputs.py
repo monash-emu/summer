@@ -30,9 +30,7 @@ class DerivedOutputRequest:
     AGGREGATE = "agg"
     CUMULATIVE = "cum"
     FUNCTION = "func"
-    DERIVED_VALUE = "derived_value"
-    INPUT_VALUE = "input_value"
-
+    COMPUTED_VALUE = "computed_value"
 
 def calculate_derived_outputs(
     requests: List[dict],
@@ -97,8 +95,7 @@ def calculate_derived_outputs(
     flow_values = np.zeros((len(times), len(flows)))
 
     # These are 'extra' values computed by requested processes, and need to be tracked separately
-    input_values = []
-    derived_values = []
+    computed_values = []
 
     # FIXME: Another question for Matt - has my changes to the time requests stuffed this up?
     # Because the timestep for the last time interval can now be different from the earlier ones.
@@ -109,12 +106,10 @@ def calculate_derived_outputs(
         flow_rates = get_flow_rates(outputs[time_idx], time)
         flow_values[time_idx, :] = flow_rates * timestep
         # Collect these as lists then build DataFrames afterwards
-        input_values.append(model._backend._calc_input_values(time))
-        derived_values.append(model._backend._calc_derived_values(outputs[time_idx], flow_rates, input_values, time))
+        computed_values.append(model._backend._calc_computed_values(outputs[time_idx], time))
     
     # Collate list values into DataFrames
-    input_values = pd.DataFrame(columns=model._input_value_processors.keys(), data = input_values, index=times)
-    derived_values = pd.DataFrame(columns=model._derived_value_processors.keys(), data = input_values, index=times)
+    computed_values = pd.DataFrame(columns=model._computed_value_processors.keys(), data = computed_values, index=times)
     
     # Convert tracked flow values into a matrix where the 1st dimension is flow type, 2nd is time
     flow_values = np.array(flow_values).T
@@ -149,10 +144,8 @@ def calculate_derived_outputs(
             # User wants to track the results of a function of other outputs over time.
             output = _get_func_output(request, derived_outputs)
         # FIXME DerivedValue and InputValue should probably be combined
-        elif request_type == DerivedOutputRequest.DERIVED_VALUE:
-            output = _get_derived_value_output(request, derived_values)
-        elif request_type == DerivedOutputRequest.INPUT_VALUE:
-            output = _get_input_value_output(request, input_values)
+        elif request_type == DerivedOutputRequest.COMPUTED_VALUE:
+            output = _get_computed_value_output(request, computed_values)
 
         derived_outputs[name] = output
 
@@ -234,13 +227,9 @@ def _get_func_output(request, derived_outputs):
     inputs = [derived_outputs[s] for s in source_names]
     return func(*inputs)
     
-def _get_derived_value_output(request, derived_values):
+def _get_computed_value_output(request, computed_values):
     name = request["name"]
-    return derived_values[name].to_numpy(dtype=float)
-
-def _get_input_value_output(request, input_values):
-    name = request["name"]
-    return input_values[name].to_numpy(dtype=float)
+    return computed_values[name].to_numpy(dtype=float)
 
 def get_scenario_start_index(base_times, start_time):
     """
