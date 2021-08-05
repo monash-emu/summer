@@ -47,7 +47,7 @@ class ReferenceRunner(ModelRunner):
         # Calculate infection frequency/density for all disease strains
         self._calculate_strain_infection_values(compartment_values, mixing_matrix)
 
-    def _get_rates(self, comp_vals: np.ndarray, time: float) -> Tuple[np.ndarray, np.ndarray]:
+    def _get_rates(self, compartment_vals: np.ndarray, time: float) -> Tuple[np.ndarray, np.ndarray]:
         """
         Calculates inter-compartmental flow rates for a given state and time, including:
             - entry: flows of people into the system
@@ -63,16 +63,18 @@ class ReferenceRunner(ModelRunner):
             flow_rates: Contribution of each flow to compartment rate of change
 
         """
-        self._prepare_time_step(time, comp_vals)
+        self._prepare_time_step(time, compartment_vals)
         # Track each flow's flow-rates at this point in time for function flows.
         flow_rates = np.zeros(len(self.model._flows))
         # Track the rate of change of compartments for the ODE solver.
-        comp_rates = np.zeros(len(comp_vals))
+        comp_rates = np.zeros(len(compartment_vals))
+
+        computed_values = self._calc_computed_values(compartment_vals, time)
 
         # Find the flow rate for each flow.
         for flow_idx, flow in self._iter_non_function_flows:
             # Evaluate all the flows that are not function flows.
-            net_flow = flow.get_net_flow(comp_vals, time)
+            net_flow = flow.get_net_flow(compartment_vals, computed_values, time)
             flow_rates[flow_idx] = net_flow
             if flow.source:
                 comp_rates[flow.source.idx] -= net_flow
@@ -82,13 +84,13 @@ class ReferenceRunner(ModelRunner):
                 # Track total deaths for any later birth replacement flows.
                 self._timestep_deaths += net_flow
 
-        derived_values = self._calc_derived_values(comp_vals, flow_rates, time)
+        
 
         if self._iter_function_flows:
             # Evaluate the function flows.
             for flow_idx, flow in self._iter_function_flows:
                 net_flow = flow.get_net_flow(
-                    self.model.compartments, comp_vals, self.model._flows, flow_rates, derived_values, time
+                    self.model.compartments, compartment_vals, self.model._flows, flow_rates, computed_values, time
                 )
                 flow_rates[flow_idx] = net_flow
                 comp_rates[flow.source.idx] -= net_flow
