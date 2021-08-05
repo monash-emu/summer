@@ -84,6 +84,8 @@ Releases are numbered using [Semantic Versioning](https://semver.org/)
   - Add AdjustmentSystems
   - Improve vectorization of flows
   - Add computed_values inputs to flow and adjustment parameters
+- 2.1.1:
+  - Fix for invalid/unused package imports (cachetools)
 
 ## Release process
 
