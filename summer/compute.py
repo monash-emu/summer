@@ -6,7 +6,7 @@ from abc import ABC, abstractmethod
 import numba
 import numpy as np
 
-class DerivedValueProcessor(ABC):
+class ComputedValueProcessor(ABC):
     """
     Base class for computing (runtime) derived values
     """
@@ -14,23 +14,17 @@ class DerivedValueProcessor(ABC):
         pass
 
     def prepare_to_run(self, compartments, flows):
+        """Doing any pre-computation or setup that requires information about model structure
+
+        Args:
+            compartments ([type]): [description]
+            flows ([type]): [description]
+        """
         pass
 
     @abstractmethod
-    def process(self, comp_vals, flow_rates, input_values, derived_values, time):
+    def process(self, compartment_values, computed_values, time):
         pass
-
-class InputValueProcessor(ABC):
-    """
-    Base class for supplying input values (time varying but independant of model values)
-    """
-    def __init__(self):
-        pass
-
-    @abstractmethod
-    def process(self, input_values, time):
-        pass
-
 
 # Use Numba to speed up the calculation of the population.
 @numba.jit(nopython=True)
