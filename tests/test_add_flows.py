@@ -83,7 +83,7 @@ def test_apply_flows__with_function_flow__expect_flows_applied(backend, inf_pop,
     Expect a flow to occur proportional to the result of `get_flow_rate`.
     """
 
-    def get_flow_rate(flow, comps, comp_vals, flows, flow_rates, derived_values, time):
+    def get_flow_rate(flow, comps, comp_vals, flows, flow_rates, computed_values, time):
         _, i_pop, _ = comp_vals
         i_flow = flow_rates[0]
         return i_pop + i_flow

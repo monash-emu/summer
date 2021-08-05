@@ -3,17 +3,17 @@ from summer.flows import BaseEntryFlow, BaseExitFlow, BaseTransitionFlow
 
 
 class TransitionFlow(BaseTransitionFlow):
-    def get_net_flow(self, compartment_values, time):
+    def get_net_flow(self, compartment_values, computed_values, time):
         return 1
 
 
 class EntryFlow(BaseEntryFlow):
-    def get_net_flow(self, compartment_values, time):
+    def get_net_flow(self, compartment_values, computed_values, time):
         return 1
 
 
 class ExitFlow(BaseExitFlow):
-    def get_net_flow(self, compartment_values, time):
+    def get_net_flow(self, compartment_values, computed_values, time):
         return 1
 
 
@@ -102,9 +102,9 @@ def test_update_compartment_indices():
 
 def test_get_weight_value__with_no_adjustments():
     flow = TransitionFlow(
-        name="recovery", source=SOURCE, dest=DEST, param=lambda t: 2 * t, adjustments=[]
+        name="recovery", source=SOURCE, dest=DEST, param=lambda t, cv: 2 * t, adjustments=[]
     )
-    weight = flow.get_weight_value(3)
+    weight = flow.get_weight_value(3, {})
     assert weight == 2 * 3
 
 
@@ -113,10 +113,10 @@ def test_get_weight_value__with_multiply_adjustments():
         name="recovery",
         source=SOURCE,
         dest=DEST,
-        param=lambda t: 2 * t,
-        adjustments=[adjust.Multiply(5), adjust.Multiply(lambda t: 7)],
+        param=lambda t, cv: 2 * t,
+        adjustments=[adjust.Multiply(5), adjust.Multiply(lambda t, cv: 7)],
     )
-    weight = flow.get_weight_value(3)
+    weight = flow.get_weight_value(3, {})
     assert weight == 2 * 3 * 5 * 7
 
 
@@ -125,14 +125,14 @@ def test_get_weight_value__with_overwrite_adjustment():
         name="recovery",
         source=SOURCE,
         dest=DEST,
-        param=lambda t: 2 * t,
+        param=lambda t, cv: 2 * t,
         adjustments=[
             adjust.Multiply(2),
             adjust.Overwrite(5),  # Overwrites 2 * 3, which is ignored.
             adjust.Multiply(7),
         ],
     )
-    weight = flow.get_weight_value(3)
+    weight = flow.get_weight_value(3, {})
     assert weight == 5 * 7
 
 
@@ -141,12 +141,12 @@ def test_get_weight_value__with_muiltiple_overwrite_adjustments():
         name="recovery",
         source=SOURCE,
         dest=DEST,
-        param=lambda t: 2 * t,
+        param=lambda t, cv: 2 * t,
         adjustments=[
             adjust.Overwrite(5),
             adjust.Multiply(7),
-            adjust.Overwrite(lambda t: 13),  # Last overwrite adjustment wins
+            adjust.Overwrite(lambda t, cv: 13),  # Last overwrite adjustment wins
         ],
     )
-    weight = flow.get_weight_value(3)
+    weight = flow.get_weight_value(3, {})
     assert weight == 13

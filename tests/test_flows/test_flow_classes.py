@@ -15,7 +15,7 @@ from summer.flows import (
 
 
 def test_function_flow_get_net_flow():
-    def get_flow_rate(flow, comps, comp_vals, flows, flow_rates, derived_values, time):
+    def get_flow_rate(flow, comps, comp_vals, flows, flow_rates, computed_values, time):
         i_pop = sum([comp_vals[c.idx] for c in comps if c.name == "I"])
         s_flows = sum([flow_rates[c.idx] for c in comps if c.name == "S"])
         return s_flows * i_pop * time
@@ -39,7 +39,7 @@ def test_function_flow_get_net_flow():
 
 
 def test_function_flow_get_net_flow_with_adjust():
-    def get_flow_rate(flow, comps, comp_vals, flows, flow_rates, derived_values, time):
+    def get_flow_rate(flow, comps, comp_vals, flows, flow_rates, computed_values, time):
         i_pop = sum([comp_vals[c.idx] for c in comps if c.name == "I"])
         s_flows = sum([flow_rates[c.idx] for c in comps if c.name == "S"])
         return s_flows * i_pop * time
@@ -67,12 +67,12 @@ def test_transition_flow_get_net_flow():
         name="flow",
         source=Compartment("I"),
         dest=Compartment("R"),
-        param=lambda t: 2 * t,
+        param=lambda t, cv: 2 * t,
         adjustments=[],
     )
     flow.source.idx = 1
     vals = np.array([1, 3, 5])
-    net_flow = flow.get_net_flow(vals, 7)
+    net_flow = flow.get_net_flow(vals, {}, 7)
     assert net_flow == 2 * 3 * 7
 
 
@@ -81,12 +81,12 @@ def test_transition_flow_get_net_flow_with_adjust():
         name="flow",
         source=Compartment("I"),
         dest=Compartment("R"),
-        param=lambda t: 2 * t,
+        param=lambda t, cv: 2 * t,
         adjustments=[adjust.Multiply(13)],
     )
     flow.source.idx = 2
     vals = np.array([1, 3, 5])
-    net_flow = flow.get_net_flow(vals, 7)
+    net_flow = flow.get_net_flow(vals, {}, 7)
     assert net_flow == 2 * 5 * 7 * 13
 
 
@@ -94,11 +94,11 @@ def test_import_flow_get_net_flow():
     flow = ImportFlow(
         name="flow",
         dest=Compartment("S"),
-        param=lambda t: 0.1 * t,
+        param=lambda t, cv: 0.1 * t,
         adjustments=[],
     )
     vals = np.array([1, 3, 5])
-    net_flow = flow.get_net_flow(vals, 7)
+    net_flow = flow.get_net_flow(vals, {}, 7)
     assert net_flow == 0.1 * 7
 
 
@@ -106,11 +106,11 @@ def test_import_flow_get_net_flow_with_adjust():
     flow = ImportFlow(
         name="flow",
         dest=Compartment("S"),
-        param=lambda t: 0.1 * t,
+        param=lambda t, cv: 0.1 * t,
         adjustments=[adjust.Multiply(13)],
     )
     vals = np.array([1, 3, 5])
-    net_flow = flow.get_net_flow(vals, 7)
+    net_flow = flow.get_net_flow(vals, {}, 7)
     assert net_flow == 0.1 * 7 * 13
 
 
@@ -118,11 +118,11 @@ def test_crude_birth_flow_get_net_flow():
     flow = CrudeBirthFlow(
         name="flow",
         dest=Compartment("S"),
-        param=lambda t: 0.1 * t,
+        param=lambda t, cv: 0.1 * t,
         adjustments=[],
     )
     vals = np.array([1, 3, 5])
-    net_flow = flow.get_net_flow(vals, 7)
+    net_flow = flow.get_net_flow(vals, {}, 7)
     assert net_flow == 0.1 * 7 * (1 + 3 + 5)
 
 
@@ -130,11 +130,11 @@ def test_crude_birth_flow_get_net_flow_with_adjust():
     flow = CrudeBirthFlow(
         name="flow",
         dest=Compartment("S"),
-        param=lambda t: 0.1 * t,
+        param=lambda t, cv: 0.1 * t,
         adjustments=[adjust.Multiply(13)],
     )
     vals = np.array([1, 3, 5])
-    net_flow = flow.get_net_flow(vals, 7)
+    net_flow = flow.get_net_flow(vals, {}, 7)
     assert net_flow == 0.1 * 7 * (1 + 3 + 5) * 13
 
 
@@ -142,11 +142,11 @@ def test_replace_deaths_birth_flow_get_net_flow():
     flow = ReplacementBirthFlow(
         name="flow",
         dest=Compartment("S"),
-        param=lambda t: 23,
+        param=lambda t, cv: 23,
         adjustments=[],
     )
     vals = np.array([1, 3, 5])
-    net_flow = flow.get_net_flow(vals, 7)
+    net_flow = flow.get_net_flow(vals, {}, 7)
     assert net_flow == 23
 
 
@@ -154,11 +154,11 @@ def test_replace_deaths_birth_flow_get_net_flow_with_adjust():
     flow = ReplacementBirthFlow(
         name="flow",
         dest=Compartment("S"),
-        param=lambda t: 23,
+        param=lambda t, cv: 23,
         adjustments=[adjust.Multiply(13)],
     )
     vals = np.array([1, 3, 5])
-    net_flow = flow.get_net_flow(vals, 7)
+    net_flow = flow.get_net_flow(vals, {}, 7)
     assert net_flow == 23 * 13
 
 
@@ -166,12 +166,12 @@ def test_death_flow_get_net_flow():
     flow = DeathFlow(
         name="flow",
         source=Compartment("I"),
-        param=lambda t: 2 * t,
+        param=lambda t, cv: 2 * t,
         adjustments=[],
     )
     flow.source.idx = 1
     vals = np.array([1, 3, 5])
-    net_flow = flow.get_net_flow(vals, 7)
+    net_flow = flow.get_net_flow(vals, {}, 7)
     assert net_flow == 2 * 3 * 7
 
 
@@ -179,12 +179,12 @@ def test_death_flow_get_net_flow_with_adjust():
     flow = DeathFlow(
         name="flow",
         source=Compartment("I"),
-        param=lambda t: 2 * t,
+        param=lambda t, cv: 2 * t,
         adjustments=[adjust.Multiply(13)],
     )
     flow.source.idx = 2
     vals = np.array([1, 3, 5])
-    net_flow = flow.get_net_flow(vals, 7)
+    net_flow = flow.get_net_flow(vals, {}, 7)
     assert net_flow == 2 * 5 * 7 * 13
 
 
@@ -194,13 +194,13 @@ def test_infection_get_net_flow(FlowClass):
         name="flow",
         source=Compartment("I"),
         dest=Compartment("R"),
-        param=lambda t: 2 * t,
+        param=lambda t, cv: 2 * t,
         find_infectious_multiplier=lambda s, d: 23,
         adjustments=[],
     )
     flow.source.idx = 1
     vals = np.array([1, 3, 5])
-    net_flow = flow.get_net_flow(vals, 7)
+    net_flow = flow.get_net_flow(vals, {}, 7)
     assert net_flow == 2 * 3 * 7 * 23
 
 
@@ -210,11 +210,11 @@ def test_infection_get_net_flow_with_adjust(FlowClass):
         name="flow",
         source=Compartment("I"),
         dest=Compartment("R"),
-        param=lambda t: 2 * t,
+        param=lambda t, cv: 2 * t,
         find_infectious_multiplier=lambda s, d: 23,
         adjustments=[adjust.Multiply(13)],
     )
     flow.source.idx = 1
     vals = np.array([1, 3, 5])
-    net_flow = flow.get_net_flow(vals, 7)
+    net_flow = flow.get_net_flow(vals, {}, 7)
     assert net_flow == 2 * 3 * 7 * 23 * 13

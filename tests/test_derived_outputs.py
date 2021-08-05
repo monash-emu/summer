@@ -101,11 +101,11 @@ def test_flow_derived_outputs(backend):
     model.request_output_for_flow(name="importation_raw", flow_name="imports", raw_results=True)
 
     # Linear entry.
-    model.add_importation_flow("imports_land", num_imported=lambda t: 3 * t, dest="S")
+    model.add_importation_flow("imports_land", num_imported=lambda t, cv: 3 * t, dest="S")
     model.request_output_for_flow(name="importation_land", flow_name="imports_land")
 
     # Quadratic entry.
-    model.add_importation_flow("imports_air", num_imported=lambda t: t ** 2, dest="S")
+    model.add_importation_flow("imports_air", num_imported=lambda t, cv: t ** 2, dest="S")
     model.request_output_for_flow(name="importation_air", flow_name="imports_air")
 
     # Fractional transition flow
