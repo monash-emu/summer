@@ -17,10 +17,8 @@ class VectorizedRunner(ModelRunner):
     An optimized, but less accessible model runner.
     """
 
-    def __init__(self, model, precompute_time_flows=False, precompute_mixing=False):
+    def __init__(self, model):
         super().__init__(model)
-        self._precompute_time_flows = precompute_time_flows
-        self._precompute_mixing = precompute_mixing
 
     def prepare_to_run(self):
         """Do all precomputation here"""
@@ -62,13 +60,11 @@ class VectorizedRunner(ModelRunner):
         self._precompute_flow_weights()
         self._precompute_flow_maps()
 
-        if self._precompute_mixing:
-            self._precompute_mixing_matrices()
+        self._build_infectious_multipliers_lookup()
 
     def _precompute_flow_weights(self):
         """Calculate all static flow weights before running, and build indices for time-varying weights"""
         self.flow_weights = np.zeros(len(self.model._flows))
-        time_varying_flow_weights = []
         time_varying_weight_indices = []
         for i, f in self._iter_non_function_flows:
             weight_type = f.weight_type()
@@ -76,16 +72,24 @@ class VectorizedRunner(ModelRunner):
                 weight = f.get_weight_value(0,None)
                 self.flow_weights[i] = weight
             elif weight_type == flows.WeightType.FUNCTION:
-                if self._precompute_time_flows:
-                    #FIXME This will fail, but keep it broken for now since we don't really support it and want to know if it gets called...
-                    param_vals = np.array([f.get_weight_value(t) for t in self.model.times])
-                    time_varying_flow_weights.append(param_vals)
                 time_varying_weight_indices.append(i)
             # else: Is system, these are calculated in a separate process
             # FIXME Refactor so all in one place, maybe?
 
         self.time_varying_weight_indices = np.array(time_varying_weight_indices, dtype=int)
-        self.time_varying_flow_weights = np.array(time_varying_flow_weights)
+
+        self._map_blocks()
+
+    def _map_blocks(self):
+        flow_block_maps = {}
+        for i in self.time_varying_weight_indices:
+            f = self.model._flows[i]
+            key = (f.param, tuple(f.adjustments))
+            if key not in flow_block_maps:
+                flow_block_maps[key] = []
+            flow_block_maps[key].append(i)
+        self.flow_block_maps = dict([(k, np.array(v,dtype=int)) for k,v in flow_block_maps.items()])
+
 
     def _precompute_flow_maps(self):
         """Build fast-access arrays of flow indices"""
@@ -105,12 +109,6 @@ class VectorizedRunner(ModelRunner):
         self._pos_flow_map = np.array(f_pos_map, dtype=np.int)
         self._neg_flow_map = np.array(f_neg_map, dtype=np.int)
 
-    def _precompute_mixing_matrices(self):
-        num_cat = self.num_categories
-        self.mixing_matrices = np.empty((len(self.model.times), num_cat, num_cat))
-        for i, t in enumerate(self.model.times):
-            self.mixing_matrices[i] = super()._get_mixing_matrix(t)
-
     def _prepare_time_step(self, time: float, compartment_values: np.ndarray):
         """
         Pre-timestep setup. This should be run before `_get_rates`.
@@ -125,51 +123,24 @@ class VectorizedRunner(ModelRunner):
 
         self._calculate_strain_infection_values(compartment_values, mixing_matrix)
 
-    def _get_mixing_matrix(self, time: float) -> np.ndarray:
-        """Thin wrapper to either get the model's mixing matrix, or use our precomputed matrices
-
-        Args:
-            time (float): Time in model.times
-
-        Returns:
-            np.ndarray: Mixing matrix at time (time)
-        """
-        if self._precompute_mixing:
-            t = int(time - self.model.times[0])
-            return self.mixing_matrices[t]
-        else:
-            return super()._get_mixing_matrix(time)
-
-    def _apply_precomputed_flow_weights_at_time(self, time: float):
-        """Fill flow weights with precomputed values
-
-        Not currently used, but retained for evaluation purposes:
-        Use apply_flow_weights_at_time instead
-
-        Args:
-            time (float): Time in model.times coordinates
-        """
-
-        # Test to see if we have any time varying weights
-        if len(self.time_varying_flow_weights):
-            t = int(time - self.model.times[0])
-            self.flow_weights[self.time_varying_weight_indices] = self.time_varying_flow_weights[
-                :, t
-            ]
-
-    def _apply_flow_weights_at_time(self, time, input_values):
+    def _apply_flow_weights_at_time(self, time, computed_values):
         """Calculate time dependent flow weights and insert them into our weights array
 
         Args:
             time (float): Time in model.times coordinates
         """
-        t = time
 
+        # Run all adjustment systems; these are vectorized flow weight systems that operate over an array of flows
         for (s,flow_idx) in self._adjustment_system_flow_maps:
-            self.flow_weights[flow_idx] = s.get_weights_at_time(time, input_values)
-        for i in self.time_varying_weight_indices:
-            f = self.model._flows[i]
-            self.flow_weights[i] = f.get_weight_value(t, input_values)
+            self.flow_weights[flow_idx] = s.get_weights_at_time(time, computed_values)
+
+        # Compute flow value blocks; these are 'chunked' blocks of flows that have a common flow param/adjustment structure,
+        # but are still specified as operating on individual flows (as opposed to AdjustmentSystems, which are vectorized)
+        for (param, adjustments), flow_idx in self.flow_block_maps.items():
+            value = param(time, computed_values) if callable(param) else param
+            for a in adjustments:
+                value = a.get_new_value(value, computed_values, time)
+            self.flow_weights[flow_idx] = value
 
     def _get_infectious_multipliers(self) -> np.ndarray:
         """Get multipliers for all infectious flows
@@ -183,7 +154,36 @@ class VectorizedRunner(ModelRunner):
             multipliers[i] = f.find_infectious_multiplier(f.source, f.dest)
         return multipliers
 
-    def _get_flow_rates(self, comp_vals: np.ndarray, time: float) -> np.ndarray:
+    def _get_infectious_multipliers_flat(self) -> np.ndarray:
+        """Experimental infectious multipliers calculator that runs in a vectorized fashion
+
+        Currently only supports infection frequency (not infection density)
+
+        Returns:
+            np.ndarray: Array of infectiousness multipliers
+        """
+        return self._infection_frequency_flat[self._infect_strain_lookup_idx, self._infect_cat_lookup_idx]
+
+    def _build_infectious_multipliers_lookup(self):
+        """Get multipliers for all infectious flows
+
+        These are used by _get_infectious_multipliers_flat (currently experimental)
+
+        Returns:
+            np.ndarray: Array of infectiousness multipliers
+        """
+        lookups = []
+        for i, idx in enumerate(self.infectious_flow_indices):
+            f = self.model._flows[idx]
+            cat_idx, strain = self._get_infection_multiplier_indices(f.source, f.dest)
+            strain_idx = self.model._disease_strains.index(strain)
+            lookups.append([strain_idx, cat_idx])
+        full_table = np.array(lookups, dtype=int)
+        self._full_table = full_table.reshape(len(self.infectious_flow_indices),2)
+        self._infect_strain_lookup_idx = self._full_table[:,0].flatten()
+        self._infect_cat_lookup_idx = self._full_table[:,1].flatten()
+
+    def _get_flow_rates(self, compartment_vals: np.ndarray, time: float) -> np.ndarray:
         """Get current flow rates, equivalent to calling get_net_flow on all (non-function) flows
 
         Args:
@@ -194,21 +194,17 @@ class VectorizedRunner(ModelRunner):
             np.ndarray: Array of all (non-function) flow rates
         """
 
-        input_values = self._calc_input_values(time)
+        computed_values = self._calc_computed_values(compartment_vals, time)
 
-        if self._precompute_time_flows:
-            self._apply_precomputed_flow_weights_at_time(time)
-        else:
-            self._apply_flow_weights_at_time(time, input_values)
+        self._apply_flow_weights_at_time(time, computed_values)
 
-        
         # These will be filled in afterwards
-        populations = comp_vals[self.population_idx]
+        populations = compartment_vals[self.population_idx]
         # Update for special cases (population-independent and CrudeBirth)
         if self._has_non_pop_flows:
             populations[self._non_pop_flow_idx] = 1.0
         if self._has_crude_birth:
-            populations[self._crude_birth_idx] = find_sum(comp_vals)
+            populations[self._crude_birth_idx] = find_sum(compartment_vals)
 
         flow_rates = self.flow_weights * populations
         
@@ -222,26 +218,17 @@ class VectorizedRunner(ModelRunner):
         if self._has_replacement:
             flow_rates[self._replacement_flow_idx] = self._timestep_deaths
 
-        derived_values = self._calc_derived_values(comp_vals, flow_rates, input_values, time)
 
-        #if self._iter_function_flows:
-        #    # Evaluate the function flows.
-        #    for flow_idx, flow in self._iter_function_flows:
-        #        net_flow = flow.get_net_flow(
-        #            self.model.compartments, comp_vals, self.model._flows, flow_rates, input_values, derived_values, time
-        #        )
-        #        flow_rates[flow_idx] = net_flow
-
-        self._apply_function_flow_rates(comp_vals, flow_rates, input_values, derived_values, time)
+        self._apply_function_flow_rates(compartment_vals, flow_rates, computed_values, time)
 
         return flow_rates
 
-    def _apply_function_flow_rates(self, comp_vals, flow_rates, input_values, derived_values, time):
+    def _apply_function_flow_rates(self, comp_vals, flow_rates, computed_values, time):
         if self._iter_function_flows:
             # Evaluate the function flows.
             for flow_idx, flow in self._iter_function_flows:
                 net_flow = flow.get_net_flow(
-                    self.model.compartments, comp_vals, self.model._flows, flow_rates, input_values, derived_values, time
+                    self.model.compartments, comp_vals, self.model._flows, flow_rates, computed_values, time
                 )
                 flow_rates[flow_idx] = net_flow
 
