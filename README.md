@@ -91,6 +91,9 @@ Releases are numbered using [Semantic Versioning](https://semver.org/)
 - 2.2.1
   - Derived output index caching
   - Optimized fast-tracks for infectious multipliers
+- 2.2.2
+  - JIT infectiousness calculations
+  - Various micro-optimizations
 
 ## Release process
 
