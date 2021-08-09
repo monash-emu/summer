@@ -24,10 +24,12 @@ class VectorizedRunner(ModelRunner):
         """Do all precomputation here"""
         super().prepare_to_run()
         
-        self.infectious_flow_indices = [
+        self.infectious_flow_indices = np.array([
             i for i, f in self._iter_non_function_flows if isinstance(f, flows.BaseInfectionFlow)
-        ]
-        self.death_flow_indices = [i for i, f in self._iter_non_function_flows if f.is_death_flow]
+        ], dtype=int)
+        self.death_flow_indices = np.array([
+            i for i, f in self._iter_non_function_flows if f.is_death_flow
+        ], dtype=int)
         
         # Include dummy values in population_idx to account for Entry flows
         non_func_pops = np.array(
