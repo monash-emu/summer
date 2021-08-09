@@ -44,6 +44,7 @@ def calculate_derived_outputs(
     model,
     whitelist: Optional[List[str]],
     baseline = None,
+    idx_cache = None
 ) -> Dict[str, np.ndarray]:
     """
     Calculates all requested derived outputs from the calculated compartment sizes.
@@ -126,10 +127,10 @@ def calculate_derived_outputs(
 
         if request_type == DerivedOutputRequest.FLOW:
             # User wants to track a set of flow rates over time.
-            output = _get_flow_output(request, times, flows, flow_values)
+            output, idx_cache = _get_flow_output(request, name, times, flows, flow_values, idx_cache)
         elif request_type == DerivedOutputRequest.COMPARTMENT:
             # User wants to track a set of compartment sizes over time.
-            output = _get_compartment_output(request, outputs, compartments)
+            output, idx_cache = _get_compartment_output(request, name, outputs, compartments, idx_cache)
         elif request_type == DerivedOutputRequest.AGGREGATE:
             # User wants to track the sum of a set of outputs over time.
             output = _get_aggregate_output(request, derived_outputs)
@@ -153,24 +154,33 @@ def calculate_derived_outputs(
     for name in outputs_to_delete_after:
         del derived_outputs[name]
 
-    return derived_outputs
+    return derived_outputs, idx_cache
 
 
-def _get_flow_output(request, times, flows, flow_values):
+def _get_flow_output(request, name, times, flows, flow_values, idx_cache=None):
     this_flow_values = np.zeros_like(times)
-    for flow_idx, flow in enumerate(flows):
-        is_matching_flow = (
-            flow.name == request["flow_name"]
-            and ((not flow.source) or flow.source.has_strata(request["source_strata"]))
-            and ((not flow.dest) or flow.dest.has_strata(request["dest_strata"]))
-        )
-        if is_matching_flow:
-            this_flow_values += flow_values[flow_idx]
+
+    if not idx_cache:
+        idx_cache = {}
+        
+    if not name in idx_cache:
+        idx_cache[name] = []
+        for flow_idx, flow in enumerate(flows):
+            is_matching_flow = (
+                flow.name == request["flow_name"]
+                and ((not flow.source) or flow.source.has_strata(request["source_strata"]))
+                and ((not flow.dest) or flow.dest.has_strata(request["dest_strata"]))
+            )
+            if is_matching_flow:
+                idx_cache[name].append(flow_idx)
+
+    for flow_idx in idx_cache[name]:
+        this_flow_values += flow_values[flow_idx]
 
     use_raw_results = request["raw_results"]
     if use_raw_results:
         # Use interpolated flow rates with no post-processing.
-        return this_flow_values
+        return this_flow_values, idx_cache
     else:
         # Set the "flow value" at time `t` to be a midpoint approximation of the integrated flow
         # bewteen `t-1` and 't'
@@ -181,15 +191,21 @@ def _get_flow_output(request, times, flows, flow_values):
         # Client using these outputs will typically the first value
         midpoint_output[0] = this_flow_values[0]
         midpoint_output[1:] = (this_flow_values[1:] + this_flow_values[:-1]) * 0.5
-        return midpoint_output
+        return midpoint_output, idx_cache
 
 
-def _get_compartment_output(request, outputs, compartments):
-    req_compartments = request["compartments"]
-    strata = request["strata"]
-    comps = ((i, c) for i, c in enumerate(compartments) if c.has_name_in_list(req_compartments))
-    idxs = [i for i, c in comps if c.is_match(c.name, strata)]
-    return outputs[:, idxs].sum(axis=1)
+def _get_compartment_output(request, name, outputs, compartments, idx_cache=None):
+    if not idx_cache:
+        idx_cache = {}
+        
+    if not name in idx_cache:
+        req_compartments = request["compartments"]
+        strata = request["strata"]
+        comps = ((i, c) for i, c in enumerate(compartments) if c.has_name_in_list(req_compartments))
+        idx_cache[name] = [i for i, c in comps if c.is_match(c.name, strata)]
+    
+    idxs = idx_cache[name]
+    return outputs[:, idxs].sum(axis=1), idx_cache
 
 
 def _get_aggregate_output(request, derived_outputs):

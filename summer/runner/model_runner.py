@@ -322,12 +322,20 @@ class ModelRunner(ABC):
         """
         Returns the final mixing matrix for a given time.
         """
-        mixing_matrix = self.model._DEFAULT_MIXING_MATRIX
-        for mm_func in self.model._mixing_matrices:
-            # Assume each mixing matrix is either an np.ndarray or a function of time that returns one.
-            mm = mm_func(time) if callable(mm_func) else mm_func
-            # Get Kronecker product of old and new mixing matrices.
-            mixing_matrix = np.kron(mixing_matrix, mm)
+        # We actually have some matrices, let's do things with them...
+        if len(self.model._mixing_matrices):
+            mixing_matrix = None
+            for mm_func in self.model._mixing_matrices:
+                # Assume each mixing matrix is either an np.ndarray or a function of time that returns one.
+                mm = mm_func(time) if callable(mm_func) else mm_func
+                # Get Kronecker product of old and new mixing matrices.
+                # Only do this if we actually need to
+                if mixing_matrix is None:
+                    mixing_matrix = mm
+                else:
+                    mixing_matrix = np.kron(mixing_matrix, mm)
+        else:
+            mixing_matrix = self.model._DEFAULT_MIXING_MATRIX
 
         return mixing_matrix
 

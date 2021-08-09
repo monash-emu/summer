@@ -97,6 +97,7 @@ class CompartmentalModel:
         # Turn on all runtime assertions by default; can be disabled for performance reasons
         # Setting to False still retains some checking, but turns off the most costly checks
         self.set_validation_enabled(True)
+        self._derived_outputs_idx_cache = {}
 
         # The results calculated using the model: no outputs exist until the model has been run.
         self.outputs = None
@@ -163,6 +164,9 @@ class CompartmentalModel:
         model issues, but then disable for subsequent iterations
         """
         self._should_validate = validate
+
+    def _set_derived_outputs_index_cache(self, idx_cache: dict):
+        self._derived_outputs_idx_cache = idx_cache
 
 
     """
@@ -726,7 +730,7 @@ class CompartmentalModel:
             self._solve_ode(solver, kwargs)
 
         # Calculate any requested derived outputs, based on the calculated compartment sizes.
-        self.derived_outputs = self._calculate_derived_outputs()
+        self.derived_outputs, self._derived_outputs_idx_cache = self._calculate_derived_outputs()
 
     def _set_backend(self, backend: str, backend_args: dict = None):
         backend_args = backend_args or {}
@@ -899,7 +903,8 @@ class CompartmentalModel:
             get_flow_rates=self._backend.get_flow_rates,
             model = self,
             whitelist=self._derived_outputs_whitelist,
-            baseline=self._baseline
+            baseline=self._baseline,
+            idx_cache = self._derived_outputs_idx_cache
         )
 
     def request_output_for_flow(

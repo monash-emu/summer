@@ -35,7 +35,7 @@ def test_compartment_size_derived_outputs(backend):
     model.request_output_for_compartments("recovered", ["R"])
     model.request_output_for_compartments("not_infected", ["S", "R"])
     model.request_output_for_compartments("total_population", ["S", "I", "R"])
-    dos = model._calculate_derived_outputs()
+    dos, _ = model._calculate_derived_outputs()
     assert_array_equal(dos["recovered"], np.array([0, 5, 10, 15, 20, 25]))
     assert_array_equal(dos["not_infected"], np.array([990, 985, 980, 975, 970, 965]))
     assert_array_equal(dos["total_population"], np.array([1000, 1000, 1000, 1000, 1000, 1000]))
@@ -61,7 +61,7 @@ def test_aggregate_derived_outputs(backend):
     model.request_output_for_compartments("not_infected", ["S", "R"])
     model.request_output_for_compartments("total_population", ["S", "I", "R"])
     model.request_aggregate_output(name="my_aggregate", sources=["recovered", "total_population"])
-    dos = model._calculate_derived_outputs()
+    dos, _ = model._calculate_derived_outputs()
     assert_array_equal(dos["my_aggregate"], np.array([1000, 1005, 1010, 1015, 1020, 1025]))
 
 
@@ -84,7 +84,7 @@ def test_cumulative_derived_outputs(backend):
     model.request_output_for_compartments("recovered", ["R"])
     model.request_cumulative_output(name="recoved_cumulative", source="recovered")
     model.request_cumulative_output(name="recoved_cumulative_2", source="recovered", start_time=2)
-    dos = model._calculate_derived_outputs()
+    dos, _ = model._calculate_derived_outputs()
     assert_array_equal(dos["recoved_cumulative"], np.array([0, 5, 15, 30, 50, 75]))
     assert_array_equal(dos["recoved_cumulative_2"], np.array([0, 0, 10, 25, 45, 70]))
 
@@ -158,7 +158,7 @@ def test_functional_derived_outputs(backend):
     model.request_output_for_compartments("population", ["S", "I", "R"])
     model.request_function_output("recovered_prop", get_non_infected, ["recovered", "population"])
 
-    dos = model._calculate_derived_outputs()
+    dos, _ = model._calculate_derived_outputs()
     assert_array_equal(dos["recovered_prop"], np.array([0, 0.005, 0.01, 0.015, 0.020, 0.025]))
 
 
@@ -198,7 +198,7 @@ def test_derived_outputs_with_no_save_results(backend):
             [940, 35, 25],
         ]
     )
-    dos = model._calculate_derived_outputs()
+    dos, _ = model._calculate_derived_outputs()
     assert_array_equal(dos["final_aggregate"][1:], np.array([12, 27, 47, 72, 102]))
     assert "importation" not in dos
     assert "recovered" not in dos
@@ -231,7 +231,7 @@ def test_derived_outputs_whitelist(backend):
 
     model.set_derived_outputs_whitelist(["recovered", "accum_infected"])
 
-    dos = model._calculate_derived_outputs()
+    dos, _ = model._calculate_derived_outputs()
     assert "recovered" in dos  # Included coz in whitelist (or dependency of)
     assert "infected" in dos  # Included coz in whitelist (or dependency of)
     assert "accum_infected" in dos  # Included coz in whitelist (or dependency of)

@@ -148,21 +148,18 @@ class VectorizedRunner(ModelRunner):
         Returns:
             np.ndarray: Array of infectiousness multipliers
         """
+        # We can use a fast lookup version if we have only one type of infectious multiplier 
+        # (eg only frequency, not mixed freq and density)
+        if self._infection_frequency_only:
+            return self._infection_frequency_flat[self._infect_strain_lookup_idx, self._infect_cat_lookup_idx]
+        elif self._infection_density_only:
+            return self._infection_density_flat[self._infect_strain_lookup_idx, self._infect_cat_lookup_idx]
+
         multipliers = np.empty(len(self.infectious_flow_indices))
         for i, idx in enumerate(self.infectious_flow_indices):
             f = self.model._flows[idx]
             multipliers[i] = f.find_infectious_multiplier(f.source, f.dest)
         return multipliers
-
-    def _get_infectious_multipliers_flat(self) -> np.ndarray:
-        """Experimental infectious multipliers calculator that runs in a vectorized fashion
-
-        Currently only supports infection frequency (not infection density)
-
-        Returns:
-            np.ndarray: Array of infectiousness multipliers
-        """
-        return self._infection_frequency_flat[self._infect_strain_lookup_idx, self._infect_cat_lookup_idx]
 
     def _build_infectious_multipliers_lookup(self):
         """Get multipliers for all infectious flows
@@ -173,8 +170,16 @@ class VectorizedRunner(ModelRunner):
             np.ndarray: Array of infectiousness multipliers
         """
         lookups = []
+
+        has_freq = False
+        has_dens = False
+
         for i, idx in enumerate(self.infectious_flow_indices):
             f = self.model._flows[idx]
+            if isinstance(f, flows.InfectionFrequencyFlow):
+                has_freq = True
+            elif isinstance(f, flows.InfectionDensityFlow):
+                has_dens = True
             cat_idx, strain = self._get_infection_multiplier_indices(f.source, f.dest)
             strain_idx = self.model._disease_strains.index(strain)
             lookups.append([strain_idx, cat_idx])
@@ -182,6 +187,14 @@ class VectorizedRunner(ModelRunner):
         self._full_table = full_table.reshape(len(self.infectious_flow_indices),2)
         self._infect_strain_lookup_idx = self._full_table[:,0].flatten()
         self._infect_cat_lookup_idx = self._full_table[:,1].flatten()
+
+        self._infection_frequency_only = False
+        self._infection_density_only = False
+
+        if has_freq and not has_dens:
+            self._infection_frequency_only = True
+        elif has_dens and not has_freq:
+            self._infection_density_only = True
 
     def _get_flow_rates(self, compartment_vals: np.ndarray, time: float) -> np.ndarray:
         """Get current flow rates, equivalent to calling get_net_flow on all (non-function) flows

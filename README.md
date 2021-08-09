@@ -86,6 +86,8 @@ Releases are numbered using [Semantic Versioning](https://semver.org/)
   - Add computed_values inputs to flow and adjustment parameters
 - 2.1.1:
   - Fix for invalid/unused package imports (cachetools)
+- 2.2.0
+  - Add validation and compartment caching optimizations
 
 ## Release process
 
