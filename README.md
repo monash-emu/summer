@@ -88,6 +88,9 @@ Releases are numbered using [Semantic Versioning](https://semver.org/)
   - Fix for invalid/unused package imports (cachetools)
 - 2.2.0
   - Add validation and compartment caching optimizations
+- 2.2.1
+  - Derived output index caching
+  - Optimized fast-tracks for infectious multipliers
 
 ## Release process
 
