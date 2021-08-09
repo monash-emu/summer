@@ -81,6 +81,10 @@ class CompartmentalModel:
         error_msg = "Infectious compartments must be a subset of compartments"
         assert all(n in compartments for n in infectious_compartments), error_msg
         self.compartments = [Compartment(n) for n in compartments]
+
+        # Compartment name lookup; needs to be present before adding any flows
+        self._update_compartment_name_map()
+
         self._infectious_compartments = [Compartment(n) for n in infectious_compartments]
         self.initial_population = np.zeros_like(self.compartments, dtype=np.float)
         # Keeps track of original, pre-stratified compartment names.
@@ -89,6 +93,10 @@ class CompartmentalModel:
         self._stratifications = []
         # Flows to be applied to the model compartments
         self._flows = []
+
+        # Turn on all runtime assertions by default; can be disabled for performance reasons
+        # Setting to False still retains some checking, but turns off the most costly checks
+        self.set_validation_enabled(True)
 
         # The results calculated using the model: no outputs exist until the model has been run.
         self.outputs = None
@@ -147,6 +155,15 @@ class CompartmentalModel:
             pop = distribution.get(comp.name, 0)
             assert pop >= 0, f"Population for {comp.name} cannot be negative: {pop}"
             self.initial_population[idx] = pop
+
+    def set_validation_enabled(self, validate: bool):
+        """
+        Set this to False in order to turn of some (potentially expensive) runtime validation
+        E.g. In calibration, leave it enabled for the first iteration, to catch any structural 
+        model issues, but then disable for subsequent iterations
+        """
+        self._should_validate = validate
+
 
     """
     Adding flows
@@ -271,7 +288,6 @@ class CompartmentalModel:
 
         self._validate_expected_flow_count(expected_flow_count, new_flows)
         self._flows += new_flows
-        self._update_compartment_indices()
 
     def add_death_flow(
         self,
@@ -358,7 +374,6 @@ class CompartmentalModel:
 
         self._validate_expected_flow_count(expected_flow_count, new_flows)
         self._flows += new_flows
-        self._update_compartment_indices()
 
     def add_infection_frequency_flow(
         self,
@@ -517,8 +532,9 @@ class CompartmentalModel:
         source_strata = source_strata or {}
         dest_strata = dest_strata or {}
 
-        dest_comps = [c for c in self.compartments if c.is_match(dest, dest_strata)]
-        source_comps = [c for c in self.compartments if c.is_match(source, source_strata)]
+        dest_comps = self.get_matching_compartments(dest, dest_strata)
+        source_comps = self.get_matching_compartments(source, source_strata)
+
         num_dest = len(dest_comps)
         num_source = len(dest_comps)
         msg = f"Expected equal number of source and dest compartments, but got {num_source} source and {num_dest} dest."
@@ -540,7 +556,6 @@ class CompartmentalModel:
 
         self._validate_expected_flow_count(expected_flow_count, new_flows)
         self._flows += new_flows
-        self._update_compartment_indices()
 
     @staticmethod
     def _validate_expected_flow_count(
@@ -555,6 +570,25 @@ class CompartmentalModel:
             actual_count = len(new_flows)
             msg = f"Expected to add {expected_count} flows but added {actual_count}"
             assert actual_count == expected_count, msg
+
+    """
+    Methods for searching and indexing flows and compartments
+    """
+
+    def _update_compartment_name_map(self):
+        names = set([c.name for c in self.compartments])
+        name_map = {}
+        for n in names:
+            name_map[n] = [c for c in self.compartments if c.name == n]
+        self._compartment_name_map = name_map
+
+    def get_matching_compartments(self, name, strata):
+        name_query = self._compartment_name_map[name]
+
+        if not len(strata):
+            return name_query
+        else:
+            return [c for c in name_query if c.has_strata(strata)]
 
     """
     Stratifying the model
@@ -606,6 +640,9 @@ class CompartmentalModel:
         self.initial_population = strat._stratify_compartment_values(
             prev_compartment_names, self.initial_population
         )
+
+        # Update the cache of compartment names; these need to correct whenever we add a new flow
+        self._update_compartment_name_map()
 
         # Stratify flows
         prev_flows = self._flows
@@ -673,6 +710,9 @@ class CompartmentalModel:
             **kwargs (optional): Extra arguments to supplied to the solver, see ``summer.solver`` for details.
 
         """
+
+        # Ensure we call this before model runs, since it is now disabled inside individual flow constructors
+        self._update_compartment_indices()
 
         self._set_backend(backend, backend_args)
         self._backend.prepare_to_run()
@@ -886,12 +926,15 @@ class CompartmentalModel:
         """
         source_strata = source_strata or {}
         dest_strata = dest_strata or {}
-        msg = f"A derived output named {name} already exists."
-        assert name not in self._derived_output_requests, msg
-        is_flow_exists = any(
-            [f.is_match(flow_name, source_strata, dest_strata) for f in self._flows]
-        )
-        assert is_flow_exists, f"No flow matches: {flow_name} {source_strata} {dest_strata}"
+
+        if self._should_validate:
+            msg = f"A derived output named {name} already exists."
+            assert name not in self._derived_output_requests, msg
+            is_flow_exists = any(
+                [f.is_match(flow_name, source_strata, dest_strata) for f in self._flows]
+            )
+            assert is_flow_exists, f"No flow matches: {flow_name} {source_strata} {dest_strata}"
+        
         self._derived_output_graph.add_node(name)
         self._derived_output_requests[name] = {
             "request_type": DerivedOutputRequest.FLOW,
@@ -920,12 +963,15 @@ class CompartmentalModel:
             save_results (optional): Whether to save or discard the results.
         """
         strata = strata or {}
-        msg = f"A derived output named {name} already exists."
-        assert name not in self._derived_output_requests, msg
-        is_match_exists = any(
-            [any([c.is_match(name, strata) for name in compartments]) for c in self.compartments]
-        )
-        assert is_match_exists, f"No compartment matches: {compartments} {strata}"
+
+        if self._should_validate:
+            msg = f"A derived output named {name} already exists."
+            assert name not in self._derived_output_requests, msg
+            is_match_exists = any(
+                [any([c.is_match(name, strata) for name in compartments]) for c in self.compartments]
+            )
+            assert is_match_exists, f"No compartment matches: {compartments} {strata}"
+    
         self._derived_output_graph.add_node(name)
         self._derived_output_requests[name] = {
             "request_type": DerivedOutputRequest.COMPARTMENT,
