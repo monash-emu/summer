@@ -1,11 +1,13 @@
 from typing import Tuple
 
 import numpy as np
+import numba
 
 import summer.flows as flows
 from summer.compute import (
     accumulate_positive_flow_contributions,
     accumulate_negative_flow_contributions,
+    sparse_pairs_accum,
     find_sum
 )
 
@@ -22,6 +24,10 @@ class VectorizedRunner(ModelRunner):
 
     def prepare_to_run(self):
         """Do all precomputation here"""
+
+        # Disable caching; we don't want it, but the reference runner probably still does...
+        self.model._enable_cache = False
+
         super().prepare_to_run()
         
         self.infectious_flow_indices = np.array([
@@ -63,6 +69,15 @@ class VectorizedRunner(ModelRunner):
         self._precompute_flow_maps()
 
         self._build_infectious_multipliers_lookup()
+
+        # Initialize arrays for infectious multipliers
+        # FIXME Put this in its own function, this is getting messy again
+        num_cats = self.num_categories
+        num_strains = len(self.model._disease_strains)
+        self._infection_density = {}
+        self._infection_frequency = {}
+        self._infection_density_flat = np.empty((num_strains, num_cats), dtype=float)
+        self._infection_frequency_flat = np.empty((num_strains, num_cats), dtype=float)
 
     def _precompute_flow_weights(self):
         """Calculate all static flow weights before running, and build indices for time-varying weights"""
@@ -198,6 +213,29 @@ class VectorizedRunner(ModelRunner):
         elif has_dens and not has_freq:
             self._infection_density_only = True
 
+    def _calculate_strain_infection_values(
+        self, compartment_values: np.ndarray, mixing_matrix: np.ndarray
+    ):
+        num_cats = self.num_categories
+        # Calculate total number of people per category (for FoI).
+        # A vector with size (num_cats).
+        self._category_populations = sparse_pairs_accum(
+            self._compartment_category_map, compartment_values, num_cats
+        )
+
+        for strain_idx, strain in enumerate(self.model._disease_strains):
+            strain_compartment_infectiousness = self._compartment_infectiousness[strain]
+
+            infection_density, infection_frequency = get_strain_infection_values(compartment_values,
+                strain_compartment_infectiousness, self._compartment_category_map, num_cats, mixing_matrix,
+                self._category_populations)
+            
+            self._infection_density[strain] = infection_density
+            self._infection_density_flat[strain_idx] = infection_density
+
+            self._infection_frequency[strain] = infection_frequency
+            self._infection_frequency_flat[strain_idx] = infection_frequency
+
     def _get_flow_rates(self, compartment_vals: np.ndarray, time: float) -> np.ndarray:
         """Get current flow rates, equivalent to calling get_net_flow on all (non-function) flows
 
@@ -227,10 +265,10 @@ class VectorizedRunner(ModelRunner):
         infect_mul = self._get_infectious_multipliers()
         flow_rates[self.infectious_flow_indices] *= infect_mul
 
-        self._timestep_deaths = flow_rates[self.death_flow_indices].sum()
-        
         # ReplacementBirthFlow depends on death flows already being calculated; update here
         if self._has_replacement:
+            # Only calculate timestep_deaths if we use replacement, it's expensive...
+            self._timestep_deaths = flow_rates[self.death_flow_indices].sum()
             flow_rates[self._replacement_flow_idx] = self._timestep_deaths
 
 
@@ -290,3 +328,21 @@ class VectorizedRunner(ModelRunner):
         comp_vals = self._clean_compartment_values(compartment_values)
         _, flow_rates = self._get_rates(comp_vals, time)
         return flow_rates
+
+"""
+Additional functions - fast JIT specializations etc
+"""
+
+@numba.jit
+def get_strain_infection_values(compartment_values, strain_compartment_infectiousness, compartment_category_map,
+                                num_cats, mixing_matrix, category_populations):
+    infected_values = compartment_values * strain_compartment_infectiousness
+    infectious_populations = sparse_pairs_accum(
+                compartment_category_map, infected_values, num_cats
+            )
+    infection_density = mixing_matrix @ infectious_populations
+    category_prevalence = infectious_populations / category_populations
+    infection_frequency = mixing_matrix @ category_prevalence
+
+    return infection_density, infection_frequency
+

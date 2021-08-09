@@ -105,3 +105,4 @@ def binary_matrix_to_sparse_pairs(category_matrix: np.ndarray) -> np.ndarray:
             if cat_idx[i, j]:
                 out_idx.append((j, i))
     return np.array(out_idx, dtype=int)
+
