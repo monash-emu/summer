@@ -57,6 +57,9 @@ def solve_with_odeint(
     return odeint(ode_func, values, times, atol=atol, rtol=rtol)
 
 
+DEFAULT_IVP_MAX_STEP = 1
+
+
 def solve_with_ivp(ode_func: OdeFunction, values: np.ndarray, times: np.ndarray, solver_args: dict):
     """
     Solve ODE with SciPy's solve_ivp solver.
@@ -68,6 +71,11 @@ def solve_with_ivp(ode_func: OdeFunction, values: np.ndarray, times: np.ndarray,
     def _ode_func(time, values):
         """Reverse parameters"""
         return ode_func(values, time)
+
+    # Set default max step size to 1,
+    # so that we do not skip over important time steps.
+    if "max_step" not in solver_args:
+        solver_args = {**solver_args, "max_step": DEFAULT_IVP_MAX_STEP}
 
     t_span = (times[0], times[-1])
     results = solve_ivp(_ode_func, t_span, values, t_eval=times, **solver_args)

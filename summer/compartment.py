@@ -49,6 +49,9 @@ class Compartment:
         """
         return name == self.name and self.has_strata(strata)
 
+    # FIXME:  Can we build a strata lookup table for the whole model so this just 
+    # becomes an index lookup?
+
     def has_strata(self, strata: dict) -> bool:
         return all([self.has_stratum(k, v) for k, v in strata.items()])
 

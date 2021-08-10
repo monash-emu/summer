@@ -7,7 +7,7 @@ from summer.flows import BaseExitFlow
 class ExitFlow(BaseExitFlow):
     """Basic exit flow used to test BaseExitFlow stratification."""
 
-    def get_net_flow(self, compartment_values, time):
+    def get_net_flow(self, compartment_values, computed_values, time):
         return 1
 
 

@@ -8,7 +8,7 @@ from numpy.testing import assert_allclose
 from summer import AgeStratification, CompartmentalModel
 
 
-def test_model__with_static_dynamics__expect_no_change():
+def test_model__with_static_dynamics__expect_no_change(backend):
     """
     Ensure that a model with two compartments and no internal dynamics results in no change.
     """
@@ -16,7 +16,7 @@ def test_model__with_static_dynamics__expect_no_change():
         times=[0, 5], compartments=["S", "I", "R"], infectious_compartments=["I"]
     )
     model.set_initial_population(distribution={"S": 990, "I": 10})
-    model.run()
+    model.run(backend=backend)
     # Expect that no one has moved from sucsceptible to infections at any point in time
     expected_outputs = np.array(
         [
@@ -31,7 +31,7 @@ def test_model__with_static_dynamics__expect_no_change():
     assert_allclose(model.outputs, expected_outputs, atol=0.1, verbose=True)
 
 
-def test_model__with_birth_rate__expect_pop_increase():
+def test_model__with_birth_rate__expect_pop_increase(backend):
     """
     Ensure that a model with two compartments and only birth rate dynamics results in more people.
     """
@@ -41,7 +41,7 @@ def test_model__with_birth_rate__expect_pop_increase():
     model.set_initial_population(distribution={"S": 100, "I": 100})
     # Add some babies at ~2 babies / 100 / year.
     model.add_crude_birth_flow("births", 0.02, "S")
-    model.run()
+    model.run(backend=backend)
     # Expect that we have more people in the population per year
     expected_outputs = np.array(
         [
@@ -56,7 +56,7 @@ def test_model__with_birth_rate__expect_pop_increase():
     assert_allclose(model.outputs, expected_outputs, atol=0.1, verbose=True)
 
 
-def test_model__with_death_rate__expect_pop_decrease():
+def test_model__with_death_rate__expect_pop_decrease(backend):
     """
     Ensure that a model with two compartments and only death rate dynamics results in fewer people.
     """
@@ -66,7 +66,7 @@ def test_model__with_death_rate__expect_pop_decrease():
     model.set_initial_population(distribution={"S": 100, "I": 100})
     # Add some dying at ~2 people / 100 / year.
     model.add_universal_death_flows("deaths", 0.02)
-    model.run()
+    model.run(backend=backend)
     # Expect that we have fewer people in the population per year
     expected_outputs = np.array(
         [
@@ -81,7 +81,7 @@ def test_model__with_death_rate__expect_pop_decrease():
     assert_allclose(model.outputs, expected_outputs, atol=0.1, verbose=True)
 
 
-def test_model__with_birth_and_death_rate__expect_pop_static_overall():
+def test_model__with_birth_and_death_rate__expect_pop_static_overall(backend):
 
     model = CompartmentalModel(
         times=[0, 5], compartments=["S", "I", "R"], infectious_compartments=["I"]
@@ -91,7 +91,7 @@ def test_model__with_birth_and_death_rate__expect_pop_static_overall():
     model.add_crude_birth_flow("births", 0.02, "S")
     # Add some dying at ~2 people / 100 / year.
     model.add_universal_death_flows("deaths", 0.02)
-    model.run()
+    model.run(backend=backend)
     expected_outputs = np.array(
         [
             [100.0, 100.0, 0],  # Initial conditions
@@ -105,7 +105,7 @@ def test_model__with_birth_and_death_rate__expect_pop_static_overall():
     assert_allclose(model.outputs, expected_outputs, atol=0.1, verbose=True)
 
 
-def test_model__with_birth_and_death_rate_replace_deaths__expect_pop_static_overall():
+def test_model__with_birth_and_death_rate_replace_deaths__expect_pop_static_overall(backend):
     model = CompartmentalModel(
         times=[0, 5], compartments=["S", "I", "R"], infectious_compartments=["I"]
     )
@@ -113,7 +113,7 @@ def test_model__with_birth_and_death_rate_replace_deaths__expect_pop_static_over
     model.add_replacement_birth_flow("births", "S")
     # Add some dying at ~2 people / 100 / year.
     model.add_universal_death_flows("deaths", 0.02)
-    model.run()
+    model.run(backend=backend)
     expected_outputs = np.array(
         [
             [100.0, 100.0, 0],  # Initial conditions
@@ -127,7 +127,7 @@ def test_model__with_birth_and_death_rate_replace_deaths__expect_pop_static_over
     assert_allclose(model.outputs, expected_outputs, atol=0.1, verbose=True)
 
 
-def test_model__with_higher_birth_than_and_death_rate__expect_pop_increase():
+def test_model__with_higher_birth_than_and_death_rate__expect_pop_increase(backend):
     model = CompartmentalModel(
         times=[0, 5], compartments=["S", "I", "R"], infectious_compartments=["I"]
     )
@@ -136,7 +136,7 @@ def test_model__with_higher_birth_than_and_death_rate__expect_pop_increase():
     model.add_crude_birth_flow("births", 0.1, "S")
     # Add some dying at ~2 people / 100 / year.
     model.add_universal_death_flows("deaths", 0.02)
-    model.run()
+    model.run(backend=backend)
     expected_outputs = np.array(
         [
             [100.0, 100.0, 0],  # Initial conditions
@@ -150,7 +150,7 @@ def test_model__with_higher_birth_than_and_death_rate__expect_pop_increase():
     assert_allclose(model.outputs, expected_outputs, atol=0.1, verbose=True)
 
 
-def test_model__with_recovery_rate__expect_all_recover():
+def test_model__with_recovery_rate__expect_all_recover(backend):
     """
     Ensure that a model with three compartments and only recovery dynamics
     results in (almost) everybody recovering.
@@ -162,7 +162,7 @@ def test_model__with_recovery_rate__expect_all_recover():
     model.set_initial_population(distribution={"I": 100})
     # Add recovery dynamics.
     model.add_transition_flow("recovery", 1, "I", "R")
-    model.run()
+    model.run(backend=backend)
     # Expect that almost everyone recovers
     expected_outputs = np.array(
         [
@@ -178,7 +178,7 @@ def test_model__with_recovery_rate__expect_all_recover():
     assert_allclose(model.outputs, expected_outputs, atol=0.1, verbose=True)
 
 
-def test_model__with_infect_death_rate__expect_infected_pop_decrease():
+def test_model__with_infect_death_rate__expect_infected_pop_decrease(backend):
     """
     Ensure that a model with two compartments and only infected death rate dynamics
     results in fewer infected people, but no change to susceptible pop.
@@ -190,7 +190,7 @@ def test_model__with_infect_death_rate__expect_infected_pop_decrease():
     model.set_initial_population(distribution={"S": 50, "I": 50})
     # Add some dying at ~2 people / 100 / year.
     model.add_death_flow("infect_death", 0.02, "I")
-    model.run()
+    model.run(backend=backend)
     expected_outputs = np.array(
         [
             [50.00, 50.00, 0],  # Initial conditions
@@ -204,7 +204,7 @@ def test_model__with_infect_death_rate__expect_infected_pop_decrease():
     assert_allclose(model.outputs, expected_outputs, atol=0.1, verbose=True)
 
 
-def test_model__with_no_infected__expect_no_change():
+def test_model__with_no_infected__expect_no_change(backend):
     """
     Ensure that if no one has the disease, then no one gets the disease in the future.
     """
@@ -214,7 +214,7 @@ def test_model__with_no_infected__expect_no_change():
     )
     model.set_initial_population(distribution={"S": 100, "I": 0})
     model.add_infection_frequency_flow("infection", 10, "S", "I")
-    model.run()
+    model.run(backend=backend)
     # Expect that no one has moved from sucsceptible to infections at any point in time
     expected_outputs = np.array(
         [
@@ -229,7 +229,7 @@ def test_model__with_no_infected__expect_no_change():
     assert_allclose(model.outputs, expected_outputs, atol=0.1, verbose=True)
 
 
-def test_model__with_infection_frequency__expect_all_infected():
+def test_model__with_infection_frequency__expect_all_infected(backend):
     """
     Ensure that a model with two compartments and one-way internal dynamics results in all infected.
     """
@@ -239,7 +239,7 @@ def test_model__with_infection_frequency__expect_all_infected():
     )
     model.set_initial_population(distribution={"S": 99, "I": 1})
     model.add_infection_frequency_flow("infection", 3, "S", "I")
-    model.run()
+    model.run(backend=backend)
     # Expect that everyone gets infected eventually.
     expected_outputs = np.array(
         [
@@ -254,7 +254,7 @@ def test_model__with_infection_frequency__expect_all_infected():
     assert_allclose(model.outputs, expected_outputs, atol=0.1, verbose=True)
 
 
-def test_model__with_infection_density__expect_all_infected():
+def test_model__with_infection_density__expect_all_infected(backend):
     """
     Ensure that a model with two compartments and one-way internal dynamics results in all infected.
     """
@@ -264,7 +264,7 @@ def test_model__with_infection_density__expect_all_infected():
     )
     model.set_initial_population(distribution={"S": 99, "I": 1})
     model.add_infection_density_flow("infection", 0.03, "S", "I")
-    model.run()
+    model.run(backend=backend)
     # Expect that everyone gets infected eventually.
     expected_outputs = np.array(
         [
@@ -279,7 +279,7 @@ def test_model__with_infection_density__expect_all_infected():
     assert_allclose(model.outputs, expected_outputs, atol=0.1, verbose=True)
 
 
-def test_model__with_complex_dynamics__expect_correct_outputs():
+def test_model__with_complex_dynamics__expect_correct_outputs(backend):
     """
     Ensure that a model with the "full suite" of TB dynamics produces correct results:
         - 5 compartments
@@ -301,7 +301,7 @@ def test_model__with_complex_dynamics__expect_correct_outputs():
     model.add_death_flow("infect_death", 0.4, "I")
     model.add_transition_flow("recovery", 0.2, "I", "R")
     model.add_transition_flow("case_detection", 1, "I", "R")
-    model.run()
+    model.run(backend=backend)
     # Expect that the results are consistent, nothing crazy happens.
     # These results were not independently calculated, so this is more of an "acceptance test".
     expected_outputs = np.array(
@@ -317,7 +317,7 @@ def test_model__with_complex_dynamics__expect_correct_outputs():
     assert_allclose(model.outputs, expected_outputs, atol=0.2, verbose=True)
 
 
-def test_strat_model__with_age__expect_ageing():
+def test_strat_model__with_age__expect_ageing(backend):
     """
     Ensure that a module with age stratification produces ageing flows,
     and the correct output.
@@ -327,7 +327,7 @@ def test_strat_model__with_age__expect_ageing():
     strat = AgeStratification("age", [0, 5, 15, 60], ["S", "I"])
     model.stratify_with(strat)
     # Run the model for 5 years.
-    model.run()
+    model.run(backend=backend)
 
     # Expect everyone to generally get older, but no one should die or get sick
     expected_arr = np.array(
@@ -344,7 +344,7 @@ def test_strat_model__with_age__expect_ageing():
     assert_allclose(model.outputs, expected_arr, atol=0.1, verbose=True)
 
 
-def test_strat_model__with_age_and_starting_proportion__expect_ageing():
+def test_strat_model__with_age_and_starting_proportion__expect_ageing(backend):
     """
     Ensure that a module with age stratification and starting proporptions
     produces ageing flows, and the correct output.
@@ -355,7 +355,7 @@ def test_strat_model__with_age_and_starting_proportion__expect_ageing():
     strat.set_population_split({"0": 0.8, "5": 0.1, "15": 0.1, "60": 0})
     model.stratify_with(strat)
     # Run the model for 5 years.
-    model.run()
+    model.run(backend=backend)
 
     # Expect everyone to generally get older, but no one should die or get sick.
     # Expect initial distribution of ages to be set according to "requested_proportions".
@@ -370,3 +370,26 @@ def test_strat_model__with_age_and_starting_proportion__expect_ageing():
         ]
     )
     assert_allclose(model.outputs, expected_arr, atol=0.1, verbose=True)
+
+def test_model__with_single_function_flow(backend):
+    """
+    Ensure that models with only function flows run correctly
+    """
+    model = CompartmentalModel(times=[0, 10], compartments=["S", "I", "R"], infectious_compartments=["I"])
+    model.set_initial_population(distribution={"S": 650, "I": 100, "R": 0})
+
+    def get_vaccination_flow_rate(flow, comp_names, comp_vals, flows, flow_rates, computed_values, time):
+        if time < 2:
+            # Vaccinate 10 people per day until day 5
+            return 10
+        elif 2 < time < 7:
+            # Vaccinate 5% of the total population per day until day 15
+            return 0.05 * comp_vals.sum()
+        else:
+            # After day 15 stop vaccinations, because we ran out of money
+            return 0
+    
+    # Use a custom function to model vaccinations
+    model.add_function_flow("vacinnation", flow_rate_func=get_vaccination_flow_rate, source="S", dest="R")
+
+    model.run(backend=backend)

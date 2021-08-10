@@ -5,7 +5,7 @@ from summer.flows import BaseTransitionFlow
 class TransitionFlow(BaseTransitionFlow):
     """Basic transition flow used to test BaseTransitionFlow stratification."""
 
-    def get_net_flow(self, compartment_values, time):
+    def get_net_flow(self, compartment_values, computed_values, time):
         return 1
 
 

@@ -22,7 +22,7 @@ from summer import Compartment as C
 from summer import CompartmentalModel, StrainStratification, Stratification, adjust
 
 
-def test_model__with_two_symmetric_stratifications():
+def test_model__with_two_symmetric_stratifications(backend):
     """
     Adding two strata with the same properties should yield the exact same infection dynamics and outputs as having no strata at all.
     This does not test strains directly, but if this doesn't work then further testing is pointless.
@@ -30,20 +30,21 @@ def test_model__with_two_symmetric_stratifications():
     model = CompartmentalModel(
         times=[0, 5], compartments=["S", "I", "R"], infectious_compartments=["I"]
     )
+    model._set_backend(backend)
     model.set_initial_population(distribution={"S": 900, "I": 100})
     model.add_infection_frequency_flow("infection", 0.2, "S", "I")
     model.add_transition_flow("recovery", 0.1, "I", "R")
 
     # Do pre-run force of infection calcs.
-    model._prepare_to_run()
-    model._prepare_time_step(0, model.initial_population)
+    model._backend.prepare_to_run()
+    model._backend._prepare_time_step(0, model.initial_population)
 
     # Check infectiousness multipliers
     susceptible = model.compartments[0]
     infectious = model.compartments[1]
     assert model._get_infection_density_multiplier(susceptible, infectious) == 100.0
     assert model._get_infection_frequency_multiplier(susceptible, infectious) == 0.1
-    model.run()
+    model.run(backend=backend)
 
     # Create a stratified model where the two non-strain strata are symmetric
     stratified_model = CompartmentalModel(
@@ -54,7 +55,7 @@ def test_model__with_two_symmetric_stratifications():
     stratified_model.add_transition_flow("recovery", 0.1, "I", "R")
     strat = Stratification("clinical", ["home", "hospital"], ["I"])
     stratified_model.stratify_with(strat)
-    stratified_model.run()
+    stratified_model.run(backend=backend)
 
     # Ensure stratified model has the same results as the unstratified model.
     merged_outputs = np.zeros_like(model.outputs)
@@ -64,7 +65,7 @@ def test_model__with_two_symmetric_stratifications():
     assert_allclose(merged_outputs, model.outputs, atol=0.01, rtol=0.01, verbose=True)
 
 
-def test_strains__with_two_symmetric_strains():
+def test_strains__with_two_symmetric_strains(backend):
     """
     Adding two strains with the same properties should yield the same infection dynamics and outputs as having no strains at all.
     We expect the force of infection for each strain to be 1/2 of the unstratified model,
@@ -74,19 +75,20 @@ def test_strains__with_two_symmetric_strains():
     model = CompartmentalModel(
         times=[0, 5], compartments=["S", "I", "R"], infectious_compartments=["I"]
     )
+    model._set_backend(backend)
     model.set_initial_population(distribution={"S": 900, "I": 100})
     model.add_infection_frequency_flow("infection", 0.2, "S", "I")
     model.add_transition_flow("recovery", 0.1, "I", "R")
 
     # Do pre-run force of infection calcs.
-    model._prepare_to_run()
-    model._prepare_time_step(0, model.initial_population)
+    model._backend.prepare_to_run()
+    model._backend._prepare_time_step(0, model.initial_population)
     # Check infectiousness multipliers
     susceptible = model.compartments[0]
     infectious = model.compartments[1]
     assert model._get_infection_density_multiplier(susceptible, infectious) == 100.0
     assert model._get_infection_frequency_multiplier(susceptible, infectious) == 0.1
-    model.run()
+    model.run(backend=backend)
 
     # Create a stratified model where the two strain strata are symmetric
     strain_model = CompartmentalModel(
@@ -97,7 +99,7 @@ def test_strains__with_two_symmetric_strains():
     strain_model.add_transition_flow("recovery", 0.1, "I", "R")
     strat = StrainStratification("strain", ["a", "b"], ["I"])
     strain_model.stratify_with(strat)
-    strain_model.run()
+    strain_model.run(backend=backend)
 
     # Ensure stratified model has the same results as the unstratified model.
     merged_outputs = np.zeros_like(model.outputs)
@@ -107,7 +109,7 @@ def test_strains__with_two_symmetric_strains():
     assert_allclose(merged_outputs, model.outputs, atol=0.01, rtol=0.01, verbose=True)
 
 
-def test_strain__with_infectious_multipliers():
+def test_strain__with_infectious_multipliers(backend):
     """
     Test infectious multiplier and flow rate calculations for
     3 strains which have different infectiousness levels.
@@ -115,6 +117,7 @@ def test_strain__with_infectious_multipliers():
     model = CompartmentalModel(
         times=[0, 5], compartments=["S", "I", "R"], infectious_compartments=["I"]
     )
+    model._set_backend(backend)
     model.set_initial_population(distribution={"S": 900, "I": 100})
     contact_rate = 0.2
     model.add_infection_frequency_flow("infection", contact_rate, "S", "I")
@@ -137,22 +140,22 @@ def test_strain__with_infectious_multipliers():
     model.stratify_with(strat)
 
     # Do pre-run force of infection calcs.
-    model._prepare_to_run()
-    assert_array_equal(model._compartment_infectiousness["a"], np.array([0, 0.5, 0, 0, 0]))
-    assert_array_equal(model._compartment_infectiousness["b"], np.array([0, 0, 3, 0, 0]))
-    assert_array_equal(model._compartment_infectiousness["c"], np.array([0, 0, 0, 2, 0]))
-    assert model._category_lookup == {0: 0, 1: 0, 2: 0, 3: 0, 4: 0}
-    assert_array_equal(model._category_matrix, np.array([[1, 1, 1, 1, 1]]))
+    model._backend.prepare_to_run()
+    assert_array_equal(model._backend._compartment_infectiousness["a"], np.array([0, 0.5, 0, 0, 0]))
+    assert_array_equal(model._backend._compartment_infectiousness["b"], np.array([0, 0, 3, 0, 0]))
+    assert_array_equal(model._backend._compartment_infectiousness["c"], np.array([0, 0, 0, 2, 0]))
+    assert model._backend._category_lookup == {0: 0, 1: 0, 2: 0, 3: 0, 4: 0}
+    assert_array_equal(model._backend._category_matrix, np.array([[1, 1, 1, 1, 1]]))
 
     # Do pre-iteration force of infection calcs
-    model._prepare_time_step(0, model.initial_population)
-    assert_array_equal(model._category_populations, np.array([1000]))
-    assert_array_equal(model._infection_density["a"], np.array([70 * 0.5]))
-    assert_array_equal(model._infection_density["b"], np.array([20 * 3]))
-    assert_array_equal(model._infection_density["c"], np.array([10 * 2]))
-    assert_array_equal(model._infection_frequency["a"], np.array([70 * 0.5 / 1000]))
-    assert_array_equal(model._infection_frequency["b"], np.array([20 * 3 / 1000]))
-    assert_array_equal(model._infection_frequency["c"], np.array([10 * 2 / 1000]))
+    model._backend._prepare_time_step(0, model.initial_population)
+    assert_array_equal(model._backend._category_populations, np.array([1000]))
+    assert_array_equal(model._backend._infection_density["a"], np.array([70 * 0.5]))
+    assert_array_equal(model._backend._infection_density["b"], np.array([20 * 3]))
+    assert_array_equal(model._backend._infection_density["c"], np.array([10 * 2]))
+    assert_array_equal(model._backend._infection_frequency["a"], np.array([70 * 0.5 / 1000]))
+    assert_array_equal(model._backend._infection_frequency["b"], np.array([20 * 3 / 1000]))
+    assert_array_equal(model._backend._infection_frequency["c"], np.array([10 * 2 / 1000]))
 
     # Get multipliers
     susceptible = model.compartments[0]
@@ -167,7 +170,7 @@ def test_strain__with_infectious_multipliers():
     assert model._get_infection_frequency_multiplier(susceptible, infectious_c) == 10 * 2 / 1000
 
     # Get infection flow rates
-    flow_rates = model._get_compartment_rates(model.initial_population, 0)
+    flow_rates = model._backend.get_compartment_rates(model.initial_population, 0)
     sus_pop = 900
     flow_to_a = sus_pop * contact_rate * (70 * 0.5 / 1000)
     flow_to_b = sus_pop * contact_rate * (20 * 3 / 1000)
@@ -178,7 +181,7 @@ def test_strain__with_infectious_multipliers():
     assert_allclose(expected_flow_rates, flow_rates, verbose=True)
 
 
-def test_strain__with_flow_adjustments():
+def test_strain__with_flow_adjustments(backend):
     """
     Test infectious multiplier and flow rate calculations for
     3 strains which have different flow adjustments.
@@ -189,6 +192,7 @@ def test_strain__with_flow_adjustments():
     model = CompartmentalModel(
         times=[0, 5], compartments=["S", "I", "R"], infectious_compartments=["I"]
     )
+    model._set_backend(backend)
     model.set_initial_population(distribution={"S": 900, "I": 100})
     contact_rate = 0.2
     model.add_infection_frequency_flow("infection", contact_rate, "S", "I")
@@ -211,22 +215,22 @@ def test_strain__with_flow_adjustments():
     model.stratify_with(strat)
 
     # Do pre-run force of infection calcs.
-    model._prepare_to_run()
-    assert_array_equal(model._compartment_infectiousness["a"], np.array([0, 1, 0, 0, 0]))
-    assert_array_equal(model._compartment_infectiousness["b"], np.array([0, 0, 1, 0, 0]))
-    assert_array_equal(model._compartment_infectiousness["c"], np.array([0, 0, 0, 1, 0]))
-    assert model._category_lookup == {0: 0, 1: 0, 2: 0, 3: 0, 4: 0}
-    assert_array_equal(model._category_matrix, np.array([[1, 1, 1, 1, 1]]))
+    model._backend.prepare_to_run()
+    assert_array_equal(model._backend._compartment_infectiousness["a"], np.array([0, 1, 0, 0, 0]))
+    assert_array_equal(model._backend._compartment_infectiousness["b"], np.array([0, 0, 1, 0, 0]))
+    assert_array_equal(model._backend._compartment_infectiousness["c"], np.array([0, 0, 0, 1, 0]))
+    assert model._backend._category_lookup == {0: 0, 1: 0, 2: 0, 3: 0, 4: 0}
+    assert_array_equal(model._backend._category_matrix, np.array([[1, 1, 1, 1, 1]]))
 
     # Do pre-iteration force of infection calcs
-    model._prepare_time_step(0, model.initial_population)
-    assert_array_equal(model._category_populations, np.array([1000]))
-    assert_array_equal(model._infection_density["a"], np.array([70]))
-    assert_array_equal(model._infection_density["b"], np.array([20]))
-    assert_array_equal(model._infection_density["c"], np.array([10]))
-    assert_array_equal(model._infection_frequency["a"], np.array([70 / 1000]))
-    assert_array_equal(model._infection_frequency["b"], np.array([20 / 1000]))
-    assert_array_equal(model._infection_frequency["c"], np.array([10 / 1000]))
+    model._backend._prepare_time_step(0, model.initial_population)
+    assert_array_equal(model._backend._category_populations, np.array([1000]))
+    assert_array_equal(model._backend._infection_density["a"], np.array([70]))
+    assert_array_equal(model._backend._infection_density["b"], np.array([20]))
+    assert_array_equal(model._backend._infection_density["c"], np.array([10]))
+    assert_array_equal(model._backend._infection_frequency["a"], np.array([70 / 1000]))
+    assert_array_equal(model._backend._infection_frequency["b"], np.array([20 / 1000]))
+    assert_array_equal(model._backend._infection_frequency["c"], np.array([10 / 1000]))
 
     # Get multipliers
     susceptible = model.compartments[0]
@@ -241,7 +245,7 @@ def test_strain__with_flow_adjustments():
     assert model._get_infection_frequency_multiplier(susceptible, infectious_c) == 10 / 1000
 
     # Get infection flow rates
-    flow_rates = model._get_compartment_rates(model.initial_population, 0)
+    flow_rates = model._backend.get_compartment_rates(model.initial_population, 0)
     sus_pop = 900
     flow_to_a = sus_pop * contact_rate * (70 * 0.5 / 1000)
     flow_to_b = sus_pop * contact_rate * (20 * 3 / 1000)
@@ -252,7 +256,7 @@ def test_strain__with_flow_adjustments():
     assert_allclose(expected_flow_rates, flow_rates, verbose=True)
 
 
-def test_strain__with_infectious_multipliers_and_heterogeneous_mixing():
+def test_strain__with_infectious_multipliers_and_heterogeneous_mixing(backend):
     """
     Test infectious multiplier and flow rate calculations for
     3 strains which have different infectiousness levels plus a seperate
@@ -261,6 +265,7 @@ def test_strain__with_infectious_multipliers_and_heterogeneous_mixing():
     model = CompartmentalModel(
         times=[0, 5], compartments=["S", "I", "R"], infectious_compartments=["I"]
     )
+    model._set_backend(backend)
     model.set_initial_population(distribution={"S": 900, "I": 100})
     contact_rate = 0.2
     model.add_infection_frequency_flow("infection", contact_rate, "S", "I")
@@ -296,20 +301,32 @@ def test_strain__with_infectious_multipliers_and_heterogeneous_mixing():
     model.stratify_with(strain_strat)
 
     # Do pre-run force of infection calcs.
-    model._prepare_to_run()
+    model._backend.prepare_to_run()
     assert_array_equal(
-        model._compartment_infectiousness["a"], np.array([0, 0, 0.5, 0, 0, 0.5, 0, 0, 0, 0])
+        model._backend._compartment_infectiousness["a"],
+        np.array([0, 0, 0.5, 0, 0, 0.5, 0, 0, 0, 0]),
     )
     assert_array_equal(
-        model._compartment_infectiousness["b"], np.array([0, 0, 0, 3, 0, 0, 3, 0, 0, 0])
+        model._backend._compartment_infectiousness["b"], np.array([0, 0, 0, 3, 0, 0, 3, 0, 0, 0])
     )
     assert_array_equal(
-        model._compartment_infectiousness["c"], np.array([0, 0, 0, 0, 2, 0, 0, 2, 0, 0])
+        model._backend._compartment_infectiousness["c"], np.array([0, 0, 0, 0, 2, 0, 0, 2, 0, 0])
     )
     # 0 for child, 1 for adult
-    assert model._category_lookup == {0: 0, 1: 1, 2: 0, 3: 0, 4: 0, 5: 1, 6: 1, 7: 1, 8: 0, 9: 1}
+    assert model._backend._category_lookup == {
+        0: 0,
+        1: 1,
+        2: 0,
+        3: 0,
+        4: 0,
+        5: 1,
+        6: 1,
+        7: 1,
+        8: 0,
+        9: 1,
+    }
     assert_array_equal(
-        model._category_matrix,
+        model._backend._category_matrix,
         np.array(
             [
                 [1, 0, 1, 1, 1, 0, 0, 0, 1, 0],
@@ -319,14 +336,14 @@ def test_strain__with_infectious_multipliers_and_heterogeneous_mixing():
     )
 
     # Do pre-iteration force of infection calcs
-    model._prepare_time_step(0, model.initial_population)
-    assert_array_equal(model._category_populations, np.array([600, 400]))
+    model._backend._prepare_time_step(0, model.initial_population)
+    assert_array_equal(model._backend._category_populations, np.array([600, 400]))
     assert_array_equal(
-        model._infection_density["a"],
+        model._backend._infection_density["a"],
         np.array([0.5 * (42 * 1.5 + 28 * 0.5), 0.5 * (42 * 0.5 + 28 * 1.5)]),
     )
     assert_array_equal(
-        model._infection_density["b"],
+        model._backend._infection_density["b"],
         np.array(
             [
                 3 * (12 * 1.5 + 8 * 0.5),
@@ -335,11 +352,11 @@ def test_strain__with_infectious_multipliers_and_heterogeneous_mixing():
         ),
     )
     assert_array_equal(
-        model._infection_density["c"],
+        model._backend._infection_density["c"],
         np.array([2 * (6 * 1.5 + 4 * 0.5), 2 * (4 * 1.5 + 6 * 0.5)]),
     )
     assert_array_equal(
-        model._infection_frequency["a"],
+        model._backend._infection_frequency["a"],
         np.array(
             [
                 0.5 * ((42 / 600) * 1.5 + (28 / 400) * 0.5),
@@ -348,7 +365,7 @@ def test_strain__with_infectious_multipliers_and_heterogeneous_mixing():
         ),
     )
     assert_array_equal(
-        model._infection_frequency["b"],
+        model._backend._infection_frequency["b"],
         np.array(
             [
                 3 * ((12 / 600) * 1.5 + (8 / 400) * 0.5),
@@ -357,7 +374,7 @@ def test_strain__with_infectious_multipliers_and_heterogeneous_mixing():
         ),
     )
     assert_array_equal(
-        model._infection_frequency["c"],
+        model._backend._infection_frequency["c"],
         np.array(
             [2 * ((6 / 600) * 1.5 + (4 / 400) * 0.5), 2 * ((4 / 400) * 1.5 + (6 / 600) * 0.5)]
         ),
@@ -408,5 +425,5 @@ def test_strain__with_infectious_multipliers_and_heterogeneous_mixing():
             0.0,
         ]
     )
-    flow_rates = model._get_compartment_rates(model.initial_population, 0)
+    flow_rates = model._backend.get_compartment_rates(model.initial_population, 0)
     assert_allclose(expected_flow_rates, flow_rates, verbose=True)

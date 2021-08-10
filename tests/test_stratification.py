@@ -17,17 +17,17 @@ from summer.flows import BaseEntryFlow, BaseExitFlow, BaseTransitionFlow
 
 
 class TransitionFlow(BaseTransitionFlow):
-    def get_net_flow(self, compartment_values, time):
+    def get_net_flow(self, compartment_values, computed_values, time):
         return 1
 
 
 class EntryFlow(BaseEntryFlow):
-    def get_net_flow(self, compartment_values, time):
+    def get_net_flow(self, compartment_values, computed_values, time):
         return 1
 
 
 class ExitFlow(BaseExitFlow):
-    def get_net_flow(self, compartment_values, time):
+    def get_net_flow(self, compartment_values, computed_values, time):
         return 1
 
 
@@ -353,7 +353,7 @@ def test_create_stratification__with_infectiousness_adjustments():
             compartment_name="S",
             adjustments={
                 "rural": Multiply(1.2),
-                "urban": Multiply(lambda t: 2),
+                "urban": Multiply(lambda t, cv: 2),
             },
         )
 

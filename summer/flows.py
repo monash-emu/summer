@@ -8,9 +8,15 @@ from typing import Callable, Dict, List
 import numpy as np
 from numba import jit
 
-from summer.adjust import BaseAdjustment, FlowParam, Multiply, Overwrite
+from summer.adjust import AdjustmentComponent, BaseAdjustment, FlowParam, Multiply, Overwrite
 from summer.compartment import Compartment
 from summer.stratification import Stratification
+from summer.compute import find_sum
+
+class WeightType:
+    STATIC = 'static'
+    SYSTEM = 'system'
+    FUNCTION = 'function'
 
 
 class BaseFlow(ABC):
@@ -54,25 +60,36 @@ class BaseFlow(ABC):
             and ((not dest_strata) or (not self.dest) or self.dest.has_strata(dest_strata))
         )
 
-    def get_weight_value(self, time: float):
+    def get_weight_value(self, time: float, computed_values: dict):
         """
         Returns the flow's 'weight' (i.e. rate to be multiplied by the value of the source compartment) at a given time.
         Applies any stratification adjustments to the base parameter.
         """
-        flow_rate = self.param(time) if callable(self.param) else self.param
+        flow_rate = self.param(time, computed_values) if callable(self.param) else self.param
         for adjustment in self.adjustments:
-            flow_rate = adjustment.get_new_value(flow_rate, time)
+            flow_rate = adjustment.get_new_value(flow_rate, computed_values, time)
 
         return flow_rate
 
-    def weight_is_static(self) -> bool:
-        """Determine whether get_weight_value is static (const over model lifetime), or time-varying
+    def weight_type(self) -> str:
+        """Returns a WeightType enum value
+
+            'static': Fixed floating point value
+            'system': Calculated using an AdjustmentSystem
+            'function': Calculated from a callable function
 
         Returns:
             bool: False if weight is time-varying, otherwise True
         """
-        time_varying = callable(self.param) or sum([callable(a.param) for a in self.adjustments])
-        return not time_varying
+        is_system = sum([isinstance(a.param, AdjustmentComponent) for a in self.adjustments])
+        is_time_varying = callable(self.param) or sum([callable(a.param) for a in self.adjustments]) \
+            or sum([isinstance(a.param, AdjustmentComponent) for a in self.adjustments])
+        if not is_time_varying:
+            return WeightType.STATIC
+        elif is_system:
+            return WeightType.SYSTEM
+        else:
+            return WeightType.FUNCTION 
 
     def update_compartment_indices(self, mapping: Dict[str, float]):
         """
@@ -83,40 +100,11 @@ class BaseFlow(ABC):
         if self.dest:
             self.dest.idx = mapping[self.dest]
 
-    def optimize_adjustments(self):
-        """
-        Rearrange adjustments so that they produce the same result but run faster.
-        This does not seem to actually impact runtime much.
-        """
-        # Start from the last Overwrite, no point calculating anything before that.
-        last_overwrite_idx = None
-        for idx in reversed(range(len(self.adjustments))):
-            adj = self.adjustments[idx]
-            if type(adj) is Overwrite:
-                last_overwrite_idx = idx
-                break
-
-        if last_overwrite_idx:
-            new_adjustments = self.adjustments[last_overwrite_idx:]
-        else:
-            new_adjustments = self.adjustments
-
-        # Combine all constant multiplications into one constant.
-        overwrites = [a for a in new_adjustments if type(a) is Overwrite]
-        consts = [a for a in new_adjustments if type(a) is Multiply and not callable(a.param)]
-        funcs = [a for a in new_adjustments if type(a) is Multiply and callable(a.param)]
-
-        if consts:
-            # Reduce multiple constants into one.
-            const = np.prod([a.param for a in consts])
-            consts = [Multiply(const)]
-
-        self.adjustments = overwrites + consts + funcs
-
     @abstractmethod
     def get_net_flow(
         self,
         compartment_values: np.ndarray,
+        computed_values: dict,
         time: float,
     ) -> float:
         """
@@ -339,7 +327,7 @@ class BaseTransitionFlow(BaseFlow):
 
             # Should we apply an adjustment to conserve the flow rate?
             should_apply_conservation_split = (
-                # If the destination has been stratified by the source hasn't been.
+                # If the destination has been stratified but the source hasn't been.
                 (is_dest_compartment_stratified and not is_source_compartment_stratified)
                 # Don't conserve flow rates for disease strain stratifications.
                 and (not strat.is_strain())
@@ -391,10 +379,11 @@ class CrudeBirthFlow(BaseEntryFlow):
     def get_net_flow(
         self,
         compartment_values: np.ndarray,
+        computed_values: dict,
         time: float,
     ) -> float:
-        parameter_value = self.get_weight_value(time)
-        total_population = _find_sum(compartment_values)
+        parameter_value = self.get_weight_value(time, computed_values)
+        total_population = find_sum(compartment_values)
         return parameter_value * total_population
 
 
@@ -416,15 +405,10 @@ class ReplacementBirthFlow(BaseEntryFlow):
     def get_net_flow(
         self,
         compartment_values: np.ndarray,
+        computed_values: dict,
         time: float,
     ) -> float:
-        return self.get_weight_value(time)
-
-
-# Use Numba to speed up the calculation of the population.
-@jit(nopython=True)
-def _find_sum(compartment_values: np.ndarray) -> float:
-    return compartment_values.sum()
+        return self.get_weight_value(time, computed_values)
 
 
 class ImportFlow(BaseEntryFlow):
@@ -446,9 +430,10 @@ class ImportFlow(BaseEntryFlow):
     def get_net_flow(
         self,
         compartment_values: np.ndarray,
+        computed_values: dict,
         time: float,
     ) -> float:
-        return self.get_weight_value(time)
+        return self.get_weight_value(time, computed_values)
 
 
 class DeathFlow(BaseExitFlow):
@@ -469,9 +454,10 @@ class DeathFlow(BaseExitFlow):
     def get_net_flow(
         self,
         compartment_values: np.ndarray,
+        computed_values: dict,
         time: float,
     ) -> float:
-        parameter_value = self.get_weight_value(time)
+        parameter_value = self.get_weight_value(time, computed_values)
         population = compartment_values[self.source.idx]
         flow_rate = parameter_value * population
         return flow_rate
@@ -494,9 +480,10 @@ class TransitionFlow(BaseTransitionFlow):
     def get_net_flow(
         self,
         compartment_values: np.ndarray,
+        computed_values: dict,
         time: float,
     ) -> float:
-        parameter_value = self.get_weight_value(time)
+        parameter_value = self.get_weight_value(time, computed_values)
         population = compartment_values[self.source.idx]
         return parameter_value * population
 
@@ -523,11 +510,12 @@ class FunctionFlow(BaseTransitionFlow):
         compartment_values: np.ndarray,
         flows: List[BaseFlow],
         flow_rates: np.ndarray,
+        computed_values: dict,
         time: float,
     ) -> float:
-        flow_rate = self.param(self, compartments, compartment_values, flows, flow_rates, time)
+        flow_rate = self.param(self, compartments, compartment_values, flows, flow_rates, computed_values, time)
         for adjustment in self.adjustments:
-            flow_rate = adjustment.get_new_value(flow_rate, time)
+            flow_rate = adjustment.get_new_value(flow_rate, time, computed_values)
 
         return flow_rate
 
@@ -545,7 +533,7 @@ class BaseInfectionFlow(BaseTransitionFlow):
         assert type(source) is Compartment
         assert type(dest) is Compartment
         self.name = name
-        self.adjustments = adjustments or []
+        self.adjustments = [a for a in (adjustments or []) if a and a.param is not None]
         self.source = source
         self.dest = dest
         self.param = param
@@ -554,10 +542,11 @@ class BaseInfectionFlow(BaseTransitionFlow):
     def get_net_flow(
         self,
         compartment_values: np.ndarray,
+        computed_values: dict,
         time: float,
     ) -> float:
         multiplier = self.find_infectious_multiplier(self.source, self.dest)
-        parameter_value = self.get_weight_value(time)
+        parameter_value = self.get_weight_value(time, computed_values)
         population = compartment_values[self.source.idx]
         return parameter_value * population * multiplier
 

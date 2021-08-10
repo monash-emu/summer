@@ -2,7 +2,9 @@
 
 [![Automated Tests](https://github.com/monash-emu/summer/actions/workflows/tests.yml/badge.svg)](https://github.com/monash-emu/summer/actions/workflows/tests.yml)
 
-Summer is a [compartmental](https://en.wikipedia.org/wiki/Compartmental_models_in_epidemiology) disease modelling framework, written in Python. It provides a high-level API to build and run models. Features include:
+Summer is a Python-based framework for the creation and execution of [compartmental](https://en.wikipedia.org/wiki/Compartmental_models_in_epidemiology) (or "state-based") epidemiological models of infectious disease transmission.
+
+It provides a range of structures for easily implementing compartmental models, including structure for some of the most common features added to basic compartmental frameworks, including:
 
 - A variety of inter-compartmental flows (infections, transitions, births, deaths, imports)
 - Force of infection multipliers (frequency, density)
@@ -13,9 +15,10 @@ Summer is a [compartmental](https://en.wikipedia.org/wiki/Compartmental_models_i
   - Heterogeneous mixing between strata
   - Multiple disease strains
 
-Some helpful links:
+Some helpful links to learn more:
 
-- **[Documentation here](http://summerepi.com/)** with [code examples](http://summerepi.com/examples)
+- [Rationale](http://summerepi.com/rationale.html) for why we are building Summer
+- **[Documentation](http://summerepi.com/)** with [code examples](http://summerepi.com/examples)
 - [Available on PyPi](https://pypi.org/project/summerepi/) as `summerepi`.
 - [Performance benchmarks](https://monash-emu.github.io/summer/)
 
@@ -29,19 +32,6 @@ pip install summerepi
 ```
 
 Then you can use the library to build and run models. See [here](http://summerepi.com/examples) for some code examples.
-
-## Performance Note
-
-You will find a significant performance improvement in the ODE solver if you set `OMP_NUM_THREADS` before importing `summer` or `numpy`.
-
-```python
-# Set this in your Python script
-os.environ["OMP_NUM_THREADS"] = "1"
-
-# Do it before importing summer or numpy
-import summer
-# ...
-```
 
 ## Development
 
@@ -76,12 +66,34 @@ isort . --profile black
 
 Releases are numbered using [Semantic Versioning](https://semver.org/)
 
-- 1.0.0/1: Initial release
-- 1.1.0: Add stochastic integrator
-- 2.0.0 (not released):
+- 1.0.0/1:
+  - Initial release
+- 1.1.0:
+  - Add stochastic integrator
+- 2.0.2:
   - Rename fractional flow to transition flow
   - Remove sojourn flow
   - Add vectorized backend and other performance improvements
+- 2.0.3:
+  - Set default IVP solver to use a maximum step size of 1 timestep
+- 2.0.4:
+  - Add runtime derived values
+- 2.0.5:
+  - Remove legacy Summer implementation
+- 2.1.0:
+  - Add AdjustmentSystems
+  - Improve vectorization of flows
+  - Add computed_values inputs to flow and adjustment parameters
+- 2.1.1:
+  - Fix for invalid/unused package imports (cachetools)
+- 2.2.0
+  - Add validation and compartment caching optimizations
+- 2.2.1
+  - Derived output index caching
+  - Optimized fast-tracks for infectious multipliers
+- 2.2.2
+  - JIT infectiousness calculations
+  - Various micro-optimizations
 
 ## Release process
 

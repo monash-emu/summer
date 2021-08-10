@@ -50,6 +50,9 @@ class Stratification:
         # No heterogeneous mixing matrix by default.
         self.mixing_matrix = None
 
+    def __repr__(self):
+        return f"Stratification: {self.name}"
+
     def is_ageing(self) -> bool:
         """Returns ``True`` if this stratification represents a set of age groups with ageing dynamics"""
         return self._is_ageing
@@ -76,7 +79,7 @@ class Stratification:
         assert set(list(proportions.keys())) == set(self.strata), msg
         msg = f"All proportions must be >= 0 when setting population split: {proportions}"
         assert all([v >= 0 for v in proportions.values()]), msg
-        msg = f"All proportions sum to 1+/-0.01 when setting population split: {proportions}"
+        msg = f"All proportions sum to 1+/-{COMP_SPLIT_REQUEST_ERROR} when setting population split: {proportions}"
         assert abs(1 - sum(proportions.values())) < COMP_SPLIT_REQUEST_ERROR, msg
         self.population_split = proportions
 
@@ -96,7 +99,7 @@ class Stratification:
 
         Args:
             flow_name: The name of the flow to adjust.
-            adjustments: An dict of adjustments to apply to the flow.
+            adjustments: A dict of adjustments to apply to the flow.
             source_strata (optional): A whitelist of strata to filter the target flow's source compartments.
             dest_strata (optional): A whitelist of strata to filter the target flow's destination compartments.
 
@@ -131,6 +134,7 @@ class Stratification:
         if flow_name not in self.flow_adjustments:
             self.flow_adjustments[flow_name] = []
 
+        #FIXME Turn this into class or named tuple or something... we want to know what's going on
         self.flow_adjustments[flow_name].append((adjustments, source_strata, dest_strata))
 
     def get_flow_adjustment(self, flow) -> dict:

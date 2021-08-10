@@ -3,7 +3,7 @@ This module contains the main disease modelling class.
 """
 import copy
 import logging
-from functools import lru_cache
+from collections import OrderedDict
 from typing import Callable, Dict, List, Optional, Tuple
 
 import networkx
@@ -11,13 +11,14 @@ import numpy as np
 
 import summer.flows as flows
 from summer import stochastic
-from summer.adjust import FlowParam
+from summer.adjust import FlowParam, AdjustmentSystem
 from summer.compartment import Compartment
-from summer.compute import binary_matrix_to_sparse_pairs, sparse_pairs_accum
+from summer.compute import ComputedValueProcessor
 from summer.derived_outputs import DerivedOutputRequest, calculate_derived_outputs
-from summer.runner import VectorizedRunner
+from summer.runner import ReferenceRunner, VectorizedRunner
 from summer.solver import SolverType, solve_ode
 from summer.stratification import Stratification
+from summer.utils import get_scenario_start_index
 
 logger = logging.getLogger()
 
@@ -56,8 +57,8 @@ class CompartmentalModel:
     """
 
     _DEFAULT_DISEASE_STRAIN = "default"
-    _DEFAULT_MIXING_MATRIX = np.array([[1]])
-    _DEFAULT_BACKEND = BackendType.REFERENCE
+    _DEFAULT_MIXING_MATRIX = np.array([[1.]])
+    _DEFAULT_BACKEND = BackendType.VECTORIZED
 
     def __init__(
         self,
@@ -80,6 +81,10 @@ class CompartmentalModel:
         error_msg = "Infectious compartments must be a subset of compartments"
         assert all(n in compartments for n in infectious_compartments), error_msg
         self.compartments = [Compartment(n) for n in compartments]
+
+        # Compartment name lookup; needs to be present before adding any flows
+        self._update_compartment_name_map()
+
         self._infectious_compartments = [Compartment(n) for n in infectious_compartments]
         self.initial_population = np.zeros_like(self.compartments, dtype=np.float)
         # Keeps track of original, pre-stratified compartment names.
@@ -89,8 +94,10 @@ class CompartmentalModel:
         # Flows to be applied to the model compartments
         self._flows = []
 
-        # Tracks total deaths per timestep for death-replacement birth flows
-        self._timestep_deaths = None
+        # Turn on all runtime assertions by default; can be disabled for performance reasons
+        # Setting to False still retains some checking, but turns off the most costly checks
+        self.set_validation_enabled(True)
+        self._derived_outputs_idx_cache = {}
 
         # The results calculated using the model: no outputs exist until the model has been run.
         self.outputs = None
@@ -102,6 +109,15 @@ class CompartmentalModel:
         # Whitelist of 'derived outputs' to evaluate
         self._derived_outputs_whitelist = []
 
+        # Adjustment systems
+        self._adjustment_systems = {}
+
+        # Map of (runtime) computed values
+        self._computed_value_processors = OrderedDict()
+
+        # Init baseline model to None; can be set via set_baseline if running as a scenario
+        self._baseline = None
+
         # Mixing matrices: a list of square arrays, or functions, used to calculate force of infection.
         self._mixing_matrices = []
         # Mixing categories: a list of dicts that knows the strata required to match a row in the mixing matrix.
@@ -110,6 +126,8 @@ class CompartmentalModel:
         self._disease_strains = [self._DEFAULT_DISEASE_STRAIN]
 
         self._update_compartment_indices()
+
+        self._enable_cache = True
 
     def _update_compartment_indices(self):
         """
@@ -139,6 +157,18 @@ class CompartmentalModel:
             assert pop >= 0, f"Population for {comp.name} cannot be negative: {pop}"
             self.initial_population[idx] = pop
 
+    def set_validation_enabled(self, validate: bool):
+        """
+        Set this to False in order to turn of some (potentially expensive) runtime validation
+        E.g. In calibration, leave it enabled for the first iteration, to catch any structural 
+        model issues, but then disable for subsequent iterations
+        """
+        self._should_validate = validate
+
+    def _set_derived_outputs_index_cache(self, idx_cache: dict):
+        self._derived_outputs_idx_cache = idx_cache
+
+
     """
     Adding flows
     """
@@ -163,7 +193,6 @@ class CompartmentalModel:
             expected_flow_count (optional): Used to assert that a particular number of flows are created.
 
         """
-        self._validate_param(name, birth_rate)
         is_already_birth_flow = any(
             [
                 type(f) is flows.CrudeBirthFlow or type(f) is flows.ReplacementBirthFlow
@@ -241,7 +270,6 @@ class CompartmentalModel:
             expected_flow_count (optional): Used to assert that a particular number of flows are created.
 
         """
-        self._validate_param(name, num_imported)
         self._add_entry_flow(
             flows.ImportFlow, name, num_imported, dest, dest_strata, expected_flow_count
         )
@@ -264,7 +292,6 @@ class CompartmentalModel:
 
         self._validate_expected_flow_count(expected_flow_count, new_flows)
         self._flows += new_flows
-        self._update_compartment_indices()
 
     def add_death_flow(
         self,
@@ -343,7 +370,6 @@ class CompartmentalModel:
         expected_flow_count: Optional[int],
     ):
         source_strata = source_strata or {}
-        self._validate_param(name, param)
         source_comps = [c for c in self.compartments if c.is_match(source, source_strata)]
         new_flows = []
         for source_comp in source_comps:
@@ -352,7 +378,6 @@ class CompartmentalModel:
 
         self._validate_expected_flow_count(expected_flow_count, new_flows)
         self._flows += new_flows
-        self._update_compartment_indices()
 
     def add_infection_frequency_flow(
         self,
@@ -510,12 +535,10 @@ class CompartmentalModel:
     ):
         source_strata = source_strata or {}
         dest_strata = dest_strata or {}
-        if flow_cls is not flows.FunctionFlow:
-            # Non standard param for FunctionFlow so cannot use this validation method.
-            self._validate_param(name, param)
 
-        dest_comps = [c for c in self.compartments if c.is_match(dest, dest_strata)]
-        source_comps = [c for c in self.compartments if c.is_match(source, source_strata)]
+        dest_comps = self.get_matching_compartments(dest, dest_strata)
+        source_comps = self.get_matching_compartments(source, source_strata)
+
         num_dest = len(dest_comps)
         num_source = len(dest_comps)
         msg = f"Expected equal number of source and dest compartments, but got {num_source} source and {num_dest} dest."
@@ -537,30 +560,39 @@ class CompartmentalModel:
 
         self._validate_expected_flow_count(expected_flow_count, new_flows)
         self._flows += new_flows
-        self._update_compartment_indices()
-
-    def _validate_param(self, flow_name: str, param: FlowParam):
-        """
-        Ensure that the supplied parameter produces sensible results for all timesteps.
-        """
-        is_all_positive = (
-            all(map(lambda t: param(t) >= 0, self.times)) if callable(param) else param >= 0
-        )
-        error_msg = f"Parameter for {flow_name} must be >= 0 for all timesteps: {param}"
-        assert is_all_positive, error_msg
 
     @staticmethod
     def _validate_expected_flow_count(
         expected_count: Optional[int], new_flows: List[flows.BaseFlow]
     ):
         """
-        Ensure the number of new flows created is the expected amount
+        Ensure the number of new flows created is the expected amountmodel
+
         """
         if expected_count is not None:
             # Check that we added the expected number of flows.
             actual_count = len(new_flows)
             msg = f"Expected to add {expected_count} flows but added {actual_count}"
             assert actual_count == expected_count, msg
+
+    """
+    Methods for searching and indexing flows and compartments
+    """
+
+    def _update_compartment_name_map(self):
+        names = set([c.name for c in self.compartments])
+        name_map = {}
+        for n in names:
+            name_map[n] = [c for c in self.compartments if c.name == n]
+        self._compartment_name_map = name_map
+
+    def get_matching_compartments(self, name, strata):
+        name_query = self._compartment_name_map[name]
+
+        if not len(strata):
+            return name_query
+        else:
+            return [c for c in name_query if c.has_strata(strata)]
 
     """
     Stratifying the model
@@ -612,6 +644,9 @@ class CompartmentalModel:
         self.initial_population = strat._stratify_compartment_values(
             prev_compartment_names, self.initial_population
         )
+
+        # Update the cache of compartment names; these need to correct whenever we add a new flow
+        self._update_compartment_name_map()
 
         # Stratify flows
         prev_flows = self._flows
@@ -680,17 +715,11 @@ class CompartmentalModel:
 
         """
 
-        backend_args = backend_args or {}
+        # Ensure we call this before model runs, since it is now disabled inside individual flow constructors
+        self._update_compartment_indices()
 
-        if backend == BackendType.REFERENCE:
-            self._runner = self
-        elif backend == BackendType.VECTORIZED:
-            self._runner = VectorizedRunner(self, **backend_args)
-        else:
-            msg = f"Invalid backend: {backend}"
-            raise ValueError(msg)
-
-        self._runner._prepare_to_run()
+        self._set_backend(backend, backend_args)
+        self._backend.prepare_to_run()
 
         if solver == SolverType.STOCHASTIC:
             # Run the model in 'stochastic mode'.
@@ -701,14 +730,31 @@ class CompartmentalModel:
             self._solve_ode(solver, kwargs)
 
         # Calculate any requested derived outputs, based on the calculated compartment sizes.
-        self.derived_outputs = self._calculate_derived_outputs()
+        self.derived_outputs, self._derived_outputs_idx_cache = self._calculate_derived_outputs()
 
-    def run_stochastic(self, seed: Optional[int] = None):
+    def _set_backend(self, backend: str, backend_args: dict = None):
+        backend_args = backend_args or {}
+        if backend == BackendType.REFERENCE:
+            self._backend = ReferenceRunner(self, **backend_args)
+        elif backend == BackendType.VECTORIZED:
+            self._backend = VectorizedRunner(self, **backend_args)
+        else:
+            msg = f"Invalid backend: {backend}"
+            raise ValueError(msg)
+
+    def run_stochastic(
+        self,
+        seed: Optional[int] = None,
+        backend: str = _DEFAULT_BACKEND,
+        backend_args: dict = None,
+    ):
         """
         Runs the model over the provided time span, calculating the outputs and the derived outputs.
         Uses an stochastic interpretation of flow rates.
         """
-        self.run(solver=SolverType.STOCHASTIC, seed=seed)
+        self.run(
+            solver=SolverType.STOCHASTIC, seed=seed, backend=backend, backend_args=backend_args
+        )
 
     def _solve_ode(self, solver, solver_args: dict):
         """
@@ -719,7 +765,7 @@ class CompartmentalModel:
         # Calculate the outputs (compartment sizes) by solving the ODE defined by _get_compartment_rates().
         self.outputs = solve_ode(
             solver,
-            self._runner._get_compartment_rates,
+            self._backend.get_compartment_rates,
             self.initial_population,
             self.times,
             solver_args,
@@ -773,8 +819,8 @@ class CompartmentalModel:
             # Calculate the flow rates at this timestep.
             # These describe the rate (people/timeunit) at which people follow the flow.
             # Later we will convert these to probabilities.
-            comp_vals = self._clean_compartment_values(self.outputs[time_idx - 1])
-            _, flow_rates = self._get_rates(comp_vals, time)
+            comp_vals = self._backend._clean_compartment_values(self.outputs[time_idx - 1])
+            flow_rates = self._backend.get_flow_rates(comp_vals, time)
 
             # We split the calculatd flow rates into entry or {transition, exit} flows,
             # because we handle them separately with different methods.
@@ -806,333 +852,14 @@ class CompartmentalModel:
             # Calculate final compartment sizes at this timestep.
             self.outputs[time_idx] = comp_vals + transition_changes + entry_changes
 
-    def _get_compartment_rates(self, compartment_values: np.ndarray, time: float):
-        """
-        Interface for the ODE solver: this function is passed to solve_ode func and defines the dynamics of the model.
-        Returns the rate of change of the compartment values for a given state and time.
-        """
-        comp_vals = self._clean_compartment_values(compartment_values)
-        comp_rates, _ = self._get_rates(comp_vals, time)
-        return comp_rates
+    def _get_infection_frequency_multiplier(self, *args, **kwargs) -> float:
+        return self._backend._get_infection_frequency_multiplier(*args, **kwargs)
 
-    def _get_flow_rates(self, compartment_values: np.ndarray, time: float) -> np.ndarray:
-        """
-        Returns the contribution of each flow to compartment rate of change for a given state and time.
-        Returns a 1D array with an entry for each flow, the value being that flow's rate.
-        """
-        comp_vals = self._clean_compartment_values(compartment_values)
-        _, flow_rates = self._get_rates(comp_vals, time)
-        return flow_rates
+    def _get_infection_density_multiplier(self, *args, **kwargs):
+        return self._backend._get_infection_density_multiplier(*args, **kwargs)
 
-    def _get_rates(self, comp_vals: np.ndarray, time: float) -> Tuple[np.ndarray, np.ndarray]:
-        """
-        Calculates inter-compartmental flow rates for a given state and time, including:
-            - entry: flows of people into the system
-            - exit: flows of people leaving of the system, and;
-            - transition: flows of people between compartments
-
-        Args:
-            comp_vals: The current state of the model compartments (ie. number of people)
-            time: The current time
-
-        Returns:
-            comp_rates: Rate of change of compartments
-            flow_rates: Contribution of each flow to compartment rate of change
-
-        """
-        self._prepare_time_step(time, comp_vals)
-        # Track each flow's flow-rates at this point in time for function flows.
-        flow_rates = np.zeros(len(self._flows))
-        # Track the rate of change of compartments for the ODE solver.
-        comp_rates = np.zeros(len(comp_vals))
-
-        # Find the flow rate for each flow.
-        for flow_idx, flow in self._iter_non_function_flows:
-            # Evaluate all the flows that are not function flows.
-            net_flow = flow.get_net_flow(comp_vals, time)
-            flow_rates[flow_idx] = net_flow
-            if flow.source:
-                comp_rates[flow.source.idx] -= net_flow
-            if flow.dest:
-                comp_rates[flow.dest.idx] += net_flow
-            if flow.is_death_flow:
-                # Track total deaths for any later birth replacement flows.
-                self._timestep_deaths += net_flow
-
-        if self._iter_function_flows:
-            # Evaluate the function flows.
-            for flow_idx, flow in self._iter_function_flows:
-                net_flow = flow.get_net_flow(
-                    self.compartments, comp_vals, self._flows, flow_rates, time
-                )
-                comp_rates[flow.source.idx] -= net_flow
-                comp_rates[flow.dest.idx] += net_flow
-
-        return comp_rates, flow_rates
-
-    def _prepare_to_run(self):
-        """
-        Pre-run setup.
-        Here we do any calculations/preparation are possible to do before the model runs.
-        """
-        # Functions will often be called multiple times per timestep, so we cache any time-varying functions.
-        # First we find all time varying functions.
-        funcs = set()
-        for flow in self._flows:
-            if isinstance(flow, flows.FunctionFlow):
-                # Don't cache these, the input arguments cannot be stored in a dict ("non hashable")
-                continue
-            elif callable(flow.param):
-                funcs.add(flow.param)
-            for adj in flow.adjustments:
-                if adj and callable(adj.param):
-                    funcs.add(adj.param)
-
-        # Cache return values to prevent re-computation. This will cause a little memory leak, which is (mostly) fine.
-        funcs_cached = {}
-        for func in funcs:
-            # Floating point return type is 8 bytes, meaning 2**17 values is ~1MB of memory.
-            funcs_cached[func] = lru_cache(maxsize=2 ** 17)(func)
-
-        # Finally, replace original functions with cached ones
-        for flow in self._flows:
-            if flow.param in funcs_cached:
-                flow.param = funcs_cached[flow.param]
-            for adj in flow.adjustments:
-                if adj and adj.param in funcs_cached:
-                    adj.param = funcs_cached[adj.param]
-
-        # Optimize flow adjustments
-        # TODO: Delete this it probably doesn't help.
-        for f in self._flows:
-            f.optimize_adjustments()
-
-        # Re-order flows so that they are executed in the correct order:
-        #   - exit flows
-        #   - entry flows (depends on exit flows for 'replace births' functionality)
-        #   - transition flows
-        #   - function flows (depend on all other prior flows, since they take flow rate as an input)
-        num_flows = len(self._flows)
-        _exit_flows = [f for f in self._flows if issubclass(f.__class__, flows.BaseExitFlow)]
-        _entry_flows = [f for f in self._flows if issubclass(f.__class__, flows.BaseEntryFlow)]
-        _transition_flows = [
-            f
-            for f in self._flows
-            if issubclass(f.__class__, flows.BaseTransitionFlow)
-            and not isinstance(f, flows.FunctionFlow)
-        ]
-        _function_flows = [f for f in self._flows if isinstance(f, flows.FunctionFlow)]
-        self._has_function_flows = bool(_function_flows)
-        self._flows = _exit_flows + _entry_flows + _transition_flows + _function_flows
-        # Check we didn't miss any flows
-        assert len(self._flows) == num_flows, "Some flows were lost when preparing to run."
-        # Split flows into two groups for runtime.
-        self._iter_function_flows = [
-            (i, f) for i, f in enumerate(self._flows) if isinstance(f, flows.FunctionFlow)
-        ]
-        self._iter_non_function_flows = [
-            (i, f) for i, f in enumerate(self._flows) if not isinstance(f, flows.FunctionFlow)
-        ]
-
-        """
-        Pre-run calculations to help determine force of infection multiplier at runtime.
-
-        We start with a set of "mixing categories". These categories describe groups of compartments.
-        For example, we might have the stratifications age {child, adult} and location {work, home}.
-        In this case, the mixing categories would be {child x home, child x work, adult x home, adult x work}.
-        Mixing categories are only created when a mixing matrix is supplied during stratification.
-
-        There is a mapping from every compartment to a mixing category.
-        This is only true if mixing matrices are supplied only for complete stratifications.
-        There are `num_cats` categories and `num_comps` compartments.
-        The category matrix is a (num_cats x num_comps) matrix of 0s and 1s, with a 1 when the compartment is in a given category.
-        We expect only one category per compartment, but there may be many compartments per category.
-
-        We can multiply the category matrix by the vector of compartment sizes to get the total number of people
-        in each mixing category.
-
-        We also create a vector of values in [0, inf) which describes how infectious each compartment is: compartment_infectiousness
-        We can use this vector plus the compartment sizes to get the 'effective' number of infectious people per compartment.
-
-        We can use the 'effective infectious' compartment sizes, plus the mixing category matrix
-        to get the infected population per mixing category.
-
-        Now that we know:
-            - the total population per category
-            - the infected population per category
-            - the inter-category mixing coefficients (mixing matrix)
-
-        We can calculate infection density or infection frequency transition flows for each category.
-        Finally, at runtime, we can lookup which category a given compartment is in and look up its infectious multiplier (density or frequency).
-        """
-        # Figure out which compartments should be infectious
-        self._infectious_mask = [
-            c.has_name_in_list(self._infectious_compartments) for c in self.compartments
-        ]
-
-        # Find out the relative infectiousness of each compartment, for each strain.
-        # If no strains have been created, we assume a default strain name.
-        self._compartment_infectiousness = {
-            strain_name: self._get_compartment_infectiousness_for_strain(strain_name)
-            for strain_name in self._disease_strains
-        }
-
-        # Create a matrix that tracks which categories each compartment is in.
-        # A matrix with size (num_cats x num_comps).
-        # This is a very sparse static matrix, and there's almost certainly a much
-        # faster way of using it than naive matrix multiplication
-        num_comps = len(self.compartments)
-        self.num_categories = len(self._mixing_categories)
-        self._category_lookup = {}  # Map compartments to categories.
-        self._category_matrix = np.zeros((self.num_categories, num_comps))
-        for i, category in enumerate(self._mixing_categories):
-            for j, comp in enumerate(self.compartments):
-                if all(comp.has_stratum(k, v) for k, v in category.items()):
-                    self._category_matrix[i][j] = 1
-                    self._category_lookup[j] = i
-        self._compartment_category_map = binary_matrix_to_sparse_pairs(self._category_matrix)
-
-    def _get_compartment_infectiousness_for_strain(self, strain: str):
-        """
-        Returns a vector of floats, each representing the relative infectiousness of each compartment.
-        If a strain name is provided, find the infectiousness factor *only for that strain*.
-        """
-        # Figure out which compartments should be infectious
-        infectious_mask = np.array(
-            [c.has_name_in_list(self._infectious_compartments) for c in self.compartments]
-        )
-        # Find the infectiousness multipliers for each compartment being implemented in the model.
-        # Start from assumption that each compartment is not infectious.
-        compartment_infectiousness = np.zeros(self.initial_population.shape)
-        # Set all infectious compartments to be equally infectious.
-        compartment_infectiousness[infectious_mask] = 1
-
-        # Apply infectiousness adjustments.
-        for idx, comp in enumerate(self.compartments):
-            inf_value = compartment_infectiousness[idx]
-            for strat in self._stratifications:
-                for comp_name, adjustments in strat.infectiousness_adjustments.items():
-                    for stratum, adjustment in adjustments.items():
-                        should_apply_adjustment = adjustment and comp.is_match(
-                            comp_name, {strat.name: stratum}
-                        )
-                        if should_apply_adjustment:
-                            # Cannot use time-varying functions for infectiousness adjustments,
-                            # because this is calculated before the model starts running.
-                            inf_value = adjustment.get_new_value(inf_value, None)
-
-            compartment_infectiousness[idx] = inf_value
-
-        if strain != self._DEFAULT_DISEASE_STRAIN:
-            # Filter out all values that are not in the given strain.
-            strain_mask = np.zeros(self.initial_population.shape)
-            for idx, compartment in enumerate(self.compartments):
-                if compartment.has_stratum("strain", strain):
-                    strain_mask[idx] = 1
-
-            compartment_infectiousness *= strain_mask
-
-        return compartment_infectiousness
-
-    def _prepare_time_step(self, time: float, compartment_values: np.ndarray):
-        """
-        Pre-timestep setup. This should be run before `_get_compartment_rates`.
-        Here we set up any stateful updates that need to happen before we get the flow rates.
-        """
-        # Prepare total deaths for tracking deaths.
-        self._timestep_deaths = 0
-
-        # Find the effective infectious population for the force of infection (FoI) calculations.
-        mixing_matrix = self._get_mixing_matrix(time)
-
-        # Calculate infection frequency/density for all disease strains
-        self._calculate_strain_infection_values(time, compartment_values, mixing_matrix)
-
-    def _calculate_strain_infection_values(
-        self, time: float, compartment_values: np.ndarray, mixing_matrix: np.ndarray
-    ):
-
-        num_cats = self.num_categories
-        # Calculate total number of people per category (for FoI).
-        # A vector with size (num_cats).
-        self._category_populations = sparse_pairs_accum(
-            self._compartment_category_map, compartment_values, num_cats
-        )
-
-        # Calculate infectious populations for each strain.
-        # Infection density/frequency is the infectious multiplier for each mixing category, calculated for each strain.
-        self._infection_density = {}
-        self._infection_frequency = {}
-        for strain in self._disease_strains:
-            strain_compartment_infectiousness = self._compartment_infectiousness[strain]
-
-            # Calculate the effective infectious people for each category, including adjustment factors.
-            # Returns a vector with size (num_cats x 1).
-            infected_values = compartment_values * strain_compartment_infectiousness
-            infectious_populations = sparse_pairs_accum(
-                self._compartment_category_map, infected_values, num_cats
-            )
-            self._infection_density[strain] = np.matmul(mixing_matrix, infectious_populations)
-
-            # Calculate the effective infectious person frequency for each category, including adjustment factors.
-            # A vector with size (num_cats x 1).
-            category_prevalence = infectious_populations / self._category_populations
-            self._infection_frequency[strain] = np.matmul(mixing_matrix, category_prevalence)
-
-    @staticmethod
-    def _clean_compartment_values(compartment_values: np.ndarray):
-        """
-        Zero out -ve compartment sizes in flow rate calculations,
-        to prevent negative values from messing up the direction of flows.
-        We don't expect large -ve values, but there can be small ones due to numerical errors.
-        """
-        comp_vals = compartment_values.copy()
-        zero_mask = comp_vals < 0
-        comp_vals[zero_mask] = 0
-        return comp_vals
-
-    def _get_force_idx(self, source: Compartment):
-        """
-        Returns the index of the source compartment in the infection multiplier vector.
-        """
-        return self._category_lookup[source.idx]
-
-    def _get_timestep_deaths(self, *args, **kwargs) -> float:
-        assert self._timestep_deaths is not None, "Total deaths has not been set."
-        return self._timestep_deaths
-
-    def _get_infection_frequency_multiplier(self, source: Compartment, dest: Compartment) -> float:
-        """
-        Get force of infection multiplier for a given compartment,
-        using the 'infection frequency' calculation.
-        """
-        idx = self._get_force_idx(source)
-        strain = dest.strata.get("strain", self._DEFAULT_DISEASE_STRAIN)
-        return self._infection_frequency[strain][idx]
-
-    def _get_infection_density_multiplier(self, source: Compartment, dest: Compartment):
-        """
-        Get force of infection multiplier for a given compartment,
-        using the 'infection density' calculation.
-        """
-        idx = self._get_force_idx(source)
-        strain = dest.strata.get("strain", self._DEFAULT_DISEASE_STRAIN)
-        return self._infection_density[strain][idx]
-
-    def _get_mixing_matrix(self, time: float) -> np.ndarray:
-        """
-        Returns the final mixing matrix for a given time.
-        """
-        # +++ FIXME _DEFAULT_MIXING_MATRIX hardcoded to [[1]], meaning first kroneker product does
-        # effectively nothing...
-        mixing_matrix = self._DEFAULT_MIXING_MATRIX
-        for mm_func in self._mixing_matrices:
-            # Assume each mixing matrix is either an np.ndarray or a function of time that returns one.
-            mm = mm_func(time) if callable(mm_func) else mm_func
-            # Get Kronecker product of old and new mixing matrices.
-            mixing_matrix = np.kron(mixing_matrix, mm)
-
-        return mixing_matrix
+    def _get_timestep_deaths(self, *args, **kwargs):
+        return self._backend._get_timestep_deaths(*args, **kwargs)
 
     """
     Requesting and calculating derived outputs
@@ -1151,6 +878,19 @@ class CompartmentalModel:
         """
         self._derived_outputs_whitelist = whitelist
 
+    def set_baseline(self, baseline):
+        """Set a baseline model to be used for this (scenario) run
+        Sets initial population values to the baseline values for this model's start time
+        Cumulative and relative outputs will refer to the baseline
+
+        Args:
+            baseline (CompartmentalModel): The baseline model to be used as reference
+        """
+        start_index = get_scenario_start_index(baseline.times, self.times[0])
+        init_compartments = baseline.outputs[start_index, :]
+        self.initial_population = init_compartments
+        self._baseline = baseline
+
     def _calculate_derived_outputs(self):
         return calculate_derived_outputs(
             requests=self._derived_output_requests,
@@ -1160,8 +900,11 @@ class CompartmentalModel:
             timestep=self.timestep,
             flows=self._flows,
             compartments=self.compartments,
-            get_flow_rates=self._runner._get_flow_rates,
+            get_flow_rates=self._backend.get_flow_rates,
+            model = self,
             whitelist=self._derived_outputs_whitelist,
+            baseline=self._baseline,
+            idx_cache = self._derived_outputs_idx_cache
         )
 
     def request_output_for_flow(
@@ -1188,12 +931,15 @@ class CompartmentalModel:
         """
         source_strata = source_strata or {}
         dest_strata = dest_strata or {}
-        msg = f"A derived output named {name} already exists."
-        assert name not in self._derived_output_requests, msg
-        is_flow_exists = any(
-            [f.is_match(flow_name, source_strata, dest_strata) for f in self._flows]
-        )
-        assert is_flow_exists, f"No flow matches: {flow_name} {source_strata} {dest_strata}"
+
+        if self._should_validate:
+            msg = f"A derived output named {name} already exists."
+            assert name not in self._derived_output_requests, msg
+            is_flow_exists = any(
+                [f.is_match(flow_name, source_strata, dest_strata) for f in self._flows]
+            )
+            assert is_flow_exists, f"No flow matches: {flow_name} {source_strata} {dest_strata}"
+        
         self._derived_output_graph.add_node(name)
         self._derived_output_requests[name] = {
             "request_type": DerivedOutputRequest.FLOW,
@@ -1222,12 +968,15 @@ class CompartmentalModel:
             save_results (optional): Whether to save or discard the results.
         """
         strata = strata or {}
-        msg = f"A derived output named {name} already exists."
-        assert name not in self._derived_output_requests, msg
-        is_match_exists = any(
-            [any([c.is_match(name, strata) for name in compartments]) for c in self.compartments]
-        )
-        assert is_match_exists, f"No compartment matches: {compartments} {strata}"
+
+        if self._should_validate:
+            msg = f"A derived output named {name} already exists."
+            assert name not in self._derived_output_requests, msg
+            is_match_exists = any(
+                [any([c.is_match(name, strata) for name in compartments]) for c in self.compartments]
+            )
+            assert is_match_exists, f"No compartment matches: {compartments} {strata}"
+    
         self._derived_output_graph.add_node(name)
         self._derived_output_requests[name] = {
             "request_type": DerivedOutputRequest.COMPARTMENT,
@@ -1352,3 +1101,47 @@ class CompartmentalModel:
             "sources": sources,
             "save_results": save_results,
         }
+
+    def request_computed_value_output(
+        self,
+        name: str,
+        save_results: bool = True
+    ):
+        """
+        Save a computed value process output to derived outputs
+
+        Args:
+            name (str): Name (key) of computed value process
+            save_results (bool, optional): Save outputs (or discard if False)
+        """
+        msg = f"A derived output named {name} already exists."
+        assert name not in self._derived_output_requests, msg
+
+        self._derived_output_graph.add_node(name)
+        self._derived_output_requests[name] = {
+            "request_type": DerivedOutputRequest.COMPUTED_VALUE,
+            "name": name,
+            "save_results": save_results,
+        }
+
+    def add_computed_value_process(self, name: str, processor: ComputedValueProcessor):
+        """
+        Calculate (at runtime) values derived from the current compartment values and/or functions/input data
+        providing time varying shared values.  The output values of these processes can be used by function 
+        parameters, adjustments, and function flows.
+
+        Args:
+            name (str): Name (key) of derived value (use this when referencing it in functions)
+            processor (DerivedValueProcessor): Object providing implementation
+        """
+        self._computed_value_processors[name] = processor
+
+    def add_adjustment_system(self, name: str, system: AdjustmentSystem):
+        """Add an AdjustmentSystem that will process common adjustments in parallel
+        These provide equivalent functionality to individual flow adjustments (adjust.py)
+       
+        Args:
+            name (str): The name of the system used for lookup purpsoes
+            system (AdjustmentSystem): AdjustmentSystem object containing the implementation details
+        """
+        self._adjustment_systems[name] = system

@@ -15,8 +15,11 @@ from typing import Callable, Dict, List, Optional
 import networkx
 import numpy as np
 
+import pandas as pd
+
 from summer.compartment import Compartment
 from summer.flows import BaseFlow
+from summer.utils import get_scenario_start_index
 
 logger = logging.getLogger()
 
@@ -27,7 +30,7 @@ class DerivedOutputRequest:
     AGGREGATE = "agg"
     CUMULATIVE = "cum"
     FUNCTION = "func"
-
+    COMPUTED_VALUE = "computed_value"
 
 def calculate_derived_outputs(
     requests: List[dict],
@@ -38,7 +41,10 @@ def calculate_derived_outputs(
     flows: List[BaseFlow],
     compartments: List[Compartment],
     get_flow_rates: Callable[[np.ndarray, float], np.ndarray],
+    model,
     whitelist: Optional[List[str]],
+    baseline = None,
+    idx_cache = None
 ) -> Dict[str, np.ndarray]:
     """
     Calculates all requested derived outputs from the calculated compartment sizes.
@@ -53,6 +59,7 @@ def calculate_derived_outputs(
         compartments: The compartments used by the model.
         get_flow_rates: A function that gets the model flow rates for a given state and time.
         whitelist: An optional subset of requests to evaluate.
+        baseline: Optional CompartmentalModel object to be used as a reference
 
     Returns:
         Dict[str, np.ndarray]: The timeseries results for each requested output.
@@ -80,18 +87,31 @@ def calculate_derived_outputs(
     derived_outputs = {}
     outputs_to_delete_after = []
 
+    # If we have a baseline for comparison, get some basic information re offsets
+    if baseline:
+        baseline_start_index = get_scenario_start_index(baseline.times, times[0])
+
     # Calculate all flow rates and store in `flow_values` so that we can fulfil flow rate requests.
     # We need to do this here because some solvers do not necessarily evaluate all timesteps.
     flow_values = np.zeros((len(times), len(flows)))
+
+    # These are 'extra' values computed by requested processes, and need to be tracked separately
+    computed_values = []
 
     # FIXME: Another question for Matt - has my changes to the time requests stuffed this up?
     # Because the timestep for the last time interval can now be different from the earlier ones.
     # So do we need to assert that the duration is an exact multiple of the timestep?
     # Could cause silent problems, because presumably we have previously been specifying durations as multiples of the timestep.
     for time_idx, time in enumerate(times):
-        # Flow rates are instantaneous; we need to provide and integrated value over timestep
-        flow_values[time_idx, :] = get_flow_rates(outputs[time_idx], time) * timestep
-
+        # Flow rates are instantaneous; we need to provide an integrated value over timestep
+        flow_rates = get_flow_rates(outputs[time_idx], time)
+        flow_values[time_idx, :] = flow_rates * timestep
+        # Collect these as lists then build DataFrames afterwards
+        computed_values.append(model._backend._calc_computed_values(outputs[time_idx], time))
+    
+    # Collate list values into DataFrames
+    computed_values = pd.DataFrame(columns=model._computed_value_processors.keys(), data = computed_values, index=times)
+    
     # Convert tracked flow values into a matrix where the 1st dimension is flow type, 2nd is time
     flow_values = np.array(flow_values).T
 
@@ -107,19 +127,26 @@ def calculate_derived_outputs(
 
         if request_type == DerivedOutputRequest.FLOW:
             # User wants to track a set of flow rates over time.
-            output = _get_flow_output(request, times, flows, flow_values)
+            output, idx_cache = _get_flow_output(request, name, times, flows, flow_values, idx_cache)
         elif request_type == DerivedOutputRequest.COMPARTMENT:
             # User wants to track a set of compartment sizes over time.
-            output = _get_compartment_output(request, outputs, compartments)
+            output, idx_cache = _get_compartment_output(request, name, outputs, compartments, idx_cache)
         elif request_type == DerivedOutputRequest.AGGREGATE:
             # User wants to track the sum of a set of outputs over time.
             output = _get_aggregate_output(request, derived_outputs)
         elif request_type == DerivedOutputRequest.CUMULATIVE:
             # User wants to track cumulative value of an output over time.
-            output = _get_cumulative_output(request, name, times, derived_outputs)
+            if baseline:
+                baseline_offset = baseline.derived_outputs[name][baseline_start_index]
+            else:
+                baseline_offset = None
+            output = _get_cumulative_output(request, name, times, derived_outputs, baseline_offset)
         elif request_type == DerivedOutputRequest.FUNCTION:
             # User wants to track the results of a function of other outputs over time.
             output = _get_func_output(request, derived_outputs)
+        # FIXME DerivedValue and InputValue should probably be combined
+        elif request_type == DerivedOutputRequest.COMPUTED_VALUE:
+            output = _get_computed_value_output(request, computed_values)
 
         derived_outputs[name] = output
 
@@ -127,24 +154,33 @@ def calculate_derived_outputs(
     for name in outputs_to_delete_after:
         del derived_outputs[name]
 
-    return derived_outputs
+    return derived_outputs, idx_cache
 
 
-def _get_flow_output(request, times, flows, flow_values):
+def _get_flow_output(request, name, times, flows, flow_values, idx_cache=None):
     this_flow_values = np.zeros_like(times)
-    for flow_idx, flow in enumerate(flows):
-        is_matching_flow = (
-            flow.name == request["flow_name"]
-            and ((not flow.source) or flow.source.has_strata(request["source_strata"]))
-            and ((not flow.dest) or flow.dest.has_strata(request["dest_strata"]))
-        )
-        if is_matching_flow:
-            this_flow_values += flow_values[flow_idx]
+
+    if not idx_cache:
+        idx_cache = {}
+        
+    if not name in idx_cache:
+        idx_cache[name] = []
+        for flow_idx, flow in enumerate(flows):
+            is_matching_flow = (
+                flow.name == request["flow_name"]
+                and ((not flow.source) or flow.source.has_strata(request["source_strata"]))
+                and ((not flow.dest) or flow.dest.has_strata(request["dest_strata"]))
+            )
+            if is_matching_flow:
+                idx_cache[name].append(flow_idx)
+
+    for flow_idx in idx_cache[name]:
+        this_flow_values += flow_values[flow_idx]
 
     use_raw_results = request["raw_results"]
     if use_raw_results:
         # Use interpolated flow rates with no post-processing.
-        return this_flow_values
+        return this_flow_values, idx_cache
     else:
         # Set the "flow value" at time `t` to be a midpoint approximation of the integrated flow
         # bewteen `t-1` and 't'
@@ -155,15 +191,21 @@ def _get_flow_output(request, times, flows, flow_values):
         # Client using these outputs will typically the first value
         midpoint_output[0] = this_flow_values[0]
         midpoint_output[1:] = (this_flow_values[1:] + this_flow_values[:-1]) * 0.5
-        return midpoint_output
+        return midpoint_output, idx_cache
 
 
-def _get_compartment_output(request, outputs, compartments):
-    req_compartments = request["compartments"]
-    strata = request["strata"]
-    comps = ((i, c) for i, c in enumerate(compartments) if c.has_name_in_list(req_compartments))
-    idxs = [i for i, c in comps if c.is_match(c.name, strata)]
-    return outputs[:, idxs].sum(axis=1)
+def _get_compartment_output(request, name, outputs, compartments, idx_cache=None):
+    if not idx_cache:
+        idx_cache = {}
+        
+    if not name in idx_cache:
+        req_compartments = request["compartments"]
+        strata = request["strata"]
+        comps = ((i, c) for i, c in enumerate(compartments) if c.has_name_in_list(req_compartments))
+        idx_cache[name] = [i for i, c in comps if c.is_match(c.name, strata)]
+    
+    idxs = idx_cache[name]
+    return outputs[:, idxs].sum(axis=1), idx_cache
 
 
 def _get_aggregate_output(request, derived_outputs):
@@ -171,7 +213,7 @@ def _get_aggregate_output(request, derived_outputs):
     return sum([derived_outputs[s] for s in source_names])
 
 
-def _get_cumulative_output(request, name, times, derived_outputs):
+def _get_cumulative_output(request, name, times, derived_outputs,baseline_offset=None):
     source_name = request["source"]
     start_time = request["start_time"]
     max_time = times.max()
@@ -189,6 +231,9 @@ def _get_cumulative_output(request, name, times, derived_outputs):
         output = np.zeros_like(times)
         output[start_idx:] = np.cumsum(derived_outputs[source_name][start_idx:])
 
+    if baseline_offset:
+        output += baseline_offset
+
     return output
 
 
@@ -197,3 +242,22 @@ def _get_func_output(request, derived_outputs):
     source_names = request["sources"]
     inputs = [derived_outputs[s] for s in source_names]
     return func(*inputs)
+    
+def _get_computed_value_output(request, computed_values):
+    name = request["name"]
+    return computed_values[name].to_numpy(dtype=float)
+
+def get_scenario_start_index(base_times, start_time):
+    """
+    Returns the index of the closest time step that is at, or before the scenario start time.
+    """
+    assert (
+        base_times[0] <= start_time
+    ), f"Scenario start time {start_time} is before baseline has started"
+    indices_after_start_index = [idx for idx, time in enumerate(base_times) if time > start_time]
+    if not indices_after_start_index:
+        raise ValueError(f"Scenario start time {start_time} is set after the baseline time range")
+
+    index_after_start_index = min(indices_after_start_index)
+    start_index = max([0, index_after_start_index - 1])
+    return start_index

@@ -7,7 +7,7 @@ from summer.flows import BaseEntryFlow
 class EntryFlow(BaseEntryFlow):
     """Basic entry flow used to test BaseEntryFlow stratification."""
 
-    def get_net_flow(self, compartment_values, time):
+    def get_net_flow(self, compartment_values, computed_values, time):
         return 1
 
 

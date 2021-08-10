@@ -17,7 +17,7 @@ DEATH_EXTINCTION_PARAMS = [
 
 
 @pytest.mark.parametrize("death_rate, contact_rate", DEATH_EXTINCTION_PARAMS)
-def test_stochastic_death_exitinction(death_rate, contact_rate):
+def test_stochastic_death_extinction(death_rate, contact_rate):
     """
     A smokey test to make sure the disease goes extinct around the right amount,
     because the infectious person dies before they can infect someone else.
@@ -79,12 +79,12 @@ RECOVERY_EXTINCTION_PARAMS = [
 
 
 @pytest.mark.parametrize("recovery_rate, contact_rate", RECOVERY_EXTINCTION_PARAMS)
-def test_stochastic_recovery_exitinction(recovery_rate, contact_rate):
+def test_stochastic_recovery_extinction(recovery_rate, contact_rate):
     """
     A smokey test to make sure the disease goes extinct sometimes,
     because the infectious person recovers before they can infect someone else.
 
-    Calculations similar to test_stochastic_death_exitinction
+    Calculations similar to test_stochastic_death_extinction
     """
     pr_recovery = 1 - np.exp(-recovery_rate)
     pr_infected = 1 - np.exp(-contact_rate / 1000)
@@ -120,12 +120,12 @@ DEATH_OR_RECOVERY_EXTINCTION_PARAMS = [
 @pytest.mark.parametrize(
     "death_rate, recovery_rate, contact_rate", DEATH_OR_RECOVERY_EXTINCTION_PARAMS
 )
-def test_stochastic_exitinction(death_rate, recovery_rate, contact_rate):
+def test_stochastic_extinction(death_rate, recovery_rate, contact_rate):
     """
     A smokey test to make sure the disease goes extinct sometimes,
     because the infectious person recovers before they can infect someone else.
 
-    Calculations similar to test_stochastic_death_exitinction
+    Calculations similar to test_stochastic_death_extinction
     """
     pr_death_or_recovery = 1 - np.exp(-1 * (death_rate + recovery_rate))
     pr_infected = 1 - np.exp(-contact_rate / 1000)

@@ -1,10 +1,12 @@
 import numpy as np
 import pytest
 from numpy.testing import assert_array_equal
+from unittest.mock import Mock
 
 from summer import CompartmentalModel, stochastic
 from summer.compartment import Compartment
 from summer.flows import DeathFlow, TransitionFlow
+from summer.model import BackendType
 
 ENTRY_FLOW_TESTS = [
     # timestep, flow rates, expected
@@ -113,13 +115,6 @@ def test_solve_stochastic(monkeypatch):
     model.add_death_flow("infect_death", 3, "I")
     model.add_transition_flow("recovery", 2, "I", "R")
 
-    # Mock out flow rate calculation - tested elsewhere and tricky to predict.
-    def mock_get_rates(comp_vals, time):
-        # Return the flow rates that will be used to solve the model
-        return None, np.array([float(f.param) for f in model._flows])
-
-    monkeypatch.setattr(model, "_get_rates", mock_get_rates)
-
     # Mock out stochastic flow sampling - tested elsewhere.
     def mock_sample_entry_flows(seed, entry_flow_rates, timestep):
         assert not seed
@@ -138,13 +133,20 @@ def test_solve_stochastic(monkeypatch):
             [[0.0, 3.0, 0.0], [0.0, 0.0, 0.0], [6.0, 0.0, 0.0], [0.0, 2.0, 0.0]]
         )
         assert_array_equal(flow_rates, expected_flow_rates)
-
         return np.array([-6, 1, 2])
 
     monkeypatch.setattr(stochastic, "sample_entry_flows", mock_sample_entry_flows)
     monkeypatch.setattr(stochastic, "sample_transistion_flows", mock_sample_transistion_flows)
 
-    model.run_stochastic()
+    # Mock out flow rate calculation - tested elsewhere and tricky to predict.
+    def mock_get_rates(*args, **kwargs):
+        # Return the flow rates that will be used to solve the model
+        return np.array([float(f.param) for f in model._flows])
+
+    model._set_backend(BackendType.REFERENCE)
+    model._backend.prepare_to_run()
+    monkeypatch.setattr(model._backend, "get_flow_rates", mock_get_rates)
+    model._solve_stochastic()
     expected_outputs = np.array(
         [
             [990, 10, 0],

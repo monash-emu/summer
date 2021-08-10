@@ -50,7 +50,11 @@ class IntegerField(BaseField):
         self.distribution = distribution
 
     def validate(self, value):
-        assert type(value) in (int, np.int64), "IntegerField values must be of int type."
+        try:
+            assert type(value) in (int, np.int32, np.int64), "IntegerField values must be of int type."
+        except:
+            print(type(value),value)
+            raise
 
     def setup(self, initial_number: int):
         if self.default:
