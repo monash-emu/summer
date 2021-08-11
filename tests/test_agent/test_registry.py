@@ -41,8 +41,8 @@ def test_regsitry_init__with_expected_all():
 
 def _get_dummy_registry(n):
     reg = Registry(DummyEntity, n)
-    reg.vals["age"] = np.array(range(1, n + 1))
-    reg.vals["weight"] = np.array(range(n + 1, 2 * n + 1))
+    reg.vals["age"] = np.array(range(1, n + 1), dtype=np.int64)
+    reg.vals["weight"] = np.array(range(n + 1, 2 * n + 1), dtype=np.int64)
     return reg
 
 
