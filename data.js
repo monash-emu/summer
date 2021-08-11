@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1628549976133,
+  "lastUpdate": 1628649479545,
   "repoUrl": "https://github.com/monash-emu/summer",
   "entries": {
     "Benchmark": [
@@ -3935,6 +3935,58 @@ window.BENCHMARK_DATA = {
             "unit": "iter/sec",
             "range": "stddev: 0.11721049457528133",
             "extra": "mean: 5.783934357666642 sec\nrounds: 3"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "dshipman@gmail.com",
+            "name": "David Shipman",
+            "username": "dshipman"
+          },
+          "committer": {
+            "email": "dshipman@gmail.com",
+            "name": "David Shipman",
+            "username": "dshipman"
+          },
+          "distinct": true,
+          "id": "7fab12c77fb4ceeb236ac466138365495c82bb97",
+          "message": "Fix documentation",
+          "timestamp": "2021-08-11T12:35:22+10:00",
+          "tree_id": "bcb4a24c0aeb777b00d1668fe34bb580fa75a192",
+          "url": "https://github.com/monash-emu/summer/commit/7fab12c77fb4ceeb236ac466138365495c82bb97"
+        },
+        "date": 1628649478982,
+        "tool": "pytest",
+        "benches": [
+          {
+            "name": "tests/test_benchmarks.py::test_benchmark_vectorized_backend",
+            "value": 7.416958728783907,
+            "unit": "iter/sec",
+            "range": "stddev: 0.002965744131452341",
+            "extra": "mean: 134.82615133331896 msec\nrounds: 3"
+          },
+          {
+            "name": "tests/test_benchmarks.py::test_benchmark_default_ode_solver",
+            "value": 7.380016006497986,
+            "unit": "iter/sec",
+            "range": "stddev: 0.004537987786830631",
+            "extra": "mean: 135.50106112500515 msec\nrounds: 8"
+          },
+          {
+            "name": "tests/test_benchmarks.py::test_benchmark_rk4_ode_solver",
+            "value": 3.3368973213481365,
+            "unit": "iter/sec",
+            "range": "stddev: 0.002674769245039948",
+            "extra": "mean: 299.67958366665925 msec\nrounds: 3"
+          },
+          {
+            "name": "tests/test_benchmarks.py::test_benchmark_stochastic_solver",
+            "value": 0.21078722561393265,
+            "unit": "iter/sec",
+            "range": "stddev: 0.029944568305049015",
+            "extra": "mean: 4.74412050866664 sec\nrounds: 3"
           }
         ]
       }
