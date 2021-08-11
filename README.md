@@ -94,7 +94,9 @@ Releases are numbered using [Semantic Versioning](https://semver.org/)
 - 2.2.2
   - JIT infectiousness calculations
   - Various micro-optimizations
-
+- 3.0.1a
+  - Include ABM draft version
+  
 ## Release process
 
 To do a release:
