@@ -94,6 +94,8 @@ Releases are numbered using [Semantic Versioning](https://semver.org/)
 - 2.2.2
   - JIT infectiousness calculations
   - Various micro-optimizations
+- 2.2.3
+  - Bugfix release (clamp outputs to 0.0)
 
 ## Release process
 
