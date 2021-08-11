@@ -729,6 +729,9 @@ class CompartmentalModel:
             # Run the model as a deterministic ODE
             self._solve_ode(solver, kwargs)
 
+        # Constrain outputs; interpolation from solvers can produce negative (invalid) values
+        self.outputs[self.outputs < 0.0] = 0.0
+
         # Calculate any requested derived outputs, based on the calculated compartment sizes.
         self.derived_outputs, self._derived_outputs_idx_cache = self._calculate_derived_outputs()
 
