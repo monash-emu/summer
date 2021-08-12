@@ -3,11 +3,13 @@ This module contains the main disease modelling class.
 """
 import copy
 import logging
+from datetime import datetime
 from collections import OrderedDict
 from typing import Callable, Dict, List, Optional, Tuple
 
 import networkx
 import numpy as np
+import pandas as pd
 
 import summer.flows as flows
 from summer import stochastic
@@ -18,7 +20,7 @@ from summer.derived_outputs import DerivedOutputRequest, calculate_derived_outpu
 from summer.runner import ReferenceRunner, VectorizedRunner
 from summer.solver import SolverType, solve_ode
 from summer.stratification import Stratification
-from summer.utils import get_scenario_start_index
+from summer.utils import get_scenario_start_index, ref_times_to_dti
 
 logger = logging.getLogger()
 
@@ -66,6 +68,7 @@ class CompartmentalModel:
         compartments: List[str],
         infectious_compartments: List[str],
         timestep: float = 1.0,
+        ref_date: datetime = None
     ):
         start_t, end_t = times
         assert end_t > start_t, "End time must be greater than start time"
@@ -77,6 +80,9 @@ class CompartmentalModel:
         assert num_steps % 1 == 0, msg
         self.times = np.linspace(start_t, end_t, num=int(num_steps))
         self.timestep = timestep
+
+        # Set the ref_date; the datetime object equivalent to times[0]
+        self.ref_date = ref_date
 
         error_msg = "Infectious compartments must be a subset of compartments"
         assert all(n in compartments for n in infectious_compartments), error_msg
@@ -1148,3 +1154,19 @@ class CompartmentalModel:
             system (AdjustmentSystem): AdjustmentSystem object containing the implementation details
         """
         self._adjustment_systems[name] = system
+
+    def _get_ref_idx(self):
+        if self.ref_date:
+            times = ref_times_to_dti(self.ref_date, self.times)
+        else:
+            times = self.times
+        return times
+
+    def get_outputs_df(self):
+        idx = self._get_ref_idx()
+        column_str = [str(c) for c in self.compartments]
+        return pd.DataFrame(self.outputs, index=idx, columns=column_str)
+
+    def get_derived_outputs_df(self):
+        idx = self._get_ref_idx()
+        return pd.DataFrame(self.derived_outputs, index=idx)
