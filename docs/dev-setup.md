@@ -32,8 +32,8 @@ By this stage you should be able to run `conda` and `poetry` from the terminal. 
 # Step #1: make sure you are in the top-level directory of the summer repository
 # Eg. C:\Users\matt\Documents\code\summer
 
-# Step #2: create a new Python 3.6 environment with conda
-conda create -n summer python=3.6
+# Step #2: create a new Python 3.7 environment with conda
+conda create -n summer python=3.7
 conda activate summer
 
 # Find the conda env location for summer

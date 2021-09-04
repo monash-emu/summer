@@ -24,7 +24,8 @@ Some helpful links to learn more:
 
 ## Installation and Quickstart
 
-This project is tested with Python 3.6.
+This project requires at least Python 3.7
+It has been tested on earlier Python versions, but these are no longer officially support
 Install the `summerepi` package from PyPI
 
 ```bash
@@ -98,6 +99,8 @@ Releases are numbered using [Semantic Versioning](https://semver.org/)
   - Bugfix release (clamp outputs to 0.0)
 - 2.2.4
   - Datetime awareness, DataFrame outputs
+- 2.3.0
+  - First official version to support only Python 3.7
 
 ## Release process
 
