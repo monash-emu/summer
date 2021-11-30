@@ -101,6 +101,8 @@ Releases are numbered using [Semantic Versioning](https://semver.org/)
   - Datetime awareness, DataFrame outputs
 - 2.3.0
   - First official version to support only Python 3.7
+- 2.5.0
+  - Support Python 3.9
 
 ## Release process
 
