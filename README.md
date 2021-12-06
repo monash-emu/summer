@@ -98,6 +98,8 @@ Releases are numbered using [Semantic Versioning](https://semver.org/)
   - Bugfix release (clamp outputs to 0.0)
 - 2.2.4
   - Datetime awareness, DataFrame outputs
+- 2.2.5
+  - Performance improvements (frozenset), no API changes
 
 ## Release process
 
