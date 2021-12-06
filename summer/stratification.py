@@ -47,8 +47,15 @@ class Stratification:
         self.flow_adjustments = {}
         self.infectiousness_adjustments = {}
 
+        # Store internal fast lookup table for flow adjustments using frozenset
+        self._flow_adjustments_fs = {}
+
         # No heterogeneous mixing matrix by default.
         self.mixing_matrix = None
+
+        # Enable/disable validation (runtime assertions)
+        # Not directly user accessable - is toggled by CompartmentalModel
+        self._validate = True
 
     def __repr__(self):
         return f"Stratification: {self.name}"
@@ -131,6 +138,9 @@ class Stratification:
             ]
         ), msg
 
+        msg = "Cannot add new flow adjustments after stratification has already been applied"
+        assert len(self._flow_adjustments_fs) == 0, msg
+
         if flow_name not in self.flow_adjustments:
             self.flow_adjustments[flow_name] = []
 
@@ -148,24 +158,36 @@ class Stratification:
         flow_adjustments = self.flow_adjustments.get(flow.name, [])
         matching_adjustment = None
 
+        # Cache frozenset lookup
+        if flow.name not in self._flow_adjustments_fs:
+            self._flow_adjustments_fs[flow.name] = cur_fadj_fs = []
+            for adjustment, source_strata, dest_strata in flow_adjustments:
+                cur_fadj_fs.append( (adjustment, source_strata, frozenset(source_strata.items()), dest_strata, frozenset(dest_strata.items())) )
+        
+        flow_adj_fs = self._flow_adjustments_fs[flow.name]
+
         # Loop over all the requested adjustments.
-        for adjustment, source_strata, dest_strata in flow_adjustments:
+        for adjustment, source_strata, _source_strata, dest_strata, _dest_strata in flow_adj_fs:
 
-            # For entry flows:
-            msg = f"Source strata requested in flow adjustment of {self.name}, but {flow.name} does not have a source"
-            assert not (source_strata and not flow.source), msg
+            # These are expensive assertions and can be disabled in multi-run situations
+            if self._validate:
+                # For entry flows:
+                msg = f"Source strata requested in flow adjustment of {self.name}, but {flow.name} does not have a source"
+                assert not (source_strata and not flow.source), msg
 
-            # For exit flows:
-            msg = f"Dest strata requested in flow adjustment of {self.name}, but {flow.name} does not have a dest"
-            assert not (dest_strata and not flow.dest), msg
+                # For exit flows:
+                msg = f"Dest strata requested in flow adjustment of {self.name}, but {flow.name} does not have a dest"
+                assert not (dest_strata and not flow.dest), msg
 
             # Make sure that the source request applies to this flow because it has all of the requested strata.
             # Note that these can be specified in the current or any previous stratifications.
             is_source_no_match = (
-                source_strata and flow.source and not flow.source.has_strata(source_strata)
+                source_strata and flow.source and not flow.source._has_strata(_source_strata)
             )
-            is_dest_no_match = dest_strata and flow.dest and not flow.dest.has_strata(dest_strata)
-            if is_source_no_match or is_dest_no_match:
+            if is_source_no_match:
+                continue
+            is_dest_no_match = dest_strata and flow.dest and not flow.dest._has_strata(_dest_strata)
+            if is_dest_no_match:
                 continue
 
             matching_adjustment = adjustment

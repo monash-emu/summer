@@ -572,7 +572,7 @@ class CompartmentalModel:
         expected_count: Optional[int], new_flows: List[flows.BaseFlow]
     ):
         """
-        Ensure the number of new flows created is the expected amountmodel
+        Ensure the number of new flows created is the expected amount
 
         """
         if expected_count is not None:
@@ -598,7 +598,8 @@ class CompartmentalModel:
         if not len(strata):
             return name_query
         else:
-            return [c for c in name_query if c.has_strata(strata)]
+            _strata = frozenset(strata.items())
+            return [c for c in name_query if c._has_strata(_strata)]
 
     """
     Stratifying the model
@@ -612,6 +613,9 @@ class CompartmentalModel:
             strat: The stratification to apply.
 
         """
+        # Enable/disable runtime assertions for strat
+        strat._validate = self._should_validate
+
         # Validate flow adjustments
         flow_names = [f.name for f in self._flows]
         for n in strat.flow_adjustments.keys():

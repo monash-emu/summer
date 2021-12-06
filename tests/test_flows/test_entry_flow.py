@@ -131,6 +131,17 @@ def test_entry_flow_stratify_with_ageing():
         )
     )
 
+    # Expect this to fail because adding flow adjustments after stratification has
+    # already been applied invalidates caching logic
+    with pytest.raises(AssertionError):
+        strat.add_flow_adjustments("birth", {"0": adjust.Multiply(0.1), "1": None, "2": None})
+
+    # Recreate the strat object in order to do this properly...
+    strat = AgeStratification(
+        name="age",
+        strata=["0", "1", "2"],
+        compartments=["I", "R"],
+    )
     # Expect this to fail coz you can't adjust birth flows for age stratifications.
     strat.add_flow_adjustments("birth", {"0": adjust.Multiply(0.1), "1": None, "2": None})
     with pytest.raises(AssertionError):
