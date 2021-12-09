@@ -170,7 +170,7 @@ def test_get_flow_adjustments__with_no_adjustments():
     strat = Stratification(name="location", strata=["rural", "urban"], compartments=["S", "I", "R"])
 
     for flow in [trans_flow, entry_flow, exit_flow]:
-        assert strat.get_flow_adjustment(flow) is None
+        assert not strat.get_flow_adjustments(flow)
 
 
 def test_get_flow_adjustments__with_one_adjustment():
@@ -182,9 +182,9 @@ def test_get_flow_adjustments__with_one_adjustment():
     strat = Stratification(name="location", strata=["rural", "urban"], compartments=["S", "I", "R"])
     strat.add_flow_adjustments("flow", {"rural": Multiply(1), "urban": None})
 
-    assert strat.get_flow_adjustment(other_flow) is None
+    assert not strat.get_flow_adjustments(other_flow)
     for flow in [trans_flow, entry_flow, exit_flow]:
-        adj = strat.get_flow_adjustment(flow)
+        adj = strat.get_flow_adjustments(flow)[0]
         assert adj["urban"] is None
         assert adj["rural"]._is_equal(Multiply(1))
 
@@ -201,11 +201,12 @@ def test_get_flow_adjustments__with_multiple_adjustments():
     strat.add_flow_adjustments("flow", {"rural": Multiply(3), "urban": Overwrite(2)})
 
     # Latest flow adjustment should always win.
-    assert strat.get_flow_adjustment(other_flow) is None
+    assert not strat.get_flow_adjustments(other_flow)
     for flow in [trans_flow, entry_flow, exit_flow]:
-        adj = strat.get_flow_adjustment(flow)
-        assert adj["rural"]._is_equal(Multiply(3))
-        assert adj["urban"]._is_equal(Overwrite(2))
+        adjustments = strat.get_flow_adjustments(flow)
+        assert adjustments[0]["rural"]._is_equal(Multiply(1))
+        assert adjustments[1]["rural"]._is_equal(Multiply(3))
+        assert adjustments[1]["urban"]._is_equal(Overwrite(2))
 
 
 def test_get_flow_adjustments__with_strata_whitelist():
@@ -220,19 +221,19 @@ def test_get_flow_adjustments__with_strata_whitelist():
     # Source strata shouldn't be specified for an entry flow.
     entry_flow = EntryFlow("flow", Compartment("S"), 1)
     with pytest.raises(AssertionError):
-        strat.get_flow_adjustment(entry_flow)
+        strat.get_flow_adjustments(entry_flow)
 
     # get_flow_adjustments returns None when adjustment doesn't apply to the flow being processed.
     other_flow = TransitionFlow("other", Compartment("S"), Compartment("I"), 1)
-    assert strat.get_flow_adjustment(other_flow) is None
+    assert not strat.get_flow_adjustments(other_flow)
 
     # Behaviour is the same for transition and exit flows, to which the adjustment should apply.
     trans_flow = TransitionFlow("flow", Compartment("S"), Compartment("I"), 1)
     exit_flow = ExitFlow("flow", Compartment("I"), 1)
     for flow in [trans_flow, exit_flow]:
-        adj = strat.get_flow_adjustment(flow)
-        assert adj["rural"]._is_equal(Multiply(3))
-        assert adj["urban"]._is_equal(Overwrite(2))
+        adjustments = strat.get_flow_adjustments(flow)
+        assert adjustments[-1]["rural"]._is_equal(Multiply(3))
+        assert adjustments[-1]["urban"]._is_equal(Overwrite(2))
 
     # Only flows with matching strata should get the adjustment.
     strat = Stratification(name="location", strata=["rural", "urban"], compartments=["S", "I", "R"])
@@ -245,13 +246,13 @@ def test_get_flow_adjustments__with_strata_whitelist():
     # No destination stratum for the flow being stratified, but destination strata requested.
     exit_flow = ExitFlow("flow", Compartment("I"), 1)
     with pytest.raises(AssertionError):
-        strat.get_flow_adjustment(exit_flow)
+        strat.get_flow_adjustments(exit_flow)
 
     # No matching destination stratum.
     other_flow = TransitionFlow("other", Compartment("S"), Compartment("I"), 1)
     other_flow_strat = TransitionFlow("other", Compartment("S"), Compartment("I", {"age": "20"}), 1)
-    assert strat.get_flow_adjustment(other_flow) is None
-    assert strat.get_flow_adjustment(other_flow_strat) is None
+    assert not strat.get_flow_adjustments(other_flow)
+    assert not strat.get_flow_adjustments(other_flow_strat)
 
     # Flows without age 20 get the last match.
     trans_flow = TransitionFlow("flow", Compartment("S"), Compartment("I"), 1)
@@ -270,16 +271,16 @@ def test_get_flow_adjustments__with_strata_whitelist():
         entry_flow_strat_wrong,
         trans_flow_strat_wrong_2,
     ]:
-        adj = strat.get_flow_adjustment(flow)
-        assert adj["rural"]._is_equal(Multiply(3))
-        assert adj["urban"]._is_equal(Overwrite(2))
+        adj = strat.get_flow_adjustments(flow)
+        assert adj[-1]["rural"]._is_equal(Multiply(3))
+        assert adj[-1]["urban"]._is_equal(Overwrite(2))
 
     trans_flow_strat = TransitionFlow("flow", Compartment("S"), Compartment("I", {"age": "20"}), 1)
     entry_flow_strat = EntryFlow("flow", Compartment("S", {"age": "20"}), 1)
     for flow in [trans_flow_strat, entry_flow_strat]:
-        adj = strat.get_flow_adjustment(flow)
-        assert adj["rural"]._is_equal(Multiply(2))
-        assert adj["urban"]._is_equal(Overwrite(1))
+        adj = strat.get_flow_adjustments(flow)
+        assert adj[-1]["rural"]._is_equal(Multiply(2))
+        assert adj[-1]["urban"]._is_equal(Overwrite(1))
 
     # The last created matching flow adjustment will win, also include both source and dest.
     strat = Stratification(name="location", strata=["rural", "urban"], compartments=["S", "I", "R"])
@@ -311,18 +312,18 @@ def test_get_flow_adjustments__with_strata_whitelist():
         "flow", Compartment("S", {"age": "20"}), Compartment("I", {"age": "30"}), 1
     )
     for flow in [trans_flow_strat_wrong, trans_flow_strat_wrong_2, trans_flow_strat_wrong_3]:
-        adj = strat.get_flow_adjustment(flow)
-        assert adj["rural"]._is_equal(Multiply(3))
-        assert adj["urban"]._is_equal(Overwrite(2))
+        adj = strat.get_flow_adjustments(flow)
+        assert adj[-1]["rural"]._is_equal(Multiply(3))
+        assert adj[-1]["urban"]._is_equal(Overwrite(2))
 
     # Match to the last created stratification
     trans_flow_strat = TransitionFlow(
         "flow", Compartment("S", {"age": "20"}), Compartment("I", {"age": "30", "work": "home"}), 1
     )
     for flow in [trans_flow_strat]:
-        adj = strat.get_flow_adjustment(flow)
-        assert adj["rural"]._is_equal(Multiply(3))
-        assert adj["urban"]._is_equal(Overwrite(2))
+        adj = strat.get_flow_adjustments(flow)
+        assert adj[-1]["rural"]._is_equal(Multiply(3))
+        assert adj[-1]["urban"]._is_equal(Overwrite(2))
 
 
 def test_create_stratification__with_infectiousness_adjustments():

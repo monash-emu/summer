@@ -147,7 +147,7 @@ class Stratification:
         #FIXME Turn this into class or named tuple or something... we want to know what's going on
         self.flow_adjustments[flow_name].append((adjustments, source_strata, dest_strata))
 
-    def get_flow_adjustment(self, flow) -> dict:
+    def get_flow_adjustments(self, flow) -> dict:
         """
         Note that the loop structure implies that if the user has requested multiple adjustments that apply to a single
         combination of strata (across multiple stratifications), then only the last one that is applicable will be used
@@ -156,7 +156,7 @@ class Stratification:
 
         """
         flow_adjustments = self.flow_adjustments.get(flow.name, [])
-        matching_adjustment = None
+        matching_adjustments = []
 
         # Cache frozenset lookup
         if flow.name not in self._flow_adjustments_fs:
@@ -190,9 +190,9 @@ class Stratification:
             if is_dest_no_match:
                 continue
 
-            matching_adjustment = adjustment
+            matching_adjustments.append(adjustment)
 
-        return matching_adjustment
+        return matching_adjustments
 
     def add_infectiousness_adjustments(
         self, compartment_name: str, adjustments: Dict[str, Adjustment]

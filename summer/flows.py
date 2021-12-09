@@ -164,14 +164,14 @@ class BaseEntryFlow(BaseFlow):
             return [self]
 
         new_flows = []
-        flow_adjustments = strat.get_flow_adjustment(self)
+        flow_adjustments = strat.get_flow_adjustments(self)
         is_birth_into_agegroup_flow = self._is_birth_flow and strat.is_ageing()
 
         msg = "Cannot adjust birth flows into age stratifications."
         assert not (is_birth_into_agegroup_flow and flow_adjustments), msg
 
         msg = f"Flow {self.name} has missing adjustments for {strat.name} strat."
-        assert not (flow_adjustments and set(flow_adjustments.keys()) != set(strat.strata)), msg
+        assert not (flow_adjustments and any([set(fadj.keys()) != set(strat.strata) for fadj in flow_adjustments])), msg
 
         for stratum in strat.strata:
             new_adjustments = [*self.adjustments]
@@ -183,9 +183,10 @@ class BaseEntryFlow(BaseFlow):
             else:
                 # Not an ageing stratification, check for user-specified flow adjustments.
                 if flow_adjustments:
-                    strata_flow_adjustment = flow_adjustments.get(stratum)
-                    if strata_flow_adjustment:
-                        new_adjustments.append(strata_flow_adjustment)
+                    for fadj in flow_adjustments:
+                        strata_flow_adjustment = fadj.get(stratum)
+                        if strata_flow_adjustment:
+                            new_adjustments.append(strata_flow_adjustment)
                 else:
                     # No adjustments specified for this flow.
                     # Default to equally dividing entry population between all strata.
@@ -235,19 +236,20 @@ class BaseExitFlow(BaseFlow):
             # Flow source is not stratified, do not stratify this flow.
             return [self]
 
-        flow_adjustments = strat.get_flow_adjustment(self)
+        flow_adjustments = strat.get_flow_adjustments(self)
 
         msg = f"Flow {self.name} has missing adjustments for {strat.name} strat."
-        assert not (flow_adjustments and set(flow_adjustments.keys()) != set(strat.strata)), msg
+        assert not (flow_adjustments and any([set(fadj.keys()) != set(strat.strata) for fadj in flow_adjustments])), msg
 
         new_flows = []
         for stratum in strat.strata:
             new_adjustments = [*self.adjustments]
             # Check for user-specified flow adjustments.
             if flow_adjustments:
-                strata_flow_adjustment = flow_adjustments.get(stratum)
-                if strata_flow_adjustment:
-                    new_adjustments.append(strata_flow_adjustment)
+                for fadj in flow_adjustments:
+                    strata_flow_adjustment = fadj.get(stratum)
+                    if strata_flow_adjustment:
+                        new_adjustments.append(strata_flow_adjustment)
 
             new_source = self.source.stratify(strat.name, stratum)
             new_flow = self.copy(
@@ -298,10 +300,10 @@ class BaseTransitionFlow(BaseFlow):
             return [self]
 
         new_flows = []
-        flow_adjustments = strat.get_flow_adjustment(self)
+        flow_adjustments = strat.get_flow_adjustments(self)
 
         msg = f"Flow {self.name} has missing adjustments for {strat.name} strat."
-        assert not (flow_adjustments and set(flow_adjustments.keys()) != set(strat.strata)), msg
+        assert not (flow_adjustments and any([set(fadj.keys()) != set(strat.strata) for fadj in flow_adjustments])), msg
 
         for stratum in strat.strata:
             # Find new compartments
@@ -343,8 +345,10 @@ class BaseTransitionFlow(BaseFlow):
                 new_adjustments.append(Multiply(entry_fraction))
             elif flow_adjustments:
                 # Use user-specified flow adjustments.
-                strata_flow_adjustment = flow_adjustments.get(stratum)
-                new_adjustments.append(strata_flow_adjustment)
+                for fadj in flow_adjustments:
+                    strata_flow_adjustment = fadj.get(stratum)
+                    if strata_flow_adjustment:
+                        new_adjustments.append(strata_flow_adjustment)
 
             new_flow = self.copy(
                 name=self.name,
