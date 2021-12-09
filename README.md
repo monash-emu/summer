@@ -100,6 +100,8 @@ Releases are numbered using [Semantic Versioning](https://semver.org/)
   - Datetime awareness, DataFrame outputs
 - 2.2.5
   - Performance improvements (frozenset), no API changes
+- 2.2.6
+  - Verify strata in flow adjustments (prevent unexpected behaviour)
 
 ## Release process
 
