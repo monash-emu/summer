@@ -622,6 +622,13 @@ class CompartmentalModel:
             msg = f"Flow adjustment for '{n}' refers to a flow that is not present in the model."
             assert n in flow_names, msg
 
+        for fadj in strat.flow_adjustments.values():
+            for _, source_strata, dest_strata in fadj:
+                # Verify source
+                self._strata_exist(source_strata)
+                # Veryify dest
+                self._strata_exist(dest_strata)
+
         # Validate infectiousness adjustments.
         msg = "All stratification infectiousness adjustments must refer to a compartment that is present in model."
         assert all(
@@ -699,6 +706,20 @@ class CompartmentalModel:
                     )
 
         self._stratifications.append(strat)
+
+    def _strata_exist(self, strata: dict):
+        """
+        Verify whether all the strata exist within the model
+        Raises an Exception if not
+        """
+        strat_names = [s.name for s in self._stratifications]
+        for k, v in strata.items():
+            if k not in strat_names:
+                raise KeyError(f"Invalid stratification {k}")
+            for s in self._stratifications:
+                if k == s.name:
+                    if v not in s.strata:
+                        raise ValueError(f"Invalid stratum {v} for {s}")
 
     """
     Running the model
