@@ -88,7 +88,7 @@ def test_stratify_entry_flows__with_explicit_adjustments():
     assert all([a._is_equal(e) for e, a in zip(expected_flows, model._flows)])
 
     strat = Stratification("location", ["urban", "rural"], ["S", "I", "R"])
-    strat.add_flow_adjustments("imports", {"urban": Multiply(0.9), "rural": None})
+    strat.set_flow_adjustments("imports", {"urban": Multiply(0.9), "rural": None})
     model.stratify_with(strat)
 
     expected_flows = [
@@ -109,7 +109,7 @@ def test_stratify_entry_flows__with_explicit_adjustments():
     assert all([a._is_equal(e) for e, a in zip(expected_flows, model._flows)])
 
     strat = Stratification("age", ["young", "old"], ["S", "I", "R"])
-    strat.add_flow_adjustments("imports", {"young": Multiply(0.8), "old": Overwrite(1)})
+    strat.set_flow_adjustments("imports", {"young": Multiply(0.8), "old": Overwrite(1)})
     model.stratify_with(strat)
     expected_flows = [
         ImportFlow(
@@ -371,8 +371,8 @@ def test_stratify_exit_flows():
 
     # Apply partial stratification with flow adjustments
     strat = Stratification("age", ["young", "old"], ["I", "R"])
-    strat.add_flow_adjustments("d_I", {"young": Multiply(0.5), "old": Multiply(2)})
-    strat.add_flow_adjustments("d_R", {"young": Multiply(0.5), "old": Multiply(2)})
+    strat.set_flow_adjustments("d_I", {"young": Multiply(0.5), "old": Multiply(2)})
+    strat.set_flow_adjustments("d_R", {"young": Multiply(0.5), "old": Multiply(2)})
     model.stratify_with(strat)
 
     expected_flows = [
@@ -568,7 +568,7 @@ def test_stratify_transition_flows__with_dest_only_stratified__with_adjustments(
 
     # Apply stratification
     strat = Stratification("location", ["urban", "rural"], ["R"])
-    strat.add_flow_adjustments("recovery", {"urban": Overwrite(0.7), "rural": Overwrite(0.1)})
+    strat.set_flow_adjustments("recovery", {"urban": Overwrite(0.7), "rural": Overwrite(0.1)})
     model.stratify_with(strat)
 
     expected_flows = [
@@ -626,7 +626,7 @@ def test_stratify_transition_flows__with_dest_only_stratified__with_adjustments_
 
     # Apply stratification
     strat = StrainStratification("location", ["urban", "rural"], ["R"])
-    strat.add_flow_adjustments("recovery", {"urban": Overwrite(0.7), "rural": Overwrite(0.1)})
+    strat.set_flow_adjustments("recovery", {"urban": Overwrite(0.7), "rural": Overwrite(0.1)})
     model.stratify_with(strat)
 
     expected_flows = [

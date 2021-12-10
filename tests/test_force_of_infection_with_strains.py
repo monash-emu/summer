@@ -204,7 +204,7 @@ def test_strain__with_flow_adjustments(backend):
             "c": 0.1,  # 10 people
         }
     )
-    strat.add_flow_adjustments(
+    strat.set_flow_adjustments(
         "infection",
         {
             "a": adjust.Multiply(0.5),  # 0.5x as susceptible
