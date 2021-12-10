@@ -90,7 +90,7 @@ class Stratification:
         assert abs(1 - sum(proportions.values())) < COMP_SPLIT_REQUEST_ERROR, msg
         self.population_split = proportions
 
-    def add_flow_adjustments(
+    def set_flow_adjustments(
         self,
         flow_name: str,
         adjustments: Dict[str, Adjustment],
@@ -98,11 +98,12 @@ class Stratification:
         dest_strata: Optional[Dict[str, str]] = None,
     ):
         """
-        Add an adjustment of a flow to the stratification.
+        Set an adjustment of a flow to the stratification.
+        Adjustments from previous stratifications will be applied before this.
         You can use time-varying functions for infectiousness adjustments.
 
-        It is possible to specify multiple conflicting flow adjustments for the same flow.
-        In this case, only the last-created applicable adjustment will be chosen.
+        It is possible to specify multiple flow adjustments for the same flow in a given Stratification.
+        In this case, only the last-created applicable adjustment will be applied.
 
         Args:
             flow_name: The name of the flow to adjust.
@@ -118,7 +119,7 @@ class Stratification:
                     strata=["urban", "rural", "alpine"],
                     compartments=["S", "I", "R"]
                 )
-                strat.add_flow_adjustments("recovery", {
+                strat.set_flow_adjustments("recovery", {
                     "urban": Multiply(1.5),
                     "rural": Multiply(0.8),
                     "alpine": None, # No adjustment
