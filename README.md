@@ -102,6 +102,10 @@ Releases are numbered using [Semantic Versioning](https://semver.org/)
   - Performance improvements (frozenset), no API changes
 - 2.2.6
   - Verify strata in flow adjustments (prevent unexpected behaviour)
+- 2.2.7
+  - Rename add_flow_adjustments -> set_flow_adjustments
+- 2.2.8
+  - Split imports functionality (add_importation_flow now requires split_imports arg)
 
 ## Release process
 

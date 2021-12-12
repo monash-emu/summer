@@ -13,7 +13,7 @@ import pandas as pd
 
 import summer.flows as flows
 from summer import stochastic
-from summer.adjust import FlowParam, AdjustmentSystem
+from summer.adjust import BaseAdjustment, FlowParam, AdjustmentSystem, Multiply
 from summer.compartment import Compartment
 from summer.compute import ComputedValueProcessor
 from summer.derived_outputs import DerivedOutputRequest, calculate_derived_outputs
@@ -261,6 +261,7 @@ class CompartmentalModel:
         name: str,
         num_imported: FlowParam,
         dest: str,
+        split_imports: bool,
         dest_strata: Optional[Dict[str, str]] = None,
         expected_flow_count: Optional[int] = None,
     ):
@@ -272,12 +273,25 @@ class CompartmentalModel:
             name: The name of the new flow.
             num_imported: The number of people arriving per timestep.
             dest: The name of the destination compartment.
+            split_imports: Whether to split num_imported amongst existing destination compartments (True), 
+                   or add the full value to each (False)
             dest_strata (optional): A whitelist of strata to filter the destination compartments.
             expected_flow_count (optional): Used to assert that a particular number of flows are created.
 
         """
+
+        dest_strata = dest_strata or {}
+        dest_comps = [c for c in self.compartments if c.is_match(dest, dest_strata)]
+
+        if split_imports:
+            # Adjust each of the flows so they are split equally between dest_comps
+            adjustments = [Multiply(1.0/len(dest_comps))]
+        else:
+            # No adjustment - flow to each dest will be num_imported
+            adjustments = None
+
         self._add_entry_flow(
-            flows.ImportFlow, name, num_imported, dest, dest_strata, expected_flow_count
+            flows.ImportFlow, name, num_imported, dest, dest_strata, expected_flow_count, adjustments
         )
 
     def _add_entry_flow(
@@ -288,12 +302,13 @@ class CompartmentalModel:
         dest: str,
         dest_strata: Optional[Dict[str, str]],
         expected_flow_count: Optional[int],
+        adjustments: List[BaseAdjustment] = None
     ):
         dest_strata = dest_strata or {}
         dest_comps = [c for c in self.compartments if c.is_match(dest, dest_strata)]
         new_flows = []
         for dest_comp in dest_comps:
-            flow = flow_cls(name, dest_comp, param)
+            flow = flow_cls(name, dest_comp, param, adjustments=adjustments)
             new_flows.append(flow)
 
         self._validate_expected_flow_count(expected_flow_count, new_flows)
