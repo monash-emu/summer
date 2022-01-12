@@ -607,7 +607,7 @@ class CompartmentalModel:
             name_map[n] = [c for c in self.compartments if c.name == n]
         self._compartment_name_map = name_map
 
-    def get_matching_compartments(self, name, strata):
+    def get_matching_compartments(self, name: str, strata: dict):
         name_query = self._compartment_name_map[name]
 
         if not len(strata):
@@ -615,6 +615,18 @@ class CompartmentalModel:
         else:
             _strata = frozenset(strata.items())
             return [c for c in name_query if c._has_strata(_strata)]
+
+    def _get_matching_compartments(self, name: str, strata: frozenset):
+        """
+        Optimized version of above method that uses frozenset directly
+        """
+        name_query = self._compartment_name_map[name]
+
+        if not len(strata):
+            return name_query
+        else:
+            return [c for c in name_query if c._has_strata(strata)]
+
 
     """
     Stratifying the model
