@@ -106,6 +106,8 @@ Releases are numbered using [Semantic Versioning](https://semver.org/)
   - Rename add_flow_adjustments -> set_flow_adjustments
 - 2.2.8
   - Split imports functionality (add_importation_flow now requires split_imports arg)
+- 2.2.9
+  - Post-stratification population restribution
 
 ## Release process
 
