@@ -114,6 +114,8 @@ Releases are numbered using [Semantic Versioning](https://semver.org/)
   - Support Python 3.9
 - 2.6.0
   - Merge 3.9/master branches
+- 2.7.0
+  - Include Python 3.10 support and update requirements 
 
 ## Release process
 
