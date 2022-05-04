@@ -24,7 +24,7 @@ Some helpful links to learn more:
 
 ## Installation and Quickstart
 
-This project is tested with Python 3.6.
+This project requires at least Python 3.7 (and is actively targeted at 3.9)
 Install the `summerepi` package from PyPI
 
 ```bash
@@ -108,6 +108,14 @@ Releases are numbered using [Semantic Versioning](https://semver.org/)
   - Split imports functionality (add_importation_flow now requires split_imports arg)
 - 2.2.9
   - Post-stratification population restribution
+- 2.3.0
+  - First official version to support only Python 3.7
+- 2.5.0
+  - Support Python 3.9
+- 2.6.0
+  - Merge 3.9/master branches
+- 2.7.0
+  - Include Python 3.10 support and update requirements 
 
 ## Release process
 
