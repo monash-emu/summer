@@ -13,7 +13,7 @@ import pandas as pd
 
 import summer.flows as flows
 from summer import stochastic
-from summer.adjust import FlowParam, AdjustmentSystem
+from summer.adjust import BaseAdjustment, FlowParam, AdjustmentSystem, Multiply
 from summer.compartment import Compartment
 from summer.compute import ComputedValueProcessor
 from summer.derived_outputs import DerivedOutputRequest, calculate_derived_outputs
@@ -21,6 +21,7 @@ from summer.runner import ReferenceRunner, VectorizedRunner
 from summer.solver import SolverType, solve_ode
 from summer.stratification import Stratification
 from summer.utils import get_scenario_start_index, ref_times_to_dti
+from summer.population import get_unique_strat_groups, filter_by_strata
 
 logger = logging.getLogger()
 
@@ -261,6 +262,7 @@ class CompartmentalModel:
         name: str,
         num_imported: FlowParam,
         dest: str,
+        split_imports: bool,
         dest_strata: Optional[Dict[str, str]] = None,
         expected_flow_count: Optional[int] = None,
     ):
@@ -272,12 +274,25 @@ class CompartmentalModel:
             name: The name of the new flow.
             num_imported: The number of people arriving per timestep.
             dest: The name of the destination compartment.
+            split_imports: Whether to split num_imported amongst existing destination compartments (True), 
+                   or add the full value to each (False)
             dest_strata (optional): A whitelist of strata to filter the destination compartments.
             expected_flow_count (optional): Used to assert that a particular number of flows are created.
 
         """
+
+        dest_strata = dest_strata or {}
+        dest_comps = [c for c in self.compartments if c.is_match(dest, dest_strata)]
+
+        if split_imports:
+            # Adjust each of the flows so they are split equally between dest_comps
+            adjustments = [Multiply(1.0/len(dest_comps))]
+        else:
+            # No adjustment - flow to each dest will be num_imported
+            adjustments = None
+
         self._add_entry_flow(
-            flows.ImportFlow, name, num_imported, dest, dest_strata, expected_flow_count
+            flows.ImportFlow, name, num_imported, dest, dest_strata, expected_flow_count, adjustments
         )
 
     def _add_entry_flow(
@@ -288,12 +303,13 @@ class CompartmentalModel:
         dest: str,
         dest_strata: Optional[Dict[str, str]],
         expected_flow_count: Optional[int],
+        adjustments: List[BaseAdjustment] = None
     ):
         dest_strata = dest_strata or {}
         dest_comps = [c for c in self.compartments if c.is_match(dest, dest_strata)]
         new_flows = []
         for dest_comp in dest_comps:
-            flow = flow_cls(name, dest_comp, param)
+            flow = flow_cls(name, dest_comp, param, adjustments=adjustments)
             new_flows.append(flow)
 
         self._validate_expected_flow_count(expected_flow_count, new_flows)
@@ -572,7 +588,7 @@ class CompartmentalModel:
         expected_count: Optional[int], new_flows: List[flows.BaseFlow]
     ):
         """
-        Ensure the number of new flows created is the expected amountmodel
+        Ensure the number of new flows created is the expected amount
 
         """
         if expected_count is not None:
@@ -592,13 +608,26 @@ class CompartmentalModel:
             name_map[n] = [c for c in self.compartments if c.name == n]
         self._compartment_name_map = name_map
 
-    def get_matching_compartments(self, name, strata):
+    def get_matching_compartments(self, name: str, strata: dict):
         name_query = self._compartment_name_map[name]
 
         if not len(strata):
             return name_query
         else:
-            return [c for c in name_query if c.has_strata(strata)]
+            _strata = frozenset(strata.items())
+            return [c for c in name_query if c._has_strata(_strata)]
+
+    def _get_matching_compartments(self, name: str, strata: frozenset):
+        """
+        Optimized version of above method that uses frozenset directly
+        """
+        name_query = self._compartment_name_map[name]
+
+        if not len(strata):
+            return name_query
+        else:
+            return [c for c in name_query if c._has_strata(strata)]
+
 
     """
     Stratifying the model
@@ -612,11 +641,21 @@ class CompartmentalModel:
             strat: The stratification to apply.
 
         """
+        # Enable/disable runtime assertions for strat
+        strat._validate = self._should_validate
+
         # Validate flow adjustments
         flow_names = [f.name for f in self._flows]
         for n in strat.flow_adjustments.keys():
             msg = f"Flow adjustment for '{n}' refers to a flow that is not present in the model."
             assert n in flow_names, msg
+
+        for fadj in strat.flow_adjustments.values():
+            for _, source_strata, dest_strata in fadj:
+                # Verify source
+                self._strata_exist(source_strata)
+                # Veryify dest
+                self._strata_exist(dest_strata)
 
         # Validate infectiousness adjustments.
         msg = "All stratification infectiousness adjustments must refer to a compartment that is present in model."
@@ -695,6 +734,57 @@ class CompartmentalModel:
                     )
 
         self._stratifications.append(strat)
+
+    def _strata_exist(self, strata: dict):
+        """
+        Verify whether all the strata exist within the model
+        Raises an Exception if not
+        """
+        strat_names = [s.name for s in self._stratifications]
+        for k, v in strata.items():
+            if k not in strat_names:
+                raise KeyError(f"Invalid stratification {k}")
+            for s in self._stratifications:
+                if k == s.name:
+                    if v not in s.strata:
+                        raise ValueError(f"Invalid stratum {v} for {s}")
+
+    def adjust_population_split(self, strat: str, dest_filter: dict, proportions: dict):
+        """Adjust the initial population to redistribute the population for a particular
+        stratification, over a subset of some other strata
+
+        Args:
+            strat (str): The stratification to redistribute over
+            dest_filter (dict): Subset of (other) strata to filter the split by
+            proportions (dict): Proportions of new split (must have all strata specified)
+
+        """ 
+            
+        msg = f"No stratification {strat} found in model"
+        assert(strat in [s.name for s in self._stratifications]), msg
+
+        model_strat = [s for s in self._stratifications if s.name==strat][0]
+
+        msg = "All strata must be specified in proportions"
+        assert(set(model_strat.strata) == set(proportions)), msg
+
+        msg = "Proportions must sum to 1.0"
+        np.testing.assert_allclose(sum(proportions.values()), 1.0, err_msg=msg)
+        
+        strat_comps = [c for c in self.compartments if strat in c.strata]
+        # Filter by only the subset we're setting in split_map
+        strat_comps = filter_by_strata(strat_comps, dest_filter)
+        
+        usg = get_unique_strat_groups(strat_comps, strat)
+        
+        for g in usg:
+            mcomps = self._get_matching_compartments(g.name, g.strata)
+            idx = [c.idx for c in mcomps]
+            total = self.initial_population[idx].sum()
+            for c in mcomps:
+                k = c.strata[strat]
+                target_prop = proportions[k]
+                self.initial_population[c.idx] = total * target_prop
 
     """
     Running the model

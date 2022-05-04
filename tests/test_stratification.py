@@ -99,14 +99,14 @@ def test_create_stratification__with_flow_adjustments():
 
     # Fails coz not all strata specified.
     with pytest.raises(AssertionError):
-        strat.add_flow_adjustments(
+        strat.set_flow_adjustments(
             flow_name="recovery",
             adjustments={"rural": Multiply(1.2)},
         )
 
     # Fails coz an incorrect stratum was specified.
     with pytest.raises(AssertionError):
-        strat.add_flow_adjustments(
+        strat.set_flow_adjustments(
             flow_name="recovery",
             adjustments={
                 "rural": Multiply(1.2),
@@ -116,7 +116,7 @@ def test_create_stratification__with_flow_adjustments():
         )
 
     # Correct version works.
-    strat.add_flow_adjustments(
+    strat.set_flow_adjustments(
         flow_name="recovery",
         adjustments={"rural": Multiply(1.2), "urban": Multiply(0.8)},
     )
@@ -128,7 +128,7 @@ def test_create_stratification__with_flow_adjustments():
     assert not src and not dst
 
     # Add another adjustment for the same flow.
-    strat.add_flow_adjustments(
+    strat.set_flow_adjustments(
         flow_name="recovery",
         adjustments={"rural": Multiply(1.3), "urban": Multiply(0.9)},
         source_strata={"age": "10"},
@@ -148,7 +148,7 @@ def test_create_stratification__with_flow_adjustments():
     def urban_infection_adjustment(t):
         return 2 * t
 
-    strat.add_flow_adjustments(
+    strat.set_flow_adjustments(
         flow_name="infection",
         adjustments={
             "rural": Multiply(urban_infection_adjustment),
@@ -180,7 +180,7 @@ def test_get_flow_adjustments__with_one_adjustment():
     exit_flow = ExitFlow("flow", Compartment("I"), 1)
 
     strat = Stratification(name="location", strata=["rural", "urban"], compartments=["S", "I", "R"])
-    strat.add_flow_adjustments("flow", {"rural": Multiply(1), "urban": None})
+    strat.set_flow_adjustments("flow", {"rural": Multiply(1), "urban": None})
 
     assert strat.get_flow_adjustment(other_flow) is None
     for flow in [trans_flow, entry_flow, exit_flow]:
@@ -197,8 +197,8 @@ def test_get_flow_adjustments__with_multiple_adjustments():
 
     strat = Stratification(name="location", strata=["rural", "urban"], compartments=["S", "I", "R"])
 
-    strat.add_flow_adjustments("flow", {"rural": Multiply(1), "urban": None})
-    strat.add_flow_adjustments("flow", {"rural": Multiply(3), "urban": Overwrite(2)})
+    strat.set_flow_adjustments("flow", {"rural": Multiply(1), "urban": None})
+    strat.set_flow_adjustments("flow", {"rural": Multiply(3), "urban": Overwrite(2)})
 
     # Latest flow adjustment should always win.
     assert strat.get_flow_adjustment(other_flow) is None
@@ -211,9 +211,9 @@ def test_get_flow_adjustments__with_multiple_adjustments():
 def test_get_flow_adjustments__with_strata_whitelist():
     # Latest matching flow adjustment should always win.
     strat = Stratification(name="location", strata=["rural", "urban"], compartments=["S", "I", "R"])
-    strat.add_flow_adjustments("flow", {"rural": Multiply(1), "urban": None})
-    strat.add_flow_adjustments("flow", {"rural": Multiply(3), "urban": Overwrite(2)})
-    strat.add_flow_adjustments(
+    strat.set_flow_adjustments("flow", {"rural": Multiply(1), "urban": None})
+    strat.set_flow_adjustments("flow", {"rural": Multiply(3), "urban": Overwrite(2)})
+    strat.set_flow_adjustments(
         "flow", {"rural": Multiply(2), "urban": Overwrite(1)}, source_strata={"age": "20"}
     )
 
@@ -236,9 +236,9 @@ def test_get_flow_adjustments__with_strata_whitelist():
 
     # Only flows with matching strata should get the adjustment.
     strat = Stratification(name="location", strata=["rural", "urban"], compartments=["S", "I", "R"])
-    strat.add_flow_adjustments("flow", {"rural": Multiply(1), "urban": None})
-    strat.add_flow_adjustments("flow", {"rural": Multiply(3), "urban": Overwrite(2)})
-    strat.add_flow_adjustments(
+    strat.set_flow_adjustments("flow", {"rural": Multiply(1), "urban": None})
+    strat.set_flow_adjustments("flow", {"rural": Multiply(3), "urban": Overwrite(2)})
+    strat.set_flow_adjustments(
         "flow", {"rural": Multiply(2), "urban": Overwrite(1)}, dest_strata={"age": "20"}
     )
 
@@ -283,20 +283,20 @@ def test_get_flow_adjustments__with_strata_whitelist():
 
     # The last created matching flow adjustment will win, also include both source and dest.
     strat = Stratification(name="location", strata=["rural", "urban"], compartments=["S", "I", "R"])
-    strat.add_flow_adjustments("flow", {"rural": Multiply(1), "urban": None})
-    strat.add_flow_adjustments(
+    strat.set_flow_adjustments("flow", {"rural": Multiply(1), "urban": None})
+    strat.set_flow_adjustments(
         "flow",
         {"rural": Multiply(5), "urban": Overwrite(7)},
         source_strata={"age": "20"},
         dest_strata={"age": "30", "work": "home"},
     )
-    strat.add_flow_adjustments(
+    strat.set_flow_adjustments(
         "flow",
         {"rural": Multiply(2), "urban": Overwrite(1)},
         source_strata={"age": "20"},
         dest_strata={"age": "30"},
     )
-    strat.add_flow_adjustments("flow", {"rural": Multiply(3), "urban": Overwrite(2)})
+    strat.set_flow_adjustments("flow", {"rural": Multiply(3), "urban": Overwrite(2)})
 
     # Missing source strata
     trans_flow_strat_wrong = TransitionFlow(

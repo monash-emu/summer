@@ -96,16 +96,16 @@ def test_flow_derived_outputs(backend):
     model.set_initial_population(distribution={"S": 900, "I": 100})
 
     # Constant entry.
-    model.add_importation_flow("imports", num_imported=2, dest="S")
+    model.add_importation_flow("imports", num_imported=2, dest="S", split_imports=False)
     model.request_output_for_flow(name="importation", flow_name="imports")
     model.request_output_for_flow(name="importation_raw", flow_name="imports", raw_results=True)
 
     # Linear entry.
-    model.add_importation_flow("imports_land", num_imported=lambda t, cv: 3 * t, dest="S")
+    model.add_importation_flow("imports_land", num_imported=lambda t, cv: 3 * t, dest="S", split_imports=False)
     model.request_output_for_flow(name="importation_land", flow_name="imports_land")
 
     # Quadratic entry.
-    model.add_importation_flow("imports_air", num_imported=lambda t, cv: t ** 2, dest="S")
+    model.add_importation_flow("imports_air", num_imported=lambda t, cv: t ** 2, dest="S", split_imports=False)
     model.request_output_for_flow(name="importation_air", flow_name="imports_air")
 
     # Fractional transition flow
@@ -167,7 +167,7 @@ def test_derived_outputs_with_no_save_results(backend):
         times=[0, 5], compartments=["S", "I", "R"], infectious_compartments=["I"]
     )
     model.set_initial_population(distribution={"S": 990, "I": 10})
-    model.add_importation_flow("imports", num_imported=2, dest="S")
+    model.add_importation_flow("imports", num_imported=2, dest="S", split_imports=False)
 
     # Expect np.array([0, 2, 2, 2, 2, 2]))
     model.request_output_for_flow(name="importation", flow_name="imports", save_results=False)

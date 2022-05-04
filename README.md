@@ -24,8 +24,7 @@ Some helpful links to learn more:
 
 ## Installation and Quickstart
 
-This project requires at least Python 3.7
-It has been tested on earlier Python versions, but these are no longer officially support
+This project requires at least Python 3.7 (and is actively targeted at 3.9)
 Install the `summerepi` package from PyPI
 
 ```bash
@@ -99,10 +98,22 @@ Releases are numbered using [Semantic Versioning](https://semver.org/)
   - Bugfix release (clamp outputs to 0.0)
 - 2.2.4
   - Datetime awareness, DataFrame outputs
+- 2.2.5
+  - Performance improvements (frozenset), no API changes
+- 2.2.6
+  - Verify strata in flow adjustments (prevent unexpected behaviour)
+- 2.2.7
+  - Rename add_flow_adjustments -> set_flow_adjustments
+- 2.2.8
+  - Split imports functionality (add_importation_flow now requires split_imports arg)
+- 2.2.9
+  - Post-stratification population restribution
 - 2.3.0
   - First official version to support only Python 3.7
 - 2.5.0
   - Support Python 3.9
+- 2.6.0
+  - Merge 3.9/master branches
 
 ## Release process
 

@@ -41,6 +41,7 @@ class Compartment:
         self.strata = strata or {}
         self._str = self.serialize()
         self.idx = None
+        self._strata = frozenset(self.strata.items())
 
     def is_match(self, name: str, strata: dict) -> bool:
         """
@@ -49,11 +50,15 @@ class Compartment:
         """
         return name == self.name and self.has_strata(strata)
 
-    # FIXME:  Can we build a strata lookup table for the whole model so this just 
-    # becomes an index lookup?
-
     def has_strata(self, strata: dict) -> bool:
-        return all([self.has_stratum(k, v) for k, v in strata.items()])
+        # Use frozenset for performance - this is _very_ significant
+        # It is equivalent to this code:
+        # return all([self.has_stratum(k, v) for k, v in strata.items()])
+        return frozenset(strata.items()).issubset(self._strata)
+
+    def _has_strata(self, strata: frozenset) -> bool:
+        # As above but takes frozenset directly as argument
+        return strata.issubset(self._strata)
 
     def has_stratum(self, stratification: str, stratum: str) -> bool:
         return self.strata.get(stratification) == stratum

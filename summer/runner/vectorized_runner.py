@@ -105,6 +105,7 @@ class VectorizedRunner(ModelRunner):
             if key not in flow_block_maps:
                 flow_block_maps[key] = []
             flow_block_maps[key].append(i)
+
         self.flow_block_maps = dict([(k, np.array(v,dtype=int)) for k,v in flow_block_maps.items()])
 
 

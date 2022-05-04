@@ -83,7 +83,7 @@ def test_exit_flow_stratify_with_flow_adjustments():
         strata=["1", "2"],
         compartments=["I", "R"],
     )
-    strat.add_flow_adjustments(
+    strat.set_flow_adjustments(
         "flow",
         {
             "1": adjust.Multiply(0.1),

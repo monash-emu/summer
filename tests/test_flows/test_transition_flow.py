@@ -153,7 +153,7 @@ def test_transition_flow_stratify_source_and_dest__with_flow_adjustments():
         strata=["1", "2"],
         compartments=["S", "I", "R"],
     )
-    strat.add_flow_adjustments(
+    strat.set_flow_adjustments(
         "flow",
         {
             "1": adjust.Multiply(0.2),
@@ -196,7 +196,7 @@ def test_transition_flow_stratify_source_but_not_dest__with_flow_adjustments():
         strata=["1", "2"],
         compartments=["S", "I"],
     )
-    strat.add_flow_adjustments(
+    strat.set_flow_adjustments(
         "flow",
         {
             "1": adjust.Multiply(0.2),
@@ -241,7 +241,7 @@ def test_transition_flow_stratify_dest_but_not_source__with_flow_adjustments():
         strata=["1", "2"],
         compartments=["S", "R"],
     )
-    strat.add_flow_adjustments(
+    strat.set_flow_adjustments(
         "flow",
         {
             "1": adjust.Multiply(0.2),

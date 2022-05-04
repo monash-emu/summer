@@ -256,15 +256,15 @@ class ModelRunner(ABC):
         for idx, comp in enumerate(self.model.compartments):
             inf_value = compartment_infectiousness[idx]
             for strat in self.model._stratifications:
+                #strat_fs = frozenset({strat.name})
                 for comp_name, adjustments in strat.infectiousness_adjustments.items():
-                    for stratum, adjustment in adjustments.items():
-                        should_apply_adjustment = adjustment and comp.is_match(
-                            comp_name, {strat.name: stratum}
-                        )
-                        if should_apply_adjustment:
-                            # Cannot use time-varying functions for infectiousness adjustments,
-                            # because this is calculated before the model starts running.
-                            inf_value = adjustment.get_new_value(inf_value, None, None)
+                    if comp_name == comp.name:
+                        for stratum, adjustment in adjustments.items():
+                            should_apply_adjustment = adjustment and comp.has_stratum(strat.name, stratum)
+                            if should_apply_adjustment:
+                                # Cannot use time-varying functions for infectiousness adjustments,
+                                # because this is calculated before the model starts running.
+                                inf_value = adjustment.get_new_value(inf_value, None, None)
 
             compartment_infectiousness[idx] = inf_value
 

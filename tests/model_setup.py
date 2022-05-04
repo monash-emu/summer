@@ -27,7 +27,7 @@ def get_test_model(timestep=1, times=[0, 150]):
     age_strat = Stratification("age", AGE_STRATA, comps)
     age_strat.set_population_split(AGE_SPLIT_PROPORTIONS)
     age_strat.set_mixing_matrix(AGE_MIXING_MATRIX)
-    age_strat.add_flow_adjustments(
+    age_strat.set_flow_adjustments(
         "infection", {s: Multiply(v) for s, v in AGE_SUSCEPTIBILITY.items()}
     )
     model.stratify_with(age_strat)
@@ -46,7 +46,7 @@ def get_test_model(timestep=1, times=[0, 150]):
             "icu": Overwrite(0.2),
         },
     )
-    clinical_strat.add_flow_adjustments(
+    clinical_strat.set_flow_adjustments(
         "infect_onset",
         {
             "non_sympt": Multiply(0.26),
