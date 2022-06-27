@@ -562,7 +562,7 @@ class CompartmentalModel:
         source_comps = self.get_matching_compartments(source, source_strata)
 
         num_dest = len(dest_comps)
-        num_source = len(dest_comps)
+        num_source = len(source_comps)
         msg = f"Expected equal number of source and dest compartments, but got {num_source} source and {num_dest} dest."
         assert num_dest == num_source, msg
         new_flows = []
