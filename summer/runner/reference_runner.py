@@ -13,8 +13,8 @@ class ReferenceRunner(ModelRunner):
     def __init__(self, model):
         super().__init__(model)
 
-    def prepare_to_run(self):
-        super().prepare_to_run()
+    def prepare_to_run(self, parameters: dict = None):
+        super().prepare_to_run(parameters)
 
     def get_compartment_rates(self, compartment_values: np.ndarray, time: float):
         """

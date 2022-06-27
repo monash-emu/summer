@@ -10,6 +10,7 @@ from numba import jit
 
 from summer.adjust import AdjustmentComponent, BaseAdjustment, FlowParam, Multiply, Overwrite
 from summer.compartment import Compartment
+from summer.parameters import is_func, get_param_value
 from summer.stratification import Stratification
 from summer.compute import find_sum
 
@@ -60,14 +61,14 @@ class BaseFlow(ABC):
             and ((not dest_strata) or (not self.dest) or self.dest.has_strata(dest_strata))
         )
 
-    def get_weight_value(self, time: float, computed_values: dict):
+    def get_weight_value(self, time: float, computed_values: dict, parameters: dict = None):
         """
         Returns the flow's 'weight' (i.e. rate to be multiplied by the value of the source compartment) at a given time.
         Applies any stratification adjustments to the base parameter.
         """
-        flow_rate = self.param(time, computed_values) if callable(self.param) else self.param
+        flow_rate = get_param_value(self.param, time, computed_values, parameters)
         for adjustment in self.adjustments:
-            flow_rate = adjustment.get_new_value(flow_rate, computed_values, time)
+            flow_rate = adjustment.get_new_value(flow_rate, computed_values, time, parameters)
 
         return flow_rate
 
@@ -81,8 +82,9 @@ class BaseFlow(ABC):
         Returns:
             bool: False if weight is time-varying, otherwise True
         """
+        # +++ FIXME AdjustmentComponent can probably be discarded, keep for old models for now...
         is_system = sum([isinstance(a.param, AdjustmentComponent) for a in self.adjustments])
-        is_time_varying = callable(self.param) or sum([callable(a.param) for a in self.adjustments]) \
+        is_time_varying = is_func(self.param) or sum([is_func(a.param) for a in self.adjustments]) \
             or sum([isinstance(a.param, AdjustmentComponent) for a in self.adjustments])
         if not is_time_varying:
             return WeightType.STATIC

@@ -17,6 +17,7 @@ from summer.adjust import BaseAdjustment, FlowParam, AdjustmentSystem, Multiply
 from summer.compartment import Compartment
 from summer.compute import ComputedValueProcessor
 from summer.derived_outputs import DerivedOutputRequest, calculate_derived_outputs
+from summer.parameters import params
 from summer.runner import ReferenceRunner, VectorizedRunner
 from summer.solver import SolverType, solve_ode
 from summer.stratification import Stratification
@@ -562,7 +563,7 @@ class CompartmentalModel:
         source_comps = self.get_matching_compartments(source, source_strata)
 
         num_dest = len(dest_comps)
-        num_source = len(dest_comps)
+        num_source = len(source_comps)
         msg = f"Expected equal number of source and dest compartments, but got {num_source} source and {num_dest} dest."
         assert num_dest == num_source, msg
         new_flows = []
@@ -795,6 +796,7 @@ class CompartmentalModel:
         solver: str = SolverType.SOLVE_IVP,
         backend: str = _DEFAULT_BACKEND,
         backend_args: dict = None,
+        parameters: dict = None,
         **kwargs,
     ):
         """
@@ -815,7 +817,7 @@ class CompartmentalModel:
         self._update_compartment_indices()
 
         self._set_backend(backend, backend_args)
-        self._backend.prepare_to_run()
+        self._backend.prepare_to_run(parameters)
 
         if solver == SolverType.STOCHASTIC:
             # Run the model in 'stochastic mode'.
@@ -1003,7 +1005,8 @@ class CompartmentalModel:
             model = self,
             whitelist=self._derived_outputs_whitelist,
             baseline=self._baseline,
-            idx_cache = self._derived_outputs_idx_cache
+            idx_cache = self._derived_outputs_idx_cache,
+            parameters=self._backend.parameters
         )
 
     def request_output_for_flow(
@@ -1158,7 +1161,7 @@ class CompartmentalModel:
         Args:
             name: The name of the derived output.
             func: A function used to calculate the derived ouput.
-            sources: The derived ouputs to input into the function.
+            sources: The derived outputs to input into the function.
             save_results (optional): Whether to save or discard the results.
 
         Example:
@@ -1198,6 +1201,37 @@ class CompartmentalModel:
             "request_type": DerivedOutputRequest.FUNCTION,
             "func": func,
             "sources": sources,
+            "save_results": save_results,
+        }
+
+    def request_param_function_output(
+        self,
+        name: str,
+        func: params.ModelFunction,
+        save_results: bool = True
+    ):
+        """Request a generic ModelFunction output
+
+        Args:
+            name (str): _description_
+            func (ModelFunction): The ModelFunction, whose args are Param
+            save_results (bool, optional): _description_. Defaults to True.
+        """
+
+        msg = f"A derived output named {name} already exists."
+        assert name not in self._derived_output_requests, msg
+        for k, v in func.kwargs.items():
+            if isinstance(v, params.DerivedOutput):
+                source = v.name
+                assert (
+                    source in self._derived_output_requests
+                ), f"Source {source} has not been requested."
+                self._derived_output_graph.add_edge(source, name)
+
+        self._derived_output_graph.add_node(name)
+        self._derived_output_requests[name] = {
+            "request_type": DerivedOutputRequest.PARAM_FUNCTION,
+            "func": func,
             "save_results": save_results,
         }
 

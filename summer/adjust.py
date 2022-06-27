@@ -6,6 +6,8 @@ from typing import Callable, Union, Any
 
 import numpy as np
 
+from summer.parameters import get_param_value
+
 FlowParam = Union[float, Callable[[float], float]]
 
 
@@ -18,7 +20,7 @@ class BaseAdjustment(ABC):
         self.param = param
 
     @abstractmethod
-    def get_new_value(self, value: float, computed_values: dict, time: float) -> float:
+    def get_new_value(self, value: float, computed_values: dict, time: float, parameters: dict = None) -> float:
         pass
 
     def _is_equal(self, adj):
@@ -56,7 +58,7 @@ class Multiply(BaseAdjustment):
 
     """
 
-    def get_new_value(self, value: float, computed_values: dict, time: float) -> float:
+    def get_new_value(self, value: float, computed_values: dict, time: float, parameters: dict = None) -> float:
         """
         Returns the adjusted value for a given time.
 
@@ -68,7 +70,7 @@ class Multiply(BaseAdjustment):
             float: The new, adjusted value.
 
         """
-        return self.param(time, computed_values) * value if callable(self.param) else self.param * value
+        return get_param_value(self.param, time, computed_values, parameters) * value
 
 
 class Overwrite(BaseAdjustment):
@@ -91,7 +93,7 @@ class Overwrite(BaseAdjustment):
 
     """
 
-    def get_new_value(self, value: float, computed_values: dict, time: float) -> float:
+    def get_new_value(self, value: float, computed_values: dict, time: float, parameters: dict = None) -> float:
         """
         Returns the adjusted value for a given time.
 
@@ -103,7 +105,16 @@ class Overwrite(BaseAdjustment):
             float: The new, adjusted value.
 
         """
-        return self.param(time, computed_values) if callable(self.param) else self.param
+        return get_param_value(self.param, time, computed_values, parameters)
+
+def enforce_wrapped(value, allowed, wrap):
+    if any([isinstance(value, t) for t in allowed]):
+        return value
+    else:
+        return wrap(value)
+
+def enforce_multiply(value):
+    return enforce_wrapped(value, [Multiply, Overwrite, type(None)], Multiply) 
 
 class AdjustmentComponent:
     def __init__(self, system: str, data: Any):

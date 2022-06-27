@@ -8,6 +8,8 @@ from summer.adjust import Overwrite, AdjustmentComponent
 from summer.compute import binary_matrix_to_sparse_pairs, sparse_pairs_accum
 from summer.compartment import Compartment
 
+from summer.parameters import get_param_value
+
 def cached(func):
     cache = dict()
     
@@ -75,12 +77,13 @@ class ModelRunner(ABC):
         return comp_vals
 
     @abstractmethod
-    def prepare_to_run(self):
+    def prepare_to_run(self, parameters: dict = None):
         """
         Pre-run setup.
         Here we do any calculations/preparation are possible to do before the model runs.
         """
 
+        self.parameters = parameters
         
         if self.model._enable_cache:
             # +++ This functionality is largely deprecated and only used for the ReferenceRunner, which is slow
@@ -151,6 +154,12 @@ class ModelRunner(ABC):
         self._iter_non_function_flows = [
             (i, f) for i, f in enumerate(self.model._flows) if not isinstance(f, flows.FunctionFlow)
         ]
+
+        # Resolve anything related to parameterization here
+
+        # Mixing matrices are their own special category
+
+        self._get_mixing_matrix
 
         """
         Pre-run calculations to help determine force of infection multiplier at runtime.
@@ -264,11 +273,13 @@ class ModelRunner(ABC):
                             if should_apply_adjustment:
                                 # Cannot use time-varying functions for infectiousness adjustments,
                                 # because this is calculated before the model starts running.
-                                inf_value = adjustment.get_new_value(inf_value, None, None)
+                                inf_value = adjustment.get_new_value(inf_value, None, None, self.parameters)
 
             compartment_infectiousness[idx] = inf_value
 
         if strain != self.model._DEFAULT_DISEASE_STRAIN:
+            # FIXME: If there are multiple strains, but one of them is _DEFAULT_DISEASE_STRAIN
+            # there will almost certainly be incorrect masks applied
             # Filter out all values that are not in the given strain.
             strain_mask = np.zeros(self.model.initial_population.shape)
             for idx, compartment in enumerate(self.model.compartments):
@@ -327,7 +338,8 @@ class ModelRunner(ABC):
             mixing_matrix = None
             for mm_func in self.model._mixing_matrices:
                 # Assume each mixing matrix is either an np.ndarray or a function of time that returns one.
-                mm = mm_func(time) if callable(mm_func) else mm_func
+                #mm = mm_func(time) if callable(mm_func) else mm_func
+                mm = get_param_value(mm_func, time, None, self.parameters)
                 # Get Kronecker product of old and new mixing matrices.
                 # Only do this if we actually need to
                 if mixing_matrix is None:

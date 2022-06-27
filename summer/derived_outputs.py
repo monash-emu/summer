@@ -21,6 +21,8 @@ from summer.compartment import Compartment
 from summer.flows import BaseFlow
 from summer.utils import get_scenario_start_index
 
+from summer.parameters import build_args
+
 logger = logging.getLogger()
 
 
@@ -31,6 +33,7 @@ class DerivedOutputRequest:
     CUMULATIVE = "cum"
     FUNCTION = "func"
     COMPUTED_VALUE = "computed_value"
+    PARAM_FUNCTION = "param_func"
 
 def calculate_derived_outputs(
     requests: List[dict],
@@ -44,7 +47,8 @@ def calculate_derived_outputs(
     model,
     whitelist: Optional[List[str]],
     baseline = None,
-    idx_cache = None
+    idx_cache = None,
+    parameters: dict = None
 ) -> Dict[str, np.ndarray]:
     """
     Calculates all requested derived outputs from the calculated compartment sizes.
@@ -144,6 +148,8 @@ def calculate_derived_outputs(
         elif request_type == DerivedOutputRequest.FUNCTION:
             # User wants to track the results of a function of other outputs over time.
             output = _get_func_output(request, derived_outputs)
+        elif request_type == DerivedOutputRequest.PARAM_FUNCTION:
+            output = _get_param_func_output(request, derived_outputs, computed_values, parameters)
         # FIXME DerivedValue and InputValue should probably be combined
         elif request_type == DerivedOutputRequest.COMPUTED_VALUE:
             output = _get_computed_value_output(request, computed_values)
@@ -243,6 +249,12 @@ def _get_func_output(request, derived_outputs):
     inputs = [derived_outputs[s] for s in source_names]
     return func(*inputs)
     
+def _get_param_func_output(request, derived_outputs, computed_values, parameters):
+    mfunc = request["func"]
+    sources = dict(derived_outputs=derived_outputs, parameters=parameters, computed_values=computed_values)
+    args, kwargs = build_args(mfunc.args, mfunc.kwargs, sources)
+    return mfunc.func(*args, **kwargs)
+
 def _get_computed_value_output(request, computed_values):
     name = request["name"]
     return computed_values[name].to_numpy(dtype=float)
