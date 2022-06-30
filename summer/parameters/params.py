@@ -1,70 +1,32 @@
 from __future__ import annotations
-from ast import Mod
 from typing import TYPE_CHECKING, List
+from computegraph.types import Variable, Function, Parameter
+from computegraph.utils import extract_variables
 
 if TYPE_CHECKING:
     from summer import CompartmentalModel
 
-class ModelVariable:
-    def __init__(self, name: str, source: str = None):
-        self.name = name
-        self.source = source
-
-    def __hash__(self):
-        return hash((self.name, self.source))
-
-    def __repr__(self):
-        return f"ModelVariable {self.source}[{self.name}]"
-
-    def __eq__(self, other):
-        return (self.name == other.name) and (self.source == other.source)
-
-class ModelParameter(ModelVariable):
-    def __init__(self, name: str):
-        super().__init__(name, "parameters")
-
-    def __repr__(self):
-        return f"Param {self.name}"
-
-class ComputedValue(ModelVariable):
+class ComputedValue(Variable):
     def __init__(self, name: str):
         super().__init__(name, "computed_values")
 
     def __repr__(self):
         return f"ComputedValue {self.name}"
 
-class DerivedOutput(ModelVariable):
+class DerivedOutput(Variable):
     def __init__(self, name: str):
         super().__init__(name, "derived_outputs")
 
     def __repr__(self):
         return f"DerivedOutput {self.name}"
 
-class ModelFunction:
-    def __init__(self, func: callable, args: tuple = None, kwargs: dict = None):
-        self.func = func
-        if args is None:
-            args = ()
-        if kwargs is None:
-            kwargs = {}
-        if not (isinstance(args, tuple) or isinstance(args, list)):
-            raise TypeError("Args must be list or tuple", args)
-        self.args = tuple(args)
-        self.kwargs = kwargs
-
-    def __hash__(self):
-        return hash((self.func, self.args, tuple(self.kwargs.items())))
-
-    def __repr__(self):
-        return f"ModelFunction: func={self.func}, args={self.args}, kwargs={self.kwargs})"
-
-class TimeVaryingFunction(ModelFunction):
+class TimeVaryingFunction(Function):
     def __repr__(self):
         return f"TimeVaryingFunction: func={self.func}, args={self.args}, kwargs={self.kwargs})"
 
 
 def is_func(param) -> bool:
-    """Wrapper to handle ModelFunction or callable
+    """Wrapper to handle Function or callable
 
     Args:
         param: Flow or adjustment parameter
@@ -73,10 +35,10 @@ def is_func(param) -> bool:
         bool: Is a function or function wrapper
     """
 
-    return isinstance(param, ModelFunction) or callable(param)
+    return isinstance(param, Function) or callable(param)
 
 def get_param_value(param, time, computed_values, parameters) -> float:
-    if isinstance(param, ModelParameter):
+    if isinstance(param, Parameter):
         return parameters[param.name]
     elif isinstance(param, ComputedValue):
         return computed_values[param.name]
@@ -84,7 +46,7 @@ def get_param_value(param, time, computed_values, parameters) -> float:
         sources = dict(computed_values=computed_values, parameters=parameters)
         args, kwargs = build_args(param.args, param.kwargs, sources)
         return param.func(time, *args, **kwargs)
-    elif isinstance(param, ModelFunction):
+    elif isinstance(param, Function):
         sources = dict(computed_values=computed_values, parameters=parameters)
         args, kwargs = build_args(param.args, param.kwargs, sources)
         return param.func(*args, **kwargs)
@@ -96,25 +58,20 @@ def get_param_value(param, time, computed_values, parameters) -> float:
 def build_args(args: tuple, kwargs: dict, sources: dict):
     out_args = []
     for a in args:
-        if isinstance(a, ModelVariable):
+        if isinstance(a, Variable):
             out_args.append(sources[a.source][a.name])
         else:
             out_args.append(a)
     out_kwargs = {}
     for k, v in kwargs.items():
-        if isinstance(v, ModelVariable):
+        if isinstance(v, Variable):
             out_kwargs[k] = sources[v.source][v.name]
         else:
             out_kwargs[k] = v
     return out_args, out_kwargs
 
 def extract_params(obj):
-    if isinstance(obj, ModelParameter):
-        return [obj.name]
-    elif isinstance(obj, ModelFunction):
-        return [v.name for v in obj.kwargs.values() if isinstance(v, ModelParameter)]
-    else:
-        return []
+    return extract_variables(obj, source='parameters')
 
 def find_all_parameters(m: CompartmentalModel):
     # Where could they hide?

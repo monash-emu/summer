@@ -1207,14 +1207,14 @@ class CompartmentalModel:
     def request_param_function_output(
         self,
         name: str,
-        func: params.ModelFunction,
+        func: params.Function,
         save_results: bool = True
     ):
-        """Request a generic ModelFunction output
+        """Request a generic Function output
 
         Args:
             name (str): _description_
-            func (ModelFunction): The ModelFunction, whose args are Param
+            func (Function): The Function, whose args are Param
             save_results (bool, optional): _description_. Defaults to True.
         """
 

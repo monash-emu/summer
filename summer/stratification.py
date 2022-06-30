@@ -7,7 +7,7 @@ import numpy as np
 
 from summer.adjust import Multiply, Overwrite, enforce_multiply
 from summer.compartment import Compartment
-from summer.parameters import is_func, ModelParameter
+from summer.parameters import is_func, Parameter
 
 Adjustment = Union[Multiply, Overwrite]
 MixingMatrix = Union[np.ndarray, Callable[[float], np.ndarray]]
@@ -253,7 +253,7 @@ class Stratification:
         assert not self.is_strain(), msg
 
         msg = "Mixing matrix must be a NumPy array, or return a NumPy array."
-        assert (isinstance(mixing_matrix, np.ndarray)) or isinstance(mixing_matrix, ModelParameter) or is_func(mixing_matrix), msg
+        assert (isinstance(mixing_matrix, np.ndarray)) or isinstance(mixing_matrix, Parameter) or is_func(mixing_matrix), msg
 
         if isinstance(mixing_matrix, np.ndarray):
             num_strata = len(self.strata)
