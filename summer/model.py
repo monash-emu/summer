@@ -117,9 +117,6 @@ class CompartmentalModel:
         # Whitelist of 'derived outputs' to evaluate
         self._derived_outputs_whitelist = []
 
-        # Adjustment systems
-        self._adjustment_systems = {}
-
         # Map of (runtime) computed values
         self._computed_value_processors = OrderedDict()
 
@@ -1268,16 +1265,6 @@ class CompartmentalModel:
             processor (DerivedValueProcessor): Object providing implementation
         """
         self._computed_value_processors[name] = processor
-
-    def add_adjustment_system(self, name: str, system: AdjustmentSystem):
-        """Add an AdjustmentSystem that will process common adjustments in parallel
-        These provide equivalent functionality to individual flow adjustments (adjust.py)
-       
-        Args:
-            name (str): The name of the system used for lookup purpsoes
-            system (AdjustmentSystem): AdjustmentSystem object containing the implementation details
-        """
-        self._adjustment_systems[name] = system
 
     def _get_ref_idx(self):
         if self.ref_date:
