@@ -6,6 +6,7 @@ import logging
 from datetime import datetime
 from collections import OrderedDict
 from typing import Callable, Dict, List, Optional, Tuple
+from warnings import warn
 
 import networkx
 import numpy as np
@@ -13,7 +14,7 @@ import pandas as pd
 
 import summer.flows as flows
 from summer import stochastic
-from summer.adjust import BaseAdjustment, FlowParam, AdjustmentSystem, Multiply
+from summer.adjust import BaseAdjustment, FlowParam, Multiply
 from summer.compartment import Compartment
 from summer.compute import ComputedValueProcessor
 from summer.derived_outputs import DerivedOutputRequest, calculate_derived_outputs
@@ -119,6 +120,7 @@ class CompartmentalModel:
 
         # Map of (runtime) computed values
         self._computed_value_processors = OrderedDict()
+        self._computed_value_graph_dict = {}
 
         # Init baseline model to None; can be set via set_baseline if running as a scenario
         self._baseline = None
@@ -1264,7 +1266,13 @@ class CompartmentalModel:
             name (str): Name (key) of derived value (use this when referencing it in functions)
             processor (DerivedValueProcessor): Object providing implementation
         """
+        warn('Deprecated feature - use model.add_computed_value_func instead', DeprecationWarning, stacklevel=2)
         self._computed_value_processors[name] = processor
+
+    def add_computed_value_func(self, name: str, func: params.Function):
+        if name in self._computed_value_graph_dict:
+            raise Exception(f"Computed value function with name {name} already exists")
+        self._computed_value_graph_dict[name] = func
 
     def _get_ref_idx(self):
         if self.ref_date:

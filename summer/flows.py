@@ -8,7 +8,7 @@ from typing import Callable, Dict, List
 import numpy as np
 from numba import jit
 
-from summer.adjust import AdjustmentComponent, BaseAdjustment, FlowParam, Multiply, Overwrite
+from summer.adjust import BaseAdjustment, FlowParam, Multiply, Overwrite
 from summer.compartment import Compartment
 from summer.parameters import is_func, get_param_value
 from summer.stratification import Stratification
@@ -16,7 +16,6 @@ from summer.compute import find_sum
 
 class WeightType:
     STATIC = 'static'
-    SYSTEM = 'system'
     FUNCTION = 'function'
 
 
@@ -76,20 +75,14 @@ class BaseFlow(ABC):
         """Returns a WeightType enum value
 
             'static': Fixed floating point value
-            'system': Calculated using an AdjustmentSystem
             'function': Calculated from a callable function
 
         Returns:
             bool: False if weight is time-varying, otherwise True
         """
-        # +++ FIXME AdjustmentComponent can probably be discarded, keep for old models for now...
-        is_system = sum([isinstance(a.param, AdjustmentComponent) for a in self.adjustments])
-        is_time_varying = is_func(self.param) or sum([is_func(a.param) for a in self.adjustments]) \
-            or sum([isinstance(a.param, AdjustmentComponent) for a in self.adjustments])
+        is_time_varying = is_func(self.param) or sum([is_func(a.param) for a in self.adjustments])
         if not is_time_varying:
             return WeightType.STATIC
-        elif is_system:
-            return WeightType.SYSTEM
         else:
             return WeightType.FUNCTION 
 

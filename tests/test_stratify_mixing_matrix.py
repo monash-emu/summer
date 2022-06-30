@@ -118,7 +118,7 @@ def test_single_dynamic_mixing_matrix(backend):
     model._set_backend(backend)
     # Apply a stratification with a dynamic mixing matrix.
     strat = Stratification(name="agegroup", strata=["child", "adult"], compartments=["S", "I", "R"])
-    dynamic_mixing_matrix = lambda t: t * np.array([[2, 3], [5, 7]])
+    dynamic_mixing_matrix = lambda t, cv: t * np.array([[2, 3], [5, 7]])
     strat.set_mixing_matrix(dynamic_mixing_matrix)
     model.stratify_with(strat)
 
@@ -192,14 +192,14 @@ def test_multiple_dynamic_mixing_matrices(backend):
     model._set_backend(backend)
     # Apply agegroup stratification with a static mixing matrix.
     strat = Stratification(name="agegroup", strata=["child", "adult"], compartments=["S", "I", "R"])
-    agegroup_mixing_matrix = lambda t: t * np.array([[2, 3], [5, 7]])
+    agegroup_mixing_matrix = lambda t, cv: t * np.array([[2, 3], [5, 7]])
     strat.set_mixing_matrix(agegroup_mixing_matrix)
     model.stratify_with(strat)
     assert model._mixing_categories == [{"agegroup": "child"}, {"agegroup": "adult"}]
 
     # Apply location stratification with a static mixing matrix.
     strat = Stratification(name="location", strata=["work", "home"], compartments=["S", "I", "R"])
-    location_mixing_matrix = lambda t: t * np.array([[11, 13], [17, 19]])
+    location_mixing_matrix = lambda t, cv: t * np.array([[11, 13], [17, 19]])
     strat.set_mixing_matrix(location_mixing_matrix)
     model.stratify_with(strat)
     assert model._mixing_categories == [
@@ -223,7 +223,7 @@ def test_multiple_dynamic_mixing_matrices(backend):
     actual_mixing = model._backend._get_mixing_matrix(1)
     assert_array_equal(actual_mixing, expected_mixing_matrix)
     # Double check that we calculated the Kronecker product correctly
-    kron_mixing = np.kron(agegroup_mixing_matrix(1), location_mixing_matrix(1))
+    kron_mixing = np.kron(agegroup_mixing_matrix(1,None), location_mixing_matrix(1,None))
     assert_array_equal(expected_mixing_matrix, kron_mixing)
     # Dynamic matrices should change over time
     actual_mixing = model._backend._get_mixing_matrix(5)

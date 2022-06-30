@@ -92,8 +92,6 @@ class VectorizedRunner(ModelRunner):
                 self.flow_weights[i] = weight
             elif weight_type == flows.WeightType.FUNCTION:
                 time_varying_weight_indices.append(i)
-            # else: Is system, these are calculated in a separate process
-            # FIXME Refactor so all in one place, maybe?
 
         self.time_varying_weight_indices = np.array(time_varying_weight_indices, dtype=int)
 
@@ -150,12 +148,8 @@ class VectorizedRunner(ModelRunner):
             time (float): Time in model.times coordinates
         """
 
-        # Run all adjustment systems; these are vectorized flow weight systems that operate over an array of flows
-        for (s,flow_idx) in self._adjustment_system_flow_maps:
-            self.flow_weights[flow_idx] = s.get_weights_at_time(time, computed_values)
-
         # Compute flow value blocks; these are 'chunked' blocks of flows that have a common flow param/adjustment structure,
-        # but are still specified as operating on individual flows (as opposed to AdjustmentSystems, which are vectorized)
+        # but are still specified as operating on individual flows
         for (param, adjustments), flow_idx in self.flow_block_maps.items():
             value = get_param_value(param, time, computed_values, self.parameters)
             for a in adjustments:

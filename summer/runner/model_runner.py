@@ -4,7 +4,7 @@ from typing import Tuple
 import numpy as np
 
 import summer.flows as flows
-from summer.adjust import Overwrite, AdjustmentComponent
+from summer.adjust import Overwrite
 from summer.compute import binary_matrix_to_sparse_pairs, sparse_pairs_accum
 from summer.compartment import Compartment
 
@@ -35,6 +35,9 @@ class ModelRunner(ABC):
 
         # Tracks total deaths per timestep for death-replacement birth flows
         self._timestep_deaths = None
+
+        # Set our initial parameters to an empty dict - this is really just to appease tests
+        self.parameters = {}
 
     @abstractmethod
     def get_flow_rates(self, compartment_values: np.ndarray, time: float) -> np.ndarray:
@@ -221,27 +224,6 @@ class ModelRunner(ABC):
         # This step initialises the processors based on model structure
         for k, proc in self.model._computed_value_processors.items():
              proc.prepare_to_run(self.model.compartments, self.model._flows)
-
-        # Adjustment systems - calculate adjusted flow weights for multiple flows
-        # in a vectorized fashion
-        # We need to aggregate all the flows sharing a common adjustment system
-        # into lists of data used for initialization, and also provide an array of
-        # flow indices for mapping back into the overall model
-        self._adjustment_system_flow_maps = []
-        for k, s in self.model._adjustment_systems.items():
-            flow_idx = []
-            components = []
-            for i, f in enumerate(self.model._flows):
-                for a in f.adjustments:
-                    if isinstance(a.param, AdjustmentComponent):
-                        if a.param.system == k:
-                            flow_idx.append(i)
-                            components.append(a.param.data)
-            if len(components):
-                s.prepare_to_run(components)
-                flow_idx = np.array(flow_idx, dtype=int)
-                self._adjustment_system_flow_maps.append((s, flow_idx))
-
 
     def _get_compartment_infectiousness_for_strain(self, strain: str):
         """
