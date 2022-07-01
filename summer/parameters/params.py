@@ -20,12 +20,11 @@ class DerivedOutput(Variable):
     def __repr__(self):
         return f"DerivedOutput {self.name}"
 
-class TimeVaryingFunction(Function):
-    def __repr__(self):
-        return f"TimeVaryingFunction: func={self.func}, args={self.args}, kwargs={self.kwargs})"
+def model_var(name):
+    return Variable(name, "model_variables")
 
-CompartmentValues = Variable("compartment_values", "model_variables")
-Time = Variable("time", "model_variables")
+CompartmentValues = model_var("compartment_values")
+Time = model_var("time")
 
 def is_func(param) -> bool:
     """Wrapper to handle Function or callable
@@ -44,10 +43,6 @@ def get_param_value(param, time, computed_values, parameters) -> float:
         return parameters[param.name]
     elif isinstance(param, ComputedValue):
         return computed_values[param.name]
-    #elif isinstance(param, TimeVaryingFunction):
-    #    sources = dict(computed_values=computed_values, parameters=parameters)
-    #    args, kwargs = build_args(param.args, param.kwargs, sources)
-    #    return param.func(time, *args, **kwargs)
     elif isinstance(param, Function):
         sources = dict(computed_values=computed_values, parameters=parameters,model_variables={'time': time})
         args, kwargs = build_args(param.args, param.kwargs, sources)
