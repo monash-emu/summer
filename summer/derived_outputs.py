@@ -114,7 +114,7 @@ def calculate_derived_outputs(
         computed_values.append(model._backend._calc_computed_values(outputs[time_idx], time))
     
     # Collate list values into DataFrames
-    computed_values = pd.DataFrame(columns=model._computed_value_processors.keys(), data = computed_values, index=times)
+    computed_values = pd.DataFrame(columns=model.get_computed_value_keys(), data = computed_values, index=times)
     
     # Convert tracked flow values into a matrix where the 1st dimension is flow type, 2nd is time
     flow_values = np.array(flow_values).T

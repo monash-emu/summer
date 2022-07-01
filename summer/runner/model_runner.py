@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Tuple
 
 import numpy as np
+from computegraph.graph import ComputeGraph
 
 import summer.flows as flows
 from summer.adjust import Overwrite
@@ -225,6 +226,10 @@ class ModelRunner(ABC):
         for k, proc in self.model._computed_value_processors.items():
              proc.prepare_to_run(self.model.compartments, self.model._flows)
 
+        cvcg = ComputeGraph(self.model._computed_values_graph_dict,"computed_values")
+
+        self.computed_values_runner = cvcg.get_callable()
+
     def _get_compartment_infectiousness_for_strain(self, strain: str):
         """
         Returns a vector of floats, each representing the relative infectiousness of each compartment.
@@ -371,5 +376,12 @@ class ModelRunner(ABC):
         for k, proc in self.model._computed_value_processors.items():
             computed_values[k] = proc.process(compartment_vals, computed_values, time)
         
+        model_variables = {
+            "compartment_values": compartment_vals,
+            "time": time
+        }
+
+        computed_values.update(self.computed_values_runner(parameters=self.parameters, model_variables=model_variables))
+
         return computed_values
 

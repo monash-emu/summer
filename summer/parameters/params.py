@@ -118,6 +118,11 @@ def find_all_parameters(m: CompartmentalModel):
         # They might sort of live in the model itself too...
         append_list(out_params, extract_params(s.mixing_matrix), ("MixingMatrix", s))
     
+    # Computed values
+    for k, v in m._computed_values_graph_dict.items():
+        params = extract_params(v)
+        append_list(out_params, params, ("ComputedValue", k, v))
+
     # Derived outputs
     for k, req in m._derived_output_requests.items():
         if req['request_type'] == 'param_func':

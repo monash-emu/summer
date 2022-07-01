@@ -120,7 +120,7 @@ class CompartmentalModel:
 
         # Map of (runtime) computed values
         self._computed_value_processors = OrderedDict()
-        self._computed_value_graph_dict = {}
+        self._computed_values_graph_dict = {}
 
         # Init baseline model to None; can be set via set_baseline if running as a scenario
         self._baseline = None
@@ -1268,11 +1268,16 @@ class CompartmentalModel:
         """
         warn('Deprecated feature - use model.add_computed_value_func instead', DeprecationWarning, stacklevel=2)
         self._computed_value_processors[name] = processor
+        #FIXME: We might actually have to keep this for now, at least until modellers get sick of seeing it and change over all the code
+        #raise DeprecationWarning('Deprecated feature - use model.add_computed_value_func instead')
 
     def add_computed_value_func(self, name: str, func: params.Function):
-        if name in self._computed_value_graph_dict:
+        if name in self._computed_values_graph_dict:
             raise Exception(f"Computed value function with name {name} already exists")
-        self._computed_value_graph_dict[name] = func
+        self._computed_values_graph_dict[name] = func
+
+    def get_computed_value_keys(self):
+        return list(self._computed_value_processors) + list(self._computed_values_graph_dict)
 
     def _get_ref_idx(self):
         if self.ref_date:
