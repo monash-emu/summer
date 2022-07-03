@@ -216,7 +216,7 @@ test = ["flake8 (==3.7.8)", "hypothesis (==3.55.3)"]
 
 [[package]]
 name = "computegraph"
-version = "0.1.0"
+version = "0.1.1"
 description = "computegraph is a tool for managing computational graphs using networkx"
 category = "main"
 optional = false
@@ -1642,7 +1642,7 @@ testing = ["pytest (>=6)", "pytest-checkdocs (>=2.4)", "pytest-flake8", "pytest-
 [metadata]
 lock-version = "1.1"
 python-versions = ">=3.7.1,<3.11"
-content-hash = "f91889813818ed7010de692a903b9cb2f8a8aa52a91a7bf899132a0ed4ff884a"
+content-hash = "979e6b16127fbe06ce9c54ecfe3a27cf42aed92e5ff05e9ad9ccc5204215db15"
 
 [metadata.files]
 absl-py = [
@@ -1788,8 +1788,8 @@ commonmark = [
     {file = "commonmark-0.9.1.tar.gz", hash = "sha256:452f9dc859be7f06631ddcb328b6919c67984aca654e5fefb3914d54691aed60"},
 ]
 computegraph = [
-    {file = "computegraph-0.1.0-py3-none-any.whl", hash = "sha256:b1e5378e64f1b4ba4d9f4cd6b37fa9092b7b5e52849f9c9e5e53325fad122d24"},
-    {file = "computegraph-0.1.0.tar.gz", hash = "sha256:06717bec3fc3b30192e9614b87814b8eb8113f956a92f4df3b99e4578778dee2"},
+    {file = "computegraph-0.1.1-py3-none-any.whl", hash = "sha256:68de95839726e746f667aac58780731a8e8e1fc7f53da3ad85194591eff5417d"},
+    {file = "computegraph-0.1.1.tar.gz", hash = "sha256:de59201b674c89a3bd0bb08e3fce2c744eb839777b4b8112e1d4c8460666d2d2"},
 ]
 cycler = [
     {file = "cycler-0.11.0-py3-none-any.whl", hash = "sha256:3a27e95f763a428a739d2add979fa7494c912a32c17c4c38c4d5f082cad165a3"},
