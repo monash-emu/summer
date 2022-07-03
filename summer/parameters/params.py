@@ -1,10 +1,17 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING, List
-from computegraph.types import Variable, Function, Parameter
+from computegraph.types import Variable, Function
 from computegraph.utils import extract_variables
 
 if TYPE_CHECKING:
     from summer import CompartmentalModel
+
+class Parameter(Variable):
+    def __init__(self, name: str):
+        super().__init__(name, "parameters")
+
+    def __repr__(self):
+        return f"Parameter {self.name}"
 
 class ComputedValue(Variable):
     def __init__(self, name: str):
@@ -39,10 +46,13 @@ def is_func(param) -> bool:
     return isinstance(param, Function) or callable(param)
 
 def get_param_value(param, time, computed_values, parameters) -> float:
-    if isinstance(param, Parameter):
-        return parameters[param.name]
-    elif isinstance(param, ComputedValue):
-        return computed_values[param.name]
+    if isinstance(param, Variable):
+        if param.source == "parameters":
+            return parameters[param.name]
+        elif param.source == "computed_values":
+            return computed_values[param.name]
+        else:
+            raise Exception("Unsupported variable source", param, param.source)
     elif isinstance(param, Function):
         sources = dict(computed_values=computed_values, parameters=parameters,model_variables={'time': time})
         args, kwargs = build_args(param.args, param.kwargs, sources)
@@ -89,14 +99,6 @@ def find_all_parameters(m: CompartmentalModel):
         if params := extract_params(f.param):
             append_list(out_params, params, ("FlowParam", f))
             
-    # We can actually skip this bit and get more intelligble results by
-    # just looking at the stratifications
-    # This one of those classic summer dualities
-    #    for a in f.adjustments:
-    #        params = extract_params(a.param)
-    #        for p in params:
-    #            append(out_params, p, ("Adjustment",f,a))
-    
     
     # Inside stratifications - we have retained some useful information...
     for s in m._stratifications:

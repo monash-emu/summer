@@ -87,7 +87,15 @@ class ModelRunner(ABC):
         Here we do any calculations/preparation are possible to do before the model runs.
         """
 
+        # FIXME:
+        # This should be split into structural model preparations, and those that
+        # are dependant on parameters
+        # I.e reusable vs run-specific
+
         self.parameters = parameters
+
+        # FIXME: Not yet implemented properly...
+        #self.model.initial_population = self._model._recalculate_initial_population()
         
         if self.model._enable_cache:
             # +++ This functionality is largely deprecated and only used for the ReferenceRunner, which is slow
@@ -163,8 +171,6 @@ class ModelRunner(ABC):
 
         # Mixing matrices are their own special category
 
-        self._get_mixing_matrix
-
         """
         Pre-run calculations to help determine force of infection multiplier at runtime.
 
@@ -229,6 +235,8 @@ class ModelRunner(ABC):
         cvcg = ComputeGraph(self.model._computed_values_graph_dict,"computed_values")
 
         self.computed_values_runner = cvcg.get_callable()
+
+        
 
     def _get_compartment_infectiousness_for_strain(self, strain: str):
         """

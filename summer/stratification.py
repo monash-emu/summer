@@ -239,8 +239,10 @@ class Stratification:
         msg = f"An infectiousness adjustment for {compartment_name} already exists for strat {self.name}"
         assert compartment_name not in self.infectiousness_adjustments, msg
 
-        msg = "Cannot use time varying functions for infectiousness adjustments."
-        assert not any([is_func(adj.param) for adj in adjustments.values() if adj]), msg
+        # FIXME: Turn this off for now since we totally can use computegraph.Function
+        # objects for this, we just don't have a good test for whether they are TimeVarying
+        #msg = "Cannot use time varying functions for infectiousness adjustments."
+        #assert not any([is_func(adj.param) for adj in adjustments.values() if adj]), msg
 
         self.infectiousness_adjustments[compartment_name] = adjustments
 

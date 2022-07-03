@@ -101,6 +101,7 @@ class BaseFlow(ABC):
         compartment_values: np.ndarray,
         computed_values: dict,
         time: float,
+        parameters: dict = None,
     ) -> float:
         """
         Returns the net flow value at a given time.
@@ -376,8 +377,9 @@ class CrudeBirthFlow(BaseEntryFlow):
         compartment_values: np.ndarray,
         computed_values: dict,
         time: float,
+        parameters: dict = None,
     ) -> float:
-        parameter_value = self.get_weight_value(time, computed_values)
+        parameter_value = self.get_weight_value(time, computed_values, parameters)
         total_population = find_sum(compartment_values)
         return parameter_value * total_population
 
@@ -402,8 +404,9 @@ class ReplacementBirthFlow(BaseEntryFlow):
         compartment_values: np.ndarray,
         computed_values: dict,
         time: float,
+        parameters: dict = None,
     ) -> float:
-        return self.get_weight_value(time, computed_values)
+        return self.get_weight_value(time, computed_values, parameters)
 
 
 class ImportFlow(BaseEntryFlow):
@@ -427,8 +430,9 @@ class ImportFlow(BaseEntryFlow):
         compartment_values: np.ndarray,
         computed_values: dict,
         time: float,
+        parameters: dict = None,
     ) -> float:
-        return self.get_weight_value(time, computed_values)
+        return self.get_weight_value(time, computed_values, parameters)
 
 
 class DeathFlow(BaseExitFlow):
@@ -451,8 +455,9 @@ class DeathFlow(BaseExitFlow):
         compartment_values: np.ndarray,
         computed_values: dict,
         time: float,
+        parameters: dict = None,
     ) -> float:
-        parameter_value = self.get_weight_value(time, computed_values)
+        parameter_value = self.get_weight_value(time, computed_values,parameters)
         population = compartment_values[self.source.idx]
         flow_rate = parameter_value * population
         return flow_rate
@@ -477,8 +482,9 @@ class TransitionFlow(BaseTransitionFlow):
         compartment_values: np.ndarray,
         computed_values: dict,
         time: float,
+        parameters: dict = None,
     ) -> float:
-        parameter_value = self.get_weight_value(time, computed_values)
+        parameter_value = self.get_weight_value(time, computed_values, parameters)
         population = compartment_values[self.source.idx]
         return parameter_value * population
 
@@ -539,9 +545,10 @@ class BaseInfectionFlow(BaseTransitionFlow):
         compartment_values: np.ndarray,
         computed_values: dict,
         time: float,
+        parameters: dict = None,
     ) -> float:
         multiplier = self.find_infectious_multiplier(self.source, self.dest)
-        parameter_value = self.get_weight_value(time, computed_values)
+        parameter_value = self.get_weight_value(time, computed_values,parameters)
         population = compartment_values[self.source.idx]
         return parameter_value * population * multiplier
 

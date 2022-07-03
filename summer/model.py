@@ -159,10 +159,19 @@ class CompartmentalModel:
         """
         error_msg = "Cannot set initial population after the model has been stratified"
         assert not self._stratifications, error_msg
-        for idx, comp in enumerate(self.compartments):
-            pop = distribution.get(comp.name, 0)
-            assert pop >= 0, f"Population for {comp.name} cannot be negative: {pop}"
-            self.initial_population[idx] = pop
+
+        if isinstance(distribution, dict):
+            for idx, comp in enumerate(self.compartments):
+                pop = distribution.get(comp.name, 0)
+                assert pop >= 0, f"Population for {comp.name} cannot be negative: {pop}"
+                self.initial_population[idx] = pop
+
+            self._original_init_population = self.initial_population.copy()
+        else:
+            ###FIXME
+            # So we've got this duality of possibly having the initial population available now,
+            # or only inspecting it later once we've got parameters
+            raise TypeError("Parameterized init population not yet supported", distribution)
 
     def set_validation_enabled(self, validate: bool):
         """
@@ -748,6 +757,21 @@ class CompartmentalModel:
                 if k == s.name:
                     if v not in s.strata:
                         raise ValueError(f"Invalid stratum {v} for {s}")
+
+    def _recalculate_initial_population(self):
+        # FIXME:
+        # Work in progress; correctly recalculates non-parameterized
+        # populations, but does not include population rebalances etc
+        initial_population = self._original_init_population
+        comps = self._original_compartment_names
+        for strat in self._stratifications:
+            # Stratify compartments, split according to split_proportions
+            prev_compartment_names = comps#copy.copy(self.compartments)
+            comps = strat._stratify_compartments(comps)
+            initial_population = strat._stratify_compartment_values(
+                prev_compartment_names, initial_population
+            )
+        return initial_population
 
     def adjust_population_split(self, strat: str, dest_filter: dict, proportions: dict):
         """Adjust the initial population to redistribute the population for a particular
