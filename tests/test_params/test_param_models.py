@@ -1,6 +1,6 @@
 import numpy as np
 
-from .models import *
+from tests.test_params.models import *
 
 
 def test_param_static_equal():
