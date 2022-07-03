@@ -96,7 +96,8 @@ def find_all_parameters(m: CompartmentalModel):
 
     # Inside flows
     for f in m._flows:
-        if params := extract_params(f.param):
+        params = extract_params(f.param)
+        if params:
             append_list(out_params, params, ("FlowParam", f))
             
     
