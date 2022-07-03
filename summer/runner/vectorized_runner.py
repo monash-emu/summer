@@ -11,6 +11,8 @@ from summer.compute import (
     find_sum
 )
 
+from summer.parameters import get_param_value
+
 from .model_runner import ModelRunner
 
 
@@ -22,13 +24,13 @@ class VectorizedRunner(ModelRunner):
     def __init__(self, model):
         super().__init__(model)
 
-    def prepare_to_run(self):
+    def prepare_to_run(self, parameters: dict = None):
         """Do all precomputation here"""
 
         # Disable caching; we don't want it, but the reference runner probably still does...
         self.model._enable_cache = False
 
-        super().prepare_to_run()
+        super().prepare_to_run(parameters)
         
         self.infectious_flow_indices = np.array([
             i for i, f in self._iter_non_function_flows if isinstance(f, flows.BaseInfectionFlow)
@@ -86,12 +88,10 @@ class VectorizedRunner(ModelRunner):
         for i, f in self._iter_non_function_flows:
             weight_type = f.weight_type()
             if weight_type == flows.WeightType.STATIC:
-                weight = f.get_weight_value(0,None)
+                weight = f.get_weight_value(0,None, self.parameters)
                 self.flow_weights[i] = weight
             elif weight_type == flows.WeightType.FUNCTION:
                 time_varying_weight_indices.append(i)
-            # else: Is system, these are calculated in a separate process
-            # FIXME Refactor so all in one place, maybe?
 
         self.time_varying_weight_indices = np.array(time_varying_weight_indices, dtype=int)
 
@@ -148,16 +148,12 @@ class VectorizedRunner(ModelRunner):
             time (float): Time in model.times coordinates
         """
 
-        # Run all adjustment systems; these are vectorized flow weight systems that operate over an array of flows
-        for (s,flow_idx) in self._adjustment_system_flow_maps:
-            self.flow_weights[flow_idx] = s.get_weights_at_time(time, computed_values)
-
         # Compute flow value blocks; these are 'chunked' blocks of flows that have a common flow param/adjustment structure,
-        # but are still specified as operating on individual flows (as opposed to AdjustmentSystems, which are vectorized)
+        # but are still specified as operating on individual flows
         for (param, adjustments), flow_idx in self.flow_block_maps.items():
-            value = param(time, computed_values) if callable(param) else param
+            value = get_param_value(param, time, computed_values, self.parameters)
             for a in adjustments:
-                value = a.get_new_value(value, computed_values, time)
+                value = a.get_new_value(value, computed_values, time, self.parameters)
             self.flow_weights[flow_idx] = value
 
     def _get_infectious_multipliers(self) -> np.ndarray:

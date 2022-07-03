@@ -2,11 +2,14 @@ from abc import ABC, abstractmethod
 from typing import Tuple
 
 import numpy as np
+from computegraph.graph import ComputeGraph
 
 import summer.flows as flows
-from summer.adjust import Overwrite, AdjustmentComponent
+from summer.adjust import Overwrite
 from summer.compute import binary_matrix_to_sparse_pairs, sparse_pairs_accum
 from summer.compartment import Compartment
+
+from summer.parameters import get_param_value
 
 def cached(func):
     cache = dict()
@@ -33,6 +36,9 @@ class ModelRunner(ABC):
 
         # Tracks total deaths per timestep for death-replacement birth flows
         self._timestep_deaths = None
+
+        # Set our initial parameters to an empty dict - this is really just to appease tests
+        self.parameters = {}
 
     @abstractmethod
     def get_flow_rates(self, compartment_values: np.ndarray, time: float) -> np.ndarray:
@@ -75,12 +81,21 @@ class ModelRunner(ABC):
         return comp_vals
 
     @abstractmethod
-    def prepare_to_run(self):
+    def prepare_to_run(self, parameters: dict = None):
         """
         Pre-run setup.
         Here we do any calculations/preparation are possible to do before the model runs.
         """
 
+        # FIXME:
+        # This should be split into structural model preparations, and those that
+        # are dependant on parameters
+        # I.e reusable vs run-specific
+
+        self.parameters = parameters
+
+        # FIXME: Not yet implemented properly...
+        #self.model.initial_population = self._model._recalculate_initial_population()
         
         if self.model._enable_cache:
             # +++ This functionality is largely deprecated and only used for the ReferenceRunner, which is slow
@@ -152,6 +167,10 @@ class ModelRunner(ABC):
             (i, f) for i, f in enumerate(self.model._flows) if not isinstance(f, flows.FunctionFlow)
         ]
 
+        # Resolve anything related to parameterization here
+
+        # Mixing matrices are their own special category
+
         """
         Pre-run calculations to help determine force of infection multiplier at runtime.
 
@@ -213,26 +232,11 @@ class ModelRunner(ABC):
         for k, proc in self.model._computed_value_processors.items():
              proc.prepare_to_run(self.model.compartments, self.model._flows)
 
-        # Adjustment systems - calculate adjusted flow weights for multiple flows
-        # in a vectorized fashion
-        # We need to aggregate all the flows sharing a common adjustment system
-        # into lists of data used for initialization, and also provide an array of
-        # flow indices for mapping back into the overall model
-        self._adjustment_system_flow_maps = []
-        for k, s in self.model._adjustment_systems.items():
-            flow_idx = []
-            components = []
-            for i, f in enumerate(self.model._flows):
-                for a in f.adjustments:
-                    if isinstance(a.param, AdjustmentComponent):
-                        if a.param.system == k:
-                            flow_idx.append(i)
-                            components.append(a.param.data)
-            if len(components):
-                s.prepare_to_run(components)
-                flow_idx = np.array(flow_idx, dtype=int)
-                self._adjustment_system_flow_maps.append((s, flow_idx))
+        cvcg = ComputeGraph(self.model._computed_values_graph_dict,"computed_values")
 
+        self.computed_values_runner = cvcg.get_callable()
+
+        
 
     def _get_compartment_infectiousness_for_strain(self, strain: str):
         """
@@ -264,11 +268,13 @@ class ModelRunner(ABC):
                             if should_apply_adjustment:
                                 # Cannot use time-varying functions for infectiousness adjustments,
                                 # because this is calculated before the model starts running.
-                                inf_value = adjustment.get_new_value(inf_value, None, None)
+                                inf_value = adjustment.get_new_value(inf_value, None, None, self.parameters)
 
             compartment_infectiousness[idx] = inf_value
 
         if strain != self.model._DEFAULT_DISEASE_STRAIN:
+            # FIXME: If there are multiple strains, but one of them is _DEFAULT_DISEASE_STRAIN
+            # there will almost certainly be incorrect masks applied
             # Filter out all values that are not in the given strain.
             strain_mask = np.zeros(self.model.initial_population.shape)
             for idx, compartment in enumerate(self.model.compartments):
@@ -327,7 +333,8 @@ class ModelRunner(ABC):
             mixing_matrix = None
             for mm_func in self.model._mixing_matrices:
                 # Assume each mixing matrix is either an np.ndarray or a function of time that returns one.
-                mm = mm_func(time) if callable(mm_func) else mm_func
+                #mm = mm_func(time) if callable(mm_func) else mm_func
+                mm = get_param_value(mm_func, time, None, self.parameters)
                 # Get Kronecker product of old and new mixing matrices.
                 # Only do this if we actually need to
                 if mixing_matrix is None:
@@ -377,5 +384,12 @@ class ModelRunner(ABC):
         for k, proc in self.model._computed_value_processors.items():
             computed_values[k] = proc.process(compartment_vals, computed_values, time)
         
+        model_variables = {
+            "compartment_values": compartment_vals,
+            "time": time
+        }
+
+        computed_values.update(self.computed_values_runner(parameters=self.parameters, model_variables=model_variables))
+
         return computed_values
 

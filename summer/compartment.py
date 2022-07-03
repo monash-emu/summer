@@ -35,6 +35,7 @@ class Compartment:
         self,
         name: str,
         strata: Optional[Dict[str, str]] = None,
+        tags: Optional[list] = None
     ):
         assert type(name) is str, "Name must be a string, not %s." % type(name)
         self.name = name
@@ -42,6 +43,7 @@ class Compartment:
         self._str = self.serialize()
         self.idx = None
         self._strata = frozenset(self.strata.items())
+        self.tags = tags or []
 
     def is_match(self, name: str, strata: dict) -> bool:
         """

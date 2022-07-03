@@ -6,6 +6,7 @@ import logging
 from datetime import datetime
 from collections import OrderedDict
 from typing import Callable, Dict, List, Optional, Tuple
+from warnings import warn
 
 import networkx
 import numpy as np
@@ -13,10 +14,11 @@ import pandas as pd
 
 import summer.flows as flows
 from summer import stochastic
-from summer.adjust import BaseAdjustment, FlowParam, AdjustmentSystem, Multiply
+from summer.adjust import BaseAdjustment, FlowParam, Multiply
 from summer.compartment import Compartment
 from summer.compute import ComputedValueProcessor
 from summer.derived_outputs import DerivedOutputRequest, calculate_derived_outputs
+from summer.parameters import params
 from summer.runner import ReferenceRunner, VectorizedRunner
 from summer.solver import SolverType, solve_ode
 from summer.stratification import Stratification
@@ -116,11 +118,9 @@ class CompartmentalModel:
         # Whitelist of 'derived outputs' to evaluate
         self._derived_outputs_whitelist = []
 
-        # Adjustment systems
-        self._adjustment_systems = {}
-
         # Map of (runtime) computed values
         self._computed_value_processors = OrderedDict()
+        self._computed_values_graph_dict = {}
 
         # Init baseline model to None; can be set via set_baseline if running as a scenario
         self._baseline = None
@@ -159,10 +159,19 @@ class CompartmentalModel:
         """
         error_msg = "Cannot set initial population after the model has been stratified"
         assert not self._stratifications, error_msg
-        for idx, comp in enumerate(self.compartments):
-            pop = distribution.get(comp.name, 0)
-            assert pop >= 0, f"Population for {comp.name} cannot be negative: {pop}"
-            self.initial_population[idx] = pop
+
+        if isinstance(distribution, dict):
+            for idx, comp in enumerate(self.compartments):
+                pop = distribution.get(comp.name, 0)
+                assert pop >= 0, f"Population for {comp.name} cannot be negative: {pop}"
+                self.initial_population[idx] = pop
+
+            self._original_init_population = self.initial_population.copy()
+        else:
+            ###FIXME
+            # So we've got this duality of possibly having the initial population available now,
+            # or only inspecting it later once we've got parameters
+            raise TypeError("Parameterized init population not yet supported", distribution)
 
     def set_validation_enabled(self, validate: bool):
         """
@@ -749,6 +758,21 @@ class CompartmentalModel:
                     if v not in s.strata:
                         raise ValueError(f"Invalid stratum {v} for {s}")
 
+    def _recalculate_initial_population(self):
+        # FIXME:
+        # Work in progress; correctly recalculates non-parameterized
+        # populations, but does not include population rebalances etc
+        initial_population = self._original_init_population
+        comps = self._original_compartment_names
+        for strat in self._stratifications:
+            # Stratify compartments, split according to split_proportions
+            prev_compartment_names = comps#copy.copy(self.compartments)
+            comps = strat._stratify_compartments(comps)
+            initial_population = strat._stratify_compartment_values(
+                prev_compartment_names, initial_population
+            )
+        return initial_population
+
     def adjust_population_split(self, strat: str, dest_filter: dict, proportions: dict):
         """Adjust the initial population to redistribute the population for a particular
         stratification, over a subset of some other strata
@@ -795,6 +819,7 @@ class CompartmentalModel:
         solver: str = SolverType.SOLVE_IVP,
         backend: str = _DEFAULT_BACKEND,
         backend_args: dict = None,
+        parameters: dict = None,
         **kwargs,
     ):
         """
@@ -815,7 +840,7 @@ class CompartmentalModel:
         self._update_compartment_indices()
 
         self._set_backend(backend, backend_args)
-        self._backend.prepare_to_run()
+        self._backend.prepare_to_run(parameters)
 
         if solver == SolverType.STOCHASTIC:
             # Run the model in 'stochastic mode'.
@@ -1003,7 +1028,8 @@ class CompartmentalModel:
             model = self,
             whitelist=self._derived_outputs_whitelist,
             baseline=self._baseline,
-            idx_cache = self._derived_outputs_idx_cache
+            idx_cache = self._derived_outputs_idx_cache,
+            parameters=self._backend.parameters
         )
 
     def request_output_for_flow(
@@ -1158,7 +1184,7 @@ class CompartmentalModel:
         Args:
             name: The name of the derived output.
             func: A function used to calculate the derived ouput.
-            sources: The derived ouputs to input into the function.
+            sources: The derived outputs to input into the function.
             save_results (optional): Whether to save or discard the results.
 
         Example:
@@ -1201,6 +1227,37 @@ class CompartmentalModel:
             "save_results": save_results,
         }
 
+    def request_param_function_output(
+        self,
+        name: str,
+        func: params.Function,
+        save_results: bool = True
+    ):
+        """Request a generic Function output
+
+        Args:
+            name (str): _description_
+            func (Function): The Function, whose args are Param
+            save_results (bool, optional): _description_. Defaults to True.
+        """
+
+        msg = f"A derived output named {name} already exists."
+        assert name not in self._derived_output_requests, msg
+        for k, v in func.kwargs.items():
+            if isinstance(v, params.DerivedOutput):
+                source = v.name
+                assert (
+                    source in self._derived_output_requests
+                ), f"Source {source} has not been requested."
+                self._derived_output_graph.add_edge(source, name)
+
+        self._derived_output_graph.add_node(name)
+        self._derived_output_requests[name] = {
+            "request_type": DerivedOutputRequest.PARAM_FUNCTION,
+            "func": func,
+            "save_results": save_results,
+        }
+
     def request_computed_value_output(
         self,
         name: str,
@@ -1233,17 +1290,18 @@ class CompartmentalModel:
             name (str): Name (key) of derived value (use this when referencing it in functions)
             processor (DerivedValueProcessor): Object providing implementation
         """
+        warn('Deprecated feature - use model.add_computed_value_func instead', DeprecationWarning, stacklevel=2)
         self._computed_value_processors[name] = processor
+        #FIXME: We might actually have to keep this for now, at least until modellers get sick of seeing it and change over all the code
+        #raise DeprecationWarning('Deprecated feature - use model.add_computed_value_func instead')
 
-    def add_adjustment_system(self, name: str, system: AdjustmentSystem):
-        """Add an AdjustmentSystem that will process common adjustments in parallel
-        These provide equivalent functionality to individual flow adjustments (adjust.py)
-       
-        Args:
-            name (str): The name of the system used for lookup purpsoes
-            system (AdjustmentSystem): AdjustmentSystem object containing the implementation details
-        """
-        self._adjustment_systems[name] = system
+    def add_computed_value_func(self, name: str, func: params.Function):
+        if name in self._computed_values_graph_dict:
+            raise Exception(f"Computed value function with name {name} already exists")
+        self._computed_values_graph_dict[name] = func
+
+    def get_computed_value_keys(self):
+        return list(self._computed_value_processors) + list(self._computed_values_graph_dict)
 
     def _get_ref_idx(self):
         if self.ref_date:

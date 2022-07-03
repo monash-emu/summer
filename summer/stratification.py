@@ -5,8 +5,9 @@ from typing import Callable, Dict, List, Optional, Union
 
 import numpy as np
 
-from summer.adjust import Multiply, Overwrite
+from summer.adjust import Multiply, Overwrite, enforce_multiply
 from summer.compartment import Compartment
+from summer.parameters import is_func, Parameter
 
 Adjustment = Union[Multiply, Overwrite]
 MixingMatrix = Union[np.ndarray, Callable[[float], np.ndarray]]
@@ -131,6 +132,8 @@ class Stratification:
         msg = "You must specify all strata when adding flow adjustments."
         assert set(adjustments.keys()) == set(self.strata), msg
 
+        adjustments = {k:enforce_multiply(v) for k,v in adjustments.items()}
+
         msg = "All flow adjustments must be Multiply, Overwrite or None."
         assert all(
             [
@@ -226,6 +229,8 @@ class Stratification:
         msg = "You must specify all strata when adding infectiousness adjustments."
         assert set(adjustments.keys()) == set(self.strata), msg
 
+        adjustments = {k:enforce_multiply(v) for k,v in adjustments.items()}
+
         msg = "All infectiousness adjustments must be Multiply, Overwrite or None."
         assert all(
             [type(a) is Overwrite or type(a) is Multiply or a is None for a in adjustments.values()]
@@ -234,6 +239,8 @@ class Stratification:
         msg = f"An infectiousness adjustment for {compartment_name} already exists for strat {self.name}"
         assert compartment_name not in self.infectiousness_adjustments, msg
 
+        # FIXME: This should work for computegraph Functions that are not time dependant,
+        # (and fail for those that are), but it's tricky to check...
         msg = "Cannot use time varying functions for infectiousness adjustments."
         assert not any([callable(adj.param) for adj in adjustments.values() if adj]), msg
 
@@ -247,14 +254,13 @@ class Stratification:
         msg = "Strain stratifications cannot have a mixing matrix."
         assert not self.is_strain(), msg
 
-        mm = mixing_matrix(0) if callable(mixing_matrix) else mixing_matrix
-
         msg = "Mixing matrix must be a NumPy array, or return a NumPy array."
-        assert type(mm) is np.ndarray, msg
+        assert (isinstance(mixing_matrix, np.ndarray)) or isinstance(mixing_matrix, Parameter) or is_func(mixing_matrix), msg
 
-        num_strata = len(self.strata)
-        msg = f"Mixing matrix must have both {num_strata} rows and {num_strata} columns."
-        assert mm.shape == (num_strata, num_strata), msg
+        if isinstance(mixing_matrix, np.ndarray):
+            num_strata = len(self.strata)
+            msg = f"Mixing matrix must have both {num_strata} rows and {num_strata} columns."
+            assert mixing_matrix.shape == (num_strata, num_strata), msg
 
         self.mixing_matrix = mixing_matrix
 

@@ -6,6 +6,8 @@ from typing import Callable, Union, Any
 
 import numpy as np
 
+from summer.parameters import get_param_value
+
 FlowParam = Union[float, Callable[[float], float]]
 
 
@@ -18,7 +20,7 @@ class BaseAdjustment(ABC):
         self.param = param
 
     @abstractmethod
-    def get_new_value(self, value: float, computed_values: dict, time: float) -> float:
+    def get_new_value(self, value: float, computed_values: dict, time: float, parameters: dict = None) -> float:
         pass
 
     def _is_equal(self, adj):
@@ -56,7 +58,7 @@ class Multiply(BaseAdjustment):
 
     """
 
-    def get_new_value(self, value: float, computed_values: dict, time: float) -> float:
+    def get_new_value(self, value: float, computed_values: dict, time: float, parameters: dict = None) -> float:
         """
         Returns the adjusted value for a given time.
 
@@ -68,7 +70,7 @@ class Multiply(BaseAdjustment):
             float: The new, adjusted value.
 
         """
-        return self.param(time, computed_values) * value if callable(self.param) else self.param * value
+        return get_param_value(self.param, time, computed_values, parameters) * value
 
 
 class Overwrite(BaseAdjustment):
@@ -91,7 +93,7 @@ class Overwrite(BaseAdjustment):
 
     """
 
-    def get_new_value(self, value: float, computed_values: dict, time: float) -> float:
+    def get_new_value(self, value: float, computed_values: dict, time: float, parameters: dict = None) -> float:
         """
         Returns the adjusted value for a given time.
 
@@ -103,44 +105,13 @@ class Overwrite(BaseAdjustment):
             float: The new, adjusted value.
 
         """
-        return self.param(time, computed_values) if callable(self.param) else self.param
+        return get_param_value(self.param, time, computed_values, parameters)
 
-class AdjustmentComponent:
-    def __init__(self, system: str, data: Any):
-        """Adjustment is a component of an AdjustmentSystem
-        The component does not compute a value directly, rather it contains
-        the data that the system can use to compute all its values
-        in a vectorized fashion
+def enforce_wrapped(value, allowed, wrap):
+    if any([isinstance(value, t) for t in allowed]):
+        return value
+    else:
+        return wrap(value)
 
-        Args:
-            system (str): Name matching a system registered via add_adjustment_system
-            data (Any): Data of any type matching the system's interface 
-        """
-        self.system = system
-        self.data = data
-
-class AdjustmentSystem:
-    def __init__(self):
-        pass
-
-    @abstractmethod
-    def prepare_to_run(self, component_data: list):
-        """Do any preparation required before a run here.
-        component_data is an ordered list of all components belonging to this system
-        The system is expected to return an ndarray of matching size, in the same
-        order, with one flow weight adjustment per component
-
-        Args:
-            component_data (list): Initialization data for the system
-        """
-        pass
-
-    @abstractmethod
-    def get_weights_at_time(self, time: float, computed_values: dict) -> np.ndarray:
-        """[summary]
-
-        Args:
-            time ([type]): [description]
-            computed_values ([type]): [description]
-        """
-        pass
+def enforce_multiply(value):
+    return enforce_wrapped(value, [Multiply, Overwrite, type(None)], Multiply) 

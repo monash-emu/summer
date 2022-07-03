@@ -13,8 +13,8 @@ class ReferenceRunner(ModelRunner):
     def __init__(self, model):
         super().__init__(model)
 
-    def prepare_to_run(self):
-        super().prepare_to_run()
+    def prepare_to_run(self, parameters: dict = None):
+        super().prepare_to_run(parameters)
 
     def get_compartment_rates(self, compartment_values: np.ndarray, time: float):
         """
@@ -74,7 +74,7 @@ class ReferenceRunner(ModelRunner):
         # Find the flow rate for each flow.
         for flow_idx, flow in self._iter_non_function_flows:
             # Evaluate all the flows that are not function flows.
-            net_flow = flow.get_net_flow(compartment_vals, computed_values, time)
+            net_flow = flow.get_net_flow(compartment_vals, computed_values, time, self.parameters)
             flow_rates[flow_idx] = net_flow
             if flow.source:
                 comp_rates[flow.source.idx] -= net_flow

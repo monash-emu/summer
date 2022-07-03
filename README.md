@@ -115,7 +115,11 @@ Releases are numbered using [Semantic Versioning](https://semver.org/)
 - 2.6.0
   - Merge 3.9/master branches
 - 2.7.0
-  - Include Python 3.10 support and update requirements 
+  - Include Python 3.10 support and update requirements
+- 2.7.1
+  - Bugfix (source flows not counted correctly in _add_transition_flow)
+- 3.1.0
+  - Parameter aware summer using computegraph
 
 ## Release process
 
