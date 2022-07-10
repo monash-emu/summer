@@ -20,36 +20,6 @@ func = Function
 _mm = np.array((0.1, 0.2, 0.1, 0.5)).reshape(2, 2)
 
 
-PARAMS = {
-    "params": {"contact_rate": 1.0, "recovery_rate": 0.01},
-    "params_func": {"recovery_rate": 0.02, "contact_scale": 1.0},
-    "params_strat": {
-        "recovery_rate": 0.02,
-        "contact_scale": 5.0,
-        "aged_recovery_scale": 0.5,
-        "mixing_matrix": _mm,
-        "young_infect_scale": 5.0,
-    },
-    "params_mm_func": {
-        "recovery_rate": 0.02,
-        "contact_scale": 1.0,
-        "aged_recovery_scale": 0.5,
-        "mixing_matrix": _mm,
-        "young_infect_scale": 3.0,
-        "matrix_scale": 0.5,
-    },
-    "params_new_derived": {
-        "recovery_rate": 0.02,
-        "contact_scale": 1.0,
-        "aged_recovery_scale": 0.5,
-        "mixing_matrix": _mm,
-        "young_infect_scale": 3.0,
-        "matrix_scale": 0.5,
-        "serosurvey_scale": 0.5,
-    },
-}
-
-
 def build_model_params(**kwargs) -> CompartmentalModel:
     """
     Base parameterized model
@@ -198,3 +168,41 @@ def build_model_new_derived(**kwargs):
     )
 
     return m
+
+
+BUILD_FUNCTIONS = {
+    "params": build_model_params,
+    "params_func": build_model_params_func,
+    "params_strat": build_model_params_strat,
+    "params_mixing_func": build_model_mixing_func,
+    "params_new_derived": build_model_new_derived,
+}
+
+PARAMS = {
+    "params": {"contact_rate": 1.0, "recovery_rate": 0.01},
+    "params_func": {"recovery_rate": 0.02, "contact_scale": 1.0},
+    "params_strat": {
+        "recovery_rate": 0.02,
+        "contact_scale": 5.0,
+        "aged_recovery_scale": 0.5,
+        "mixing_matrix": _mm,
+        "young_infect_scale": 5.0,
+    },
+    "params_mixing_func": {
+        "recovery_rate": 0.02,
+        "contact_scale": 1.0,
+        "aged_recovery_scale": 0.5,
+        "mixing_matrix": _mm,
+        "young_infect_scale": 3.0,
+        "matrix_scale": 0.5,
+    },
+    "params_new_derived": {
+        "recovery_rate": 0.02,
+        "contact_scale": 1.0,
+        "aged_recovery_scale": 0.5,
+        "mixing_matrix": _mm,
+        "young_infect_scale": 3.0,
+        "matrix_scale": 0.5,
+        "serosurvey_scale": 0.5,
+    },
+}

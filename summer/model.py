@@ -12,6 +12,8 @@ import networkx
 import numpy as np
 import pandas as pd
 
+from computegraph.utils import is_var
+
 import summer.flows as flows
 from summer import stochastic
 from summer.adjust import BaseAdjustment, FlowParam, Multiply
@@ -41,28 +43,34 @@ class CompartmentalModel:
 
     This model defines a set of compartments which each contain a population.
     Disease dynamics are defined by a set of flows which link the compartments together.
-    The model is run over a period of time, starting from some initial conditions to predict the future state of a disease.
+    The model is run over a period of time, starting from some initial conditions to
+    predict the future state of a disease.
 
     Args:
         times: The start and end times. ***
         compartments: The compartments to simulate.
         infectious_compartments: The compartments which are counted as infectious.
-        time_step (optional): The timesteps to return results for. This request does not affect the ODE solver, but is used for the stochastic solver. Defaults to ``1``.
+        time_step (optional): The timesteps to return results for. This request does not
+        affect the ODE solver, but is used for the stochastic solver. Defaults to ``1``.
 
     Attributes:
         times (np.ndarray): The times that the model will simulate.
         compartments (List[Compartment]): The model's compartments.
         initial_population (np.ndarray): The model's starting population. The indices of this
-            array match to the ``compartments`` attribute. This is zero by default, but should be set with the ``set_initial_population`` method.
-        outputs (np.ndarray): The values of each compartment for each requested timestep. For ``C`` compartments and
-            ``T`` timesteps this will be a ``TxC`` matrix. The column indices of this array will match up with ``compartments`` and the row indices will match up with ``times``.
-        derived_outputs (Dict[str, np.ndarray]): Additional results that are calculated from ``outputs`` for each timestep.
+            array match to the ``compartments`` attribute. This is zero by default, but should
+            be set with the ``set_initial_population`` method.
+        outputs (np.ndarray): The values of each compartment for each requested timestep.
+            For ``C`` compartments and ``T`` timesteps this will be a ``TxC`` matrix.
+            The column indices of this array will match up with ``compartments`` and the
+            row indices will match up with ``times``.
+        derived_outputs (Dict[str, np.ndarray]): Additional results that are calculated from
+            ``outputs`` for each timestep.
 
 
     """
 
     _DEFAULT_DISEASE_STRAIN = "default"
-    _DEFAULT_MIXING_MATRIX = np.array([[1.]])
+    _DEFAULT_MIXING_MATRIX = np.array([[1.0]])
     _DEFAULT_BACKEND = BackendType.VECTORIZED
 
     def __init__(
@@ -71,7 +79,7 @@ class CompartmentalModel:
         compartments: List[str],
         infectious_compartments: List[str],
         timestep: float = 1.0,
-        ref_date: datetime = None
+        ref_date: datetime = None,
     ):
         start_t, end_t = times
         assert end_t > start_t, "End time must be greater than start time"
@@ -125,11 +133,14 @@ class CompartmentalModel:
         # Init baseline model to None; can be set via set_baseline if running as a scenario
         self._baseline = None
 
-        # Mixing matrices: a list of square arrays, or functions, used to calculate force of infection.
+        # Mixing matrices: a list of square arrays, or functions, used to calculate
+        # force of infection.
         self._mixing_matrices = []
-        # Mixing categories: a list of dicts that knows the strata required to match a row in the mixing matrix.
+        # Mixing categories: a list of dicts that knows the strata required to match a row in
+        # the mixing matrix.
         self._mixing_categories = [{}]
-        # Strains: a list of the different sub-categories ('strains') of the disease that we are modelling.
+        # Strains: a list of the different sub-categories ('strains') of the disease that we
+        # are modelling.
         self._disease_strains = [self._DEFAULT_DISEASE_STRAIN]
 
         self._update_compartment_indices()
@@ -159,6 +170,7 @@ class CompartmentalModel:
         """
         error_msg = "Cannot set initial population after the model has been stratified"
         assert not self._stratifications, error_msg
+        self._initial_population_distribution = distribution
 
         if isinstance(distribution, dict):
             for idx, comp in enumerate(self.compartments):
@@ -167,23 +179,20 @@ class CompartmentalModel:
                 self.initial_population[idx] = pop
 
             self._original_init_population = self.initial_population.copy()
-        else:
-            ###FIXME
-            # So we've got this duality of possibly having the initial population available now,
-            # or only inspecting it later once we've got parameters
-            raise TypeError("Parameterized init population not yet supported", distribution)
+
+        elif not is_var(distribution, "parameters"):
+            raise TypeError("Initial population must be dict or Parameter", distribution)
 
     def set_validation_enabled(self, validate: bool):
         """
         Set this to False in order to turn of some (potentially expensive) runtime validation
-        E.g. In calibration, leave it enabled for the first iteration, to catch any structural 
+        E.g. In calibration, leave it enabled for the first iteration, to catch any structural
         model issues, but then disable for subsequent iterations
         """
         self._should_validate = validate
 
     def _set_derived_outputs_index_cache(self, idx_cache: dict):
         self._derived_outputs_idx_cache = idx_cache
-
 
     """
     Adding flows
@@ -199,14 +208,16 @@ class CompartmentalModel:
     ):
         """
         Adds a crude birth rate flow to the model.
-        The number of births will be determined by the product of the birth rate and total population.
+        The number of births will be determined by the product of the birth rate
+        and total population.
 
         Args:
             name: The name of the new flow.
             birth_rate: The fractional crude birth rate per timestep.
             dest: The name of the destination compartment.
             dest_strata (optional): A whitelist of strata to filter the destination compartments.
-            expected_flow_count (optional): Used to assert that a particular number of flows are created.
+            expected_flow_count (optional): Used to assert that a particular number of flows
+                                            are created.
 
         """
         is_already_birth_flow = any(
@@ -243,7 +254,8 @@ class CompartmentalModel:
             name: The name of the new flow.
             dest: The name of the destination compartment.
             dest_strata (optional): A whitelist of strata to filter the destination compartments.
-            expected_flow_count (optional): Used to assert that a particular number of flows are created.
+            expected_flow_count (optional): Used to assert that a particular number of flows
+                                            are created.
 
         """
         # Only allow a single replacement flow to be added to the model.
@@ -276,17 +288,19 @@ class CompartmentalModel:
         expected_flow_count: Optional[int] = None,
     ):
         """
-        Adds an importation flow to the model, where people enter the destination compartment from outside the system.
+        Adds an importation flow to the model, where people enter the destination compartment from
+        outside the system.
         The number of people imported per timestep is completely determined by ``num_imported``.
 
         Args:
             name: The name of the new flow.
             num_imported: The number of people arriving per timestep.
             dest: The name of the destination compartment.
-            split_imports: Whether to split num_imported amongst existing destination compartments (True), 
-                   or add the full value to each (False)
+            split_imports: Whether to split num_imported amongst existing destination
+                           compartments (True), or add the full value to each (False)
             dest_strata (optional): A whitelist of strata to filter the destination compartments.
-            expected_flow_count (optional): Used to assert that a particular number of flows are created.
+            expected_flow_count (optional): Used to assert that a particular number of flows are
+                                            created.
 
         """
 
@@ -295,13 +309,19 @@ class CompartmentalModel:
 
         if split_imports:
             # Adjust each of the flows so they are split equally between dest_comps
-            adjustments = [Multiply(1.0/len(dest_comps))]
+            adjustments = [Multiply(1.0 / len(dest_comps))]
         else:
             # No adjustment - flow to each dest will be num_imported
             adjustments = None
 
         self._add_entry_flow(
-            flows.ImportFlow, name, num_imported, dest, dest_strata, expected_flow_count, adjustments
+            flows.ImportFlow,
+            name,
+            num_imported,
+            dest,
+            dest_strata,
+            expected_flow_count,
+            adjustments,
         )
 
     def _add_entry_flow(
@@ -312,7 +332,7 @@ class CompartmentalModel:
         dest: str,
         dest_strata: Optional[Dict[str, str]],
         expected_flow_count: Optional[int],
-        adjustments: List[BaseAdjustment] = None
+        adjustments: List[BaseAdjustment] = None,
     ):
         dest_strata = dest_strata or {}
         dest_comps = [c for c in self.compartments if c.is_match(dest, dest_strata)]
@@ -340,7 +360,8 @@ class CompartmentalModel:
             death_rate: The fractional death rate per timestep.
             source: The name of the source compartment.
             source_strata (optional): A whitelist of strata to filter the source compartments.
-            expected_flow_count (optional): Used to assert that a particular number of flows are created.
+            expected_flow_count (optional): Used to assert that a particular number of flows are
+                                            created.
 
         """
         self._add_exit_flow(
@@ -373,7 +394,8 @@ class CompartmentalModel:
         # Only allow a single universal death flow with a given name to be added to the model.
         is_already_used = any([f.name.startswith(base_name) for f in self._flows])
         if is_already_used:
-            msg = f"There is already a universal death flow called '{base_name}' in this model, cannot add a second."
+            msg = f"There is already a universal death flow called '{base_name}' in this model, \
+                cannot add a second."
             raise ValueError(msg)
 
         flow_names = []
@@ -422,7 +444,8 @@ class CompartmentalModel:
     ):
         """
         Adds a flow that infects people using an "infection frequency" contact rate, which is
-        when the infectious multiplier is determined by the proportion of infectious people to the total population.
+        when the infectious multiplier is determined by the proportion of infectious people to the
+        total population.
 
         Args:
             name: The name of the new flow.
@@ -431,7 +454,8 @@ class CompartmentalModel:
             dest: The name of the destination compartment.
             source_strata (optional): A whitelist of strata to filter the source compartments.
             dest_strata (optional): A whitelist of strata to filter the destination compartments.
-            expected_flow_count (optional): Used to assert that a particular number of flows are created.
+            expected_flow_count (optional): Used to assert that a particular number of flows are
+                                            created.
 
         """
         self._add_transition_flow(
@@ -467,7 +491,8 @@ class CompartmentalModel:
             dest: The name of the destination compartment.
             source_strata (optional): A whitelist of strata to filter the source compartments.
             dest_strata (optional): A whitelist of strata to filter the destination compartments.
-            expected_flow_count (optional): Used to assert that a particular number of flows are created.
+            expected_flow_count (optional): Used to assert that a particular number of flows are
+                                            created.
 
         """
         self._add_transition_flow(
@@ -493,8 +518,8 @@ class CompartmentalModel:
         expected_flow_count: Optional[int] = None,
     ):
         """
-        Adds a flow transfers people from a source to a destination based on the population of the source
-        compartment and the fractional flow rate.
+        Adds a flow transferring people from a source to a destination based on the population of
+        the source compartment and the fractional flow rate.
 
         Args:
             name: The name of the new flow.
@@ -503,7 +528,8 @@ class CompartmentalModel:
             dest: The name of the destination compartment.
             source_strata (optional): A whitelist of strata to filter the source compartments.
             dest_strata (optional): A whitelist of strata to filter the destination compartments.
-            expected_flow_count (optional): Used to assert that a particular number of flows are created.
+            expected_flow_count (optional): Used to assert that a particular number of flows are
+                                            created.
 
         """
         self._add_transition_flow(
@@ -528,8 +554,9 @@ class CompartmentalModel:
         expected_flow_count: Optional[int] = None,
     ):
         """
-        A flow that transfers people from a source to a destination based on a user-defined function.
-        This can be used to define more complex flows if required. See `flows.FunctionFlow` for more details on the arguments to the function.
+        A flow that transfers people from a source to a destination based on a user-defined function
+        This can be used to define more complex flows if required. See `flows.FunctionFlow` for more
+        details on the arguments to the function.
 
         Args:
             name: The name of the new flow.
@@ -538,7 +565,8 @@ class CompartmentalModel:
             dest: The name of the destination compartment.
             source_strata (optional): A whitelist of strata to filter the source compartments.
             dest_strata (optional): A whitelist of strata to filter the destination compartments.
-            expected_flow_count (optional): Used to assert that a particular number of flows are created.
+            expected_flow_count (optional): Used to assert that a particular number of flows are
+                                            created.
 
         """
         self._add_transition_flow(
@@ -572,7 +600,8 @@ class CompartmentalModel:
 
         num_dest = len(dest_comps)
         num_source = len(source_comps)
-        msg = f"Expected equal number of source and dest compartments, but got {num_source} source and {num_dest} dest."
+        msg = f"Expected equal number of source and dest compartments, but got {num_source} source \
+                and {num_dest} dest."
         assert num_dest == num_source, msg
         new_flows = []
         for source_comp, dest_comp in zip(source_comps, dest_comps):
@@ -637,7 +666,6 @@ class CompartmentalModel:
         else:
             return [c for c in name_query if c._has_strata(strata)]
 
-
     """
     Stratifying the model
     """
@@ -667,7 +695,8 @@ class CompartmentalModel:
                 self._strata_exist(dest_strata)
 
         # Validate infectiousness adjustments.
-        msg = "All stratification infectiousness adjustments must refer to a compartment that is present in model."
+        msg = "All stratification infectiousness adjustments must refer to a compartment that is \
+               present in model."
         assert all(
             [c in self._original_compartment_names for c in strat.infectiousness_adjustments.keys()]
         ), msg
@@ -688,7 +717,8 @@ class CompartmentalModel:
 
         if strat.is_strain():
             # Track disease strain names, overriding default values.
-            msg = "An infection strain stratification has already been applied, cannot use this more than once."
+            msg = "An infection strain stratification has already been applied, cannot use this \
+                   more than once."
             assert not any([s.is_strain() for s in self._stratifications]), msg
             self._disease_strains = strat.strata
 
@@ -720,7 +750,8 @@ class CompartmentalModel:
             # It's assumed that both ages and model timesteps are in years.
             ages = list(sorted(map(int, strat.strata)))
 
-            # Only allow age stratification to be applied with complete stratifications, because everyone has an age.
+            # Only allow age stratification to be applied with complete stratifications,
+            # because everyone has an age.
             msg = "Mixing matrices only allowed for full stratification."
             assert strat.compartments == self._original_compartment_names, msg
 
@@ -758,7 +789,8 @@ class CompartmentalModel:
                     if v not in s.strata:
                         raise ValueError(f"Invalid stratum {v} for {s}")
 
-    def _recalculate_initial_population(self):
+    def _recalculate_initial_population(self) -> np.ndarray:
+        """Can only be called on a finalized model with parameters"""
         # FIXME:
         # Work in progress; correctly recalculates non-parameterized
         # populations, but does not include population rebalances etc
@@ -766,7 +798,7 @@ class CompartmentalModel:
         comps = self._original_compartment_names
         for strat in self._stratifications:
             # Stratify compartments, split according to split_proportions
-            prev_compartment_names = comps#copy.copy(self.compartments)
+            prev_compartment_names = comps  # copy.copy(self.compartments)
             comps = strat._stratify_compartments(comps)
             initial_population = strat._stratify_compartment_values(
                 prev_compartment_names, initial_population
@@ -782,25 +814,25 @@ class CompartmentalModel:
             dest_filter (dict): Subset of (other) strata to filter the split by
             proportions (dict): Proportions of new split (must have all strata specified)
 
-        """ 
-            
-        msg = f"No stratification {strat} found in model"
-        assert(strat in [s.name for s in self._stratifications]), msg
+        """
 
-        model_strat = [s for s in self._stratifications if s.name==strat][0]
+        msg = f"No stratification {strat} found in model"
+        assert strat in [s.name for s in self._stratifications], msg
+
+        model_strat = [s for s in self._stratifications if s.name == strat][0]
 
         msg = "All strata must be specified in proportions"
-        assert(set(model_strat.strata) == set(proportions)), msg
+        assert set(model_strat.strata) == set(proportions), msg
 
         msg = "Proportions must sum to 1.0"
         np.testing.assert_allclose(sum(proportions.values()), 1.0, err_msg=msg)
-        
+
         strat_comps = [c for c in self.compartments if strat in c.strata]
         # Filter by only the subset we're setting in split_map
         strat_comps = filter_by_strata(strat_comps, dest_filter)
-        
+
         usg = get_unique_strat_groups(strat_comps, strat)
-        
+
         for g in usg:
             mcomps = self._get_matching_compartments(g.name, g.strata)
             idx = [c.idx for c in mcomps]
@@ -824,19 +856,25 @@ class CompartmentalModel:
     ):
         """
         Runs the model over the provided time span, calculating the outputs and the derived outputs.
-        The model calculates the outputs by solving an ODE which is defined by the initial population and the inter-compartmental flows.
+        The model calculates the outputs by solving an ODE which is defined by the initial
+        population and the inter-compartmental flows.
 
-        **Note**: The default ODE solver used to produce the model's outputs does not necessarily evaluate every requested timestep. This adaptive
-        solver can skip over times, or double back when trying to characterize the ODE. The final results are produced by interpolating the
-        solution produced by the ODE solver. This means that model dynamics that only occur in short time periods may not be reflected in the outputs.
+        **Note**: The default ODE solver used to produce the model's outputs does not necessarily
+        evaluate every requested timestep. This adaptive
+        solver can skip over times, or double back when trying to characterize the ODE. The final
+        results are produced by interpolating the
+        solution produced by the ODE solver. This means that model dynamics that only occur in
+        short time periods may not be reflected in the outputs.
 
         Args:
             solver (optional): The ODE solver to use, defaults to SciPy's IVP solver.
-            **kwargs (optional): Extra arguments to supplied to the solver, see ``summer.solver`` for details.
+            **kwargs (optional): Extra arguments to supplied to the solver, see ``summer.solver``
+            for details.
 
         """
 
-        # Ensure we call this before model runs, since it is now disabled inside individual flow constructors
+        # Ensure we call this before model runs, since it is now disabled inside individual
+        # flow constructors
         self._update_compartment_indices()
 
         self._set_backend(backend, backend_args)
@@ -886,7 +924,8 @@ class CompartmentalModel:
         Uses an ODE interpretation of flow rates.
         """
 
-        # Calculate the outputs (compartment sizes) by solving the ODE defined by _get_compartment_rates().
+        # Calculate the outputs (compartment sizes) by solving the ODE defined by
+        # _get_compartment_rates().
         self.outputs = solve_ode(
             solver,
             self._backend.get_compartment_rates,
@@ -902,8 +941,8 @@ class CompartmentalModel:
         A random seed (eg. 12345, 1337) can be provided to ensure the same results are produced.
 
         With this approach we represent a discrete number of people, unlike in the ODE solver, there
-        is way to have of 'half a person' or a compartment size of 101.23. Both compartment sizes and
-        flows are discrete.
+        is way to have of 'half a person' or a compartment size of 101.23. Both compartment sizes
+        and flows are discrete.
 
         We use an stochastic interpretation of flow rates.
         The flow rates from _get_rates() are used to calculate the probability of an person
@@ -912,7 +951,8 @@ class CompartmentalModel:
             - moving between compartments (transitions, infections)
 
         There are two sampling methods used:
-            - Transition and exit flows are sampled from an exponential distribution using a multinomial
+            - Transition and exit flows are sampled from an exponential distribution using a
+              multinomial
             - Entry flows are sampled froma  Poisson distribution
 
         The main difference is that there is no 'source' compartment for entry flows.
@@ -950,7 +990,8 @@ class CompartmentalModel:
             # because we handle them separately with different methods.
 
             # Transition (and exit) flow are stored in a 2D FxC ndarray where f is the flow idx
-            # and c is the compartment idx, giving us a matrix of flows rates out of each compartment.
+            # and c is the compartment idx, giving us a matrix of flows rates out of each
+            # compartment.
             transition_flow_rates = np.zeros((len(self._flows), len(comp_vals)))
 
             # Entry flows are stored in 1D C sized ndarray with one element per compartment.
@@ -967,7 +1008,8 @@ class CompartmentalModel:
                     entry_flow_rates[flow.dest.idx] += flow_rates[flow_idx]
 
             # Convert flow rates to probabilities, and take a sample using these probabilities,
-            # so we end up with the changes to the compartment sizes due to flows over this timestep.
+            # so we end up with the changes to the compartment sizes due to flows over this
+            # timestep.
             entry_changes = stochastic.sample_entry_flows(seed, entry_flow_rates, self.timestep)
             transition_changes = stochastic.sample_transistion_flows(
                 seed, transition_flow_rates, flow_map, comp_vals, self.timestep
@@ -992,9 +1034,10 @@ class CompartmentalModel:
     def set_derived_outputs_whitelist(self, whitelist: List[str]):
         """
         Request that we should only calculate a subset of the model's derived outputs.
-        This can be useful when you only care about some results and you want to cut down on runtime.
-        For example, we may only need some derived outputs for calibration, but may need more later when we want to know
-        all the dyanmics that the model actually showed.
+        This can be useful when you only care about some results and you want to cut down on
+        runtime.
+        For example, we may only need some derived outputs for calibration, but may need more later
+        when we want to know all the dyanmics that the model actually showed.
 
         Args:
             whitelist: A list of the derived output names to calculate, ignoring all others.
@@ -1025,11 +1068,11 @@ class CompartmentalModel:
             flows=self._flows,
             compartments=self.compartments,
             get_flow_rates=self._backend.get_flow_rates,
-            model = self,
+            model=self,
             whitelist=self._derived_outputs_whitelist,
             baseline=self._baseline,
-            idx_cache = self._derived_outputs_idx_cache,
-            parameters=self._backend.parameters
+            idx_cache=self._derived_outputs_idx_cache,
+            parameters=self._backend.parameters,
         )
 
     def request_output_for_flow(
@@ -1051,8 +1094,9 @@ class CompartmentalModel:
             source_strata (optional): A whitelist of strata to filter the source compartments.
             dest_strata (optional): A whitelist of strata to filter the destination compartments.
             save_results (optional): Whether to save or discard the results. Defaults to ``True``.
-            raw_results (optional): Whether to use raw interpolated flow rates, or post-process them so that they're more
-                represenative of the changes in compartment sizes. Defaults to ``False``.
+            raw_results (optional): Whether to use raw interpolated flow rates, or post-process them
+                so that they're more representative of the changes in compartment sizes.
+                Defaults to ``False``.
         """
         source_strata = source_strata or {}
         dest_strata = dest_strata or {}
@@ -1064,7 +1108,7 @@ class CompartmentalModel:
                 [f.is_match(flow_name, source_strata, dest_strata) for f in self._flows]
             )
             assert is_flow_exists, f"No flow matches: {flow_name} {source_strata} {dest_strata}"
-        
+
         self._derived_output_graph.add_node(name)
         self._derived_output_requests[name] = {
             "request_type": DerivedOutputRequest.FLOW,
@@ -1098,10 +1142,13 @@ class CompartmentalModel:
             msg = f"A derived output named {name} already exists."
             assert name not in self._derived_output_requests, msg
             is_match_exists = any(
-                [any([c.is_match(name, strata) for name in compartments]) for c in self.compartments]
+                [
+                    any([c.is_match(name, strata) for name in compartments])
+                    for c in self.compartments
+                ]
             )
             assert is_match_exists, f"No compartment matches: {compartments} {strata}"
-    
+
         self._derived_output_graph.add_node(name)
         self._derived_output_requests[name] = {
             "request_type": DerivedOutputRequest.COMPARTMENT,
@@ -1117,7 +1164,8 @@ class CompartmentalModel:
         save_results: bool = True,
     ):
         """
-        Adds a derived output to the model's results. The output will be the aggregate of other derived outputs.
+        Adds a derived output to the model's results. The output will be the aggregate of other
+        derived outputs.
 
         Args:
             name: The name of the derived output.
@@ -1148,13 +1196,13 @@ class CompartmentalModel:
         save_results: bool = True,
     ):
         """
-        Adds a derived output to the model's results. The output will be the accumulated values of another derived
-        output over the model's time period.
+        Adds a derived output to the model's results. The output will be the accumulated values of
+        another derived output over the model's time period.
 
         Args:
             name: The name of the derived output.
             source: The name of the derived outputs to accumulate.
-            start_time (optional): The time to start accumulating from, defaults to model start time.
+            start_time (optional): The time to start accumulating from, defaults to model start time
             save_results (optional): Whether to save or discard the results.
 
         """
@@ -1228,10 +1276,7 @@ class CompartmentalModel:
         }
 
     def request_param_function_output(
-        self,
-        name: str,
-        func: params.Function,
-        save_results: bool = True
+        self, name: str, func: params.Function, save_results: bool = True
     ):
         """Request a generic Function output
 
@@ -1258,11 +1303,7 @@ class CompartmentalModel:
             "save_results": save_results,
         }
 
-    def request_computed_value_output(
-        self,
-        name: str,
-        save_results: bool = True
-    ):
+    def request_computed_value_output(self, name: str, save_results: bool = True):
         """
         Save a computed value process output to derived outputs
 
@@ -1282,18 +1323,23 @@ class CompartmentalModel:
 
     def add_computed_value_process(self, name: str, processor: ComputedValueProcessor):
         """
-        Calculate (at runtime) values derived from the current compartment values and/or functions/input data
-        providing time varying shared values.  The output values of these processes can be used by function 
-        parameters, adjustments, and function flows.
+        Calculate (at runtime) values derived from the current compartment values and/or
+        functions/input data
+        providing time varying shared values.  The output values of these processes can be used by
+        function parameters, adjustments, and function flows.
 
         Args:
             name (str): Name (key) of derived value (use this when referencing it in functions)
             processor (DerivedValueProcessor): Object providing implementation
         """
-        warn('Deprecated feature - use model.add_computed_value_func instead', DeprecationWarning, stacklevel=2)
+        # FIXME: We might actually have to keep this for now, at least until modellers get sick of
+        # seeing it and change over all the code
+        warn(
+            "Deprecated feature - use model.add_computed_value_func instead",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         self._computed_value_processors[name] = processor
-        #FIXME: We might actually have to keep this for now, at least until modellers get sick of seeing it and change over all the code
-        #raise DeprecationWarning('Deprecated feature - use model.add_computed_value_func instead')
 
     def add_computed_value_func(self, name: str, func: params.Function):
         if name in self._computed_values_graph_dict:
