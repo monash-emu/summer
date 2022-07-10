@@ -1,7 +1,7 @@
 from __future__ import annotations
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from computegraph.types import Variable, Function
-from computegraph.utils import extract_variables
+from computegraph.utils import extract_variables, is_var
 
 if TYPE_CHECKING:
     from summer import CompartmentalModel
@@ -56,7 +56,21 @@ def is_func(param) -> bool:
     return isinstance(param, Function) or callable(param)
 
 
-def get_param_value(param, time, computed_values, parameters) -> float:
+def get_model_param_value(param, time, computed_values, parameters) -> Any:
+    """_summary_
+
+    Args:
+        param (_type_): _description_
+        time (_type_): _description_
+        computed_values (_type_): _description_
+        parameters (_type_): _description_
+
+    Raises:
+        Exception: _description_
+
+    Returns:
+        float: _description_
+    """
     if isinstance(param, Variable):
         if param.source == "parameters":
             return parameters[param.name]
@@ -74,6 +88,25 @@ def get_param_value(param, time, computed_values, parameters) -> float:
         return param(time, computed_values)
     else:
         return param
+
+
+def get_static_param_value(obj: Any, parameters: dict) -> Any:
+    """Get the value of a parameter, or of a function that depends only on parameters,
+       or return obj if any other type
+
+    Args:
+        obj : The Variable, Function, or Python object
+        parameters: Parameters dictionary
+
+    Returns:
+        The value of the object
+    """
+    if is_var(obj, "parameters"):
+        return parameters[obj.name]
+    elif isinstance(obj, Function):
+        return obj.call(sources={"parameters": parameters})
+    else:
+        return obj
 
 
 def build_args(args: tuple, kwargs: dict, sources: dict):

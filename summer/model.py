@@ -26,6 +26,7 @@ from summer.solver import SolverType, solve_ode
 from summer.stratification import Stratification
 from summer.utils import get_scenario_start_index, ref_times_to_dti
 from summer.population import get_unique_strat_groups, filter_by_strata
+from summer.tracker import ModelBuildTracker, ActionType
 
 logger = logging.getLogger()
 
@@ -80,6 +81,7 @@ class CompartmentalModel:
         infectious_compartments: List[str],
         timestep: float = 1.0,
         ref_date: datetime = None,
+        takes_params: bool = False,
     ):
         start_t, end_t = times
         assert end_t > start_t, "End time must be greater than start time"
@@ -145,7 +147,14 @@ class CompartmentalModel:
 
         self._update_compartment_indices()
 
-        self._enable_cache = True
+        # Track the actions we take building this model
+        self.tracker = ModelBuildTracker()
+
+        if takes_params:
+            self._defer_actions = True
+        else:
+            self._defer_actions = False
+        self._finalized = False
 
     def _update_compartment_indices(self):
         """
@@ -160,6 +169,10 @@ class CompartmentalModel:
         for flow in self._flows:
             flow.update_compartment_indices(compartment_idx_lookup)
 
+    def _assert_not_finalized(self):
+        error_msg = "Cannot make changes to model that is already finalized"
+        assert not self._finalized, error_msg
+
     def set_initial_population(self, distribution: Dict[str, float]):
         """
         Sets the initial population of the model, which is zero by default.
@@ -168,6 +181,8 @@ class CompartmentalModel:
             distribution: A map of populations to be assigned to compartments.
 
         """
+        self._assert_not_finalized()
+
         error_msg = "Cannot set initial population after the model has been stratified"
         assert not self._stratifications, error_msg
         self._initial_population_distribution = distribution
@@ -334,6 +349,7 @@ class CompartmentalModel:
         expected_flow_count: Optional[int],
         adjustments: List[BaseAdjustment] = None,
     ):
+        self._assert_not_finalized()
         dest_strata = dest_strata or {}
         dest_comps = [c for c in self.compartments if c.is_match(dest, dest_strata)]
         new_flows = []
@@ -428,6 +444,7 @@ class CompartmentalModel:
         source_strata: Optional[Dict[str, str]],
         expected_flow_count: Optional[int],
     ):
+        self._assert_not_finalized()
         source_strata = source_strata or {}
         source_comps = [c for c in self.compartments if c.is_match(source, source_strata)]
         new_flows = []
@@ -598,6 +615,7 @@ class CompartmentalModel:
         expected_flow_count: Optional[int],
         find_infectious_multiplier=None,
     ):
+        self._assert_not_finalized()
         source_strata = source_strata or {}
         dest_strata = dest_strata or {}
 
@@ -684,6 +702,7 @@ class CompartmentalModel:
             strat: The stratification to apply.
 
         """
+        self._assert_not_finalized()
         # Enable/disable runtime assertions for strat
         strat._validate = self._should_validate
 
@@ -731,9 +750,14 @@ class CompartmentalModel:
         # Stratify compartments, split according to split_proportions
         prev_compartment_names = copy.copy(self.compartments)
         self.compartments = strat._stratify_compartments(self.compartments)
-        self.initial_population = strat._stratify_compartment_values(
-            prev_compartment_names, self.initial_population
-        )
+        if not self._defer_actions or self._finalized:
+            try:
+                self.initial_population = strat._stratify_compartment_values(
+                    prev_compartment_names, self.initial_population
+                )
+            except Exception as e:
+                logger.critical("Parameterized models must set takes_params in constructor")
+                raise e
 
         # Update the cache of compartment names; these need to correct whenever we add a new flow
         self._update_compartment_name_map()
@@ -781,6 +805,8 @@ class CompartmentalModel:
 
         self._stratifications.append(strat)
 
+        self.tracker.append_action(ActionType.STRATIFY, strat=strat)
+
     def _strata_exist(self, strata: dict):
         """
         Verify whether all the strata exist within the model
@@ -795,22 +821,6 @@ class CompartmentalModel:
                     if v not in s.strata:
                         raise ValueError(f"Invalid stratum {v} for {s}")
 
-    def _recalculate_initial_population(self) -> np.ndarray:
-        """Can only be called on a finalized model with parameters"""
-        # FIXME:
-        # Work in progress; correctly recalculates non-parameterized
-        # populations, but does not include population rebalances etc
-        initial_population = self._original_init_population
-        comps = self._original_compartment_names
-        for strat in self._stratifications:
-            # Stratify compartments, split according to split_proportions
-            prev_compartment_names = comps  # copy.copy(self.compartments)
-            comps = strat._stratify_compartments(comps)
-            initial_population = strat._stratify_compartment_values(
-                prev_compartment_names, initial_population
-            )
-        return initial_population
-
     def adjust_population_split(self, strat: str, dest_filter: dict, proportions: dict):
         """Adjust the initial population to redistribute the population for a particular
         stratification, over a subset of some other strata
@@ -821,6 +831,7 @@ class CompartmentalModel:
             proportions (dict): Proportions of new split (must have all strata specified)
 
         """
+        self._assert_not_finalized()
 
         msg = f"No stratification {strat} found in model"
         assert strat in [s.name for s in self._stratifications], msg
@@ -847,6 +858,13 @@ class CompartmentalModel:
                 k = c.strata[strat]
                 target_prop = proportions[k]
                 self.initial_population[c.idx] = total * target_prop
+
+        self.tracker.append_action(
+            ActionType.ADJUST_POP_SPLIT,
+            strat=strat,
+            dest_filter=dest_filter,
+            proportions=proportions,
+        )
 
     """
     Running the model
@@ -882,6 +900,8 @@ class CompartmentalModel:
         # Ensure we call this before model runs, since it is now disabled inside individual
         # flow constructors
         self._update_compartment_indices()
+
+        self._finalized = True
 
         self._set_backend(backend, backend_args)
         self._backend.prepare_to_run(parameters)

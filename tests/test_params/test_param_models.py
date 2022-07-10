@@ -3,6 +3,8 @@ import numpy as np
 from summer import CompartmentalModel
 from summer.parameters.params import CompartmentValues, Function, Parameter
 
+from summer.compute import ComputedValueProcessor
+
 from tests.test_params.models import (
     PARAMS,
     BUILD_FUNCTIONS,
@@ -124,3 +126,63 @@ def test_param_initial_pop():
     parameters = {"initial_pop_distribution": get_ipop_dist(1000.0, 0.4)}
     model.run(parameters=parameters)
     assert (model.outputs[0] == np.array((600, 400, 0))).all()
+
+
+class TestConstCVP(ComputedValueProcessor):
+    def process(self, compartment_values, computed_values, time):
+        return 1.0
+
+
+def test_computed_values_old():
+
+    model = CompartmentalModel((0, 100), ["S", "I", "R"], ["I"])
+
+    model.set_initial_population({"S": 90, "I": 10, "R": 0})
+
+    model.add_computed_value_process("const_computed_value", TestConstCVP())
+    model.request_computed_value_output("const_computed_value")
+
+    model.run()
+
+    assert (model.get_derived_outputs_df()["const_computed_value"] == 1.0).all()
+
+
+def test_computed_values_mixed():
+    mkey = "params_new_derived"
+    build_model = BUILD_FUNCTIONS[mkey]
+    parameters = PARAMS[mkey]
+
+    m = build_model()
+
+    def get_scaled_pop(compartment_values, scale):
+        return compartment_values.sum() * scale
+
+    m.add_computed_value_func(
+        "scaled_pop", Function(get_scaled_pop, [CompartmentValues, Parameter("pop_scale")])
+    )
+    m.request_computed_value_output("scaled_pop")
+
+    m.add_computed_value_process("const_computed_value", TestConstCVP())
+    m.request_computed_value_output("const_computed_value")
+
+    mm = np.array((0.1, 0.2, 0.1, 0.5)).reshape(2, 2)
+    parameters = {
+        "pop_scale": 0.5,
+        "recovery_rate": 0.02,
+        "contact_scale": 1.0,
+        "aged_recovery_scale": 0.5,
+        "mixing_matrix": mm,
+        "young_infect_scale": 3.0,
+        "matrix_scale": 0.5,
+        "serosurvey_scale": 0.5,
+    }
+
+    m.run(parameters=parameters)
+
+    do_df = m.get_derived_outputs_df()
+
+    assert "scaled_pop" in do_df.columns
+
+    np.testing.assert_allclose(do_df["scaled_pop"], 50.0)
+
+    assert (do_df["const_computed_value"] == 1.0).all()

@@ -3,7 +3,7 @@ import os
 from jax import numpy as jnp
 from jax.config import config as jax_config
 
-from summer.parameters import get_param_value
+from summer.parameters import get_model_param_value
 
 # Jax configuration
 
@@ -34,7 +34,7 @@ def build_get_mixing_matrix(runner):
                 # Assume each mixing matrix is either an np.ndarray or
                 # a function of time that returns one.
                 # mm = mm_func(time) if callable(mm_func) else mm_func
-                mm = get_param_value(mm_func, time, None, parameters)
+                mm = get_model_param_value(mm_func, time, None, parameters)
                 # Get Kronecker product of old and new mixing matrices.
                 # Only do this if we actually need to
                 if mixing_matrix is None:
@@ -85,7 +85,7 @@ def build_get_flow_weights(runner):
     def get_flow_weights(static_flow_weights, computed_values, parameters, time):
         flow_weights = static_flow_weights.copy()
         for (param, adjustments, flow_idx) in flow_block_maps:
-            value = get_param_value(param, time, computed_values, parameters)
+            value = get_model_param_value(param, time, computed_values, parameters)
             for a in adjustments:
                 value = a.get_new_value(value, computed_values, time, parameters)
             flow_weights = flow_weights.at[flow_idx].set(value)

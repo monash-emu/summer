@@ -10,8 +10,9 @@ import summer.flows as flows
 from summer.adjust import Overwrite
 from summer.compute import binary_matrix_to_sparse_pairs, sparse_pairs_accum
 from summer.compartment import Compartment
+from summer.population import get_rebalanced_population
 
-from summer.parameters import get_param_value
+from summer.parameters import get_model_param_value
 
 
 def cached(func):
@@ -101,44 +102,7 @@ class ModelRunner(ABC):
         self.parameters = parameters
 
         # FIXME: Not yet implemented properly...
-        self.model.initial_population = self.calculate_initial_population()
-
-        if self.model._enable_cache:
-            # +++ This functionality is largely deprecated and only used for the ReferenceRunner,
-            # which is slow
-            # anyway.  Caching obscures functions when debugging and is thus a bit irritating to
-            # work with,
-            # and no longer required for the VectorizedRunner
-
-            # Functions will often be called multiple times per timestep, so we cache any
-            # time-varying functions.
-            # First we find all time varying functions.
-            funcs = set()
-            for flow in self.model._flows:
-                if isinstance(flow, flows.FunctionFlow):
-                    # Don't cache these, the input arguments cannot be stored in a dict
-                    # ("non hashable")
-                    continue
-                elif callable(flow.param):
-                    funcs.add(flow.param)
-                for adj in flow.adjustments:
-                    if adj and callable(adj.param):
-                        funcs.add(adj.param)
-
-            # Cache return values to prevent re-computation. This will cause a little memory leak,
-            # which is (mostly) fine.
-            funcs_cached = {}
-            for func in funcs:
-                # We use a custom cache since lru_cache cannot handle custom hash functions
-                funcs_cached[func] = cached(func)
-
-            # Finally, replace original functions with cached ones
-            for flow in self.model._flows:
-                if flow.param in funcs_cached:
-                    flow.param = funcs_cached[flow.param]
-                for adj in flow.adjustments:
-                    if adj and adj.param in funcs_cached:
-                        adj.param = funcs_cached[adj.param]
+        self.model.initial_population = self.calculate_initial_population(self.parameters)
 
         # Re-order flows so that they are executed in the correct order:
         #   - exit flows
@@ -362,7 +326,7 @@ class ModelRunner(ABC):
                 # Assume each mixing matrix is either an np.ndarray or a function of time that
                 # returns one.
                 # mm = mm_func(time) if callable(mm_func) else mm_func
-                mm = get_param_value(mm_func, time, None, self.parameters)
+                mm = get_model_param_value(mm_func, time, None, self.parameters)
                 # Get Kronecker product of old and new mixing matrices.
                 # Only do this if we actually need to
                 if mixing_matrix is None:
@@ -421,7 +385,7 @@ class ModelRunner(ABC):
 
         return computed_values
 
-    def calculate_initial_population(self) -> np.ndarray:
+    def calculate_initial_population(self, parameters) -> np.ndarray:
         """
         Called to recalculate the initial population from either fixed dictionary, or a dict
         supplied as a parameter
@@ -436,20 +400,27 @@ class ModelRunner(ABC):
             distribution = self.parameters[distribution.name]
 
         if isinstance(distribution, dict):
-
             for idx, comp in enumerate(self.model._original_compartment_names):
                 pop = distribution.get(comp.name, 0)
                 assert pop >= 0, f"Population for {comp.name} cannot be negative: {pop}"
                 initial_population[idx] = pop
 
             comps = self.model._original_compartment_names
-            for strat in self.model._stratifications:
-                # Stratify compartments, split according to split_proportions
-                prev_compartment_names = comps  # copy.copy(self.compartments)
-                comps = strat._stratify_compartments(comps)
-                initial_population = strat._stratify_compartment_values(
-                    prev_compartment_names, initial_population
-                )
+
+            for action in self.model.tracker.all_actions:
+                if action.action_type == "stratify":
+                    strat = action.kwargs["strat"]
+                    # for strat in self.model._stratifications:
+                    # Stratify compartments, split according to split_proportions
+                    prev_compartment_names = comps  # copy.copy(self.compartments)
+                    comps = strat._stratify_compartments(comps)
+                    initial_population = strat._stratify_compartment_values(
+                        prev_compartment_names, initial_population, parameters
+                    )
+                elif action.action_type == "adjust_pop_split":
+                    initial_population = get_rebalanced_population(
+                        self.model, initial_population, parameters, **action.kwargs
+                    )
             return initial_population
         else:
             raise TypeError(
