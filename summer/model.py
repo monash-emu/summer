@@ -391,6 +391,12 @@ class CompartmentalModel:
             List[str]: The names of the flows added.
 
         """
+        warn(
+            "Feature is scheduled for deprecation",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+
         # Only allow a single universal death flow with a given name to be added to the model.
         is_already_used = any([f.name.startswith(base_name) for f in self._flows])
         if is_already_used:

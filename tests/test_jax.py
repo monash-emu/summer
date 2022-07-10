@@ -17,7 +17,7 @@ def test_model_params():
 
 
 def test_model_mm_func():
-    params = PARAMS["params_mm_func"]
+    params = PARAMS["params_mixing_func"]
     m, jrun = build_model_with_jax(build_model_mixing_func, params)
 
     m.run(solver=SolverType.ODE_INT, parameters=params, rtol=1.4e-8, atol=1.4e-8)

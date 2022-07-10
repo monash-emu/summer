@@ -31,7 +31,7 @@ def test_param_func_equal():
     build_model = BUILD_FUNCTIONS[mkey]
     parameters = PARAMS[mkey]
 
-    m_param = build_model
+    m_param = build_model()
     m_param.run(parameters=parameters)
 
     m_static = build_model_static_func(parameters)
