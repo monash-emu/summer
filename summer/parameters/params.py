@@ -164,6 +164,15 @@ def find_all_parameters(m: CompartmentalModel):
                             ("FlowAdjustment", fname, source_strata, dest_strata),
                         )
 
+        for comp, adjustments in s.infectiousness_adjustments.items():
+            for strain, adjustment in adjustments.items():
+                if adjustment is not None:
+                    params = extract_params(adjustment.param)
+                    append_list(
+                        out_params,
+                        params,
+                        ("InfectiousnessAdjustment", s, comp, strain),
+                    )
         # Mixing matrices can be inspected here
         # They might sort of live in the model itself too...
         append_list(out_params, extract_params(s.mixing_matrix), ("MixingMatrix", s))
