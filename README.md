@@ -120,6 +120,10 @@ Releases are numbered using [Semantic Versioning](https://semver.org/)
   - Bugfix (source flows not counted correctly in _add_transition_flow)
 - 3.1.0
   - Parameter aware summer using computegraph
+- 3.1.1
+  - Update computegraph and add additional param awareness
+- 3.1.2
+  - Initial population/stratification now param aware
 
 ## Release process
 
