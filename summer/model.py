@@ -904,7 +904,9 @@ class CompartmentalModel:
         self._finalized = True
 
         self._set_backend(backend, backend_args)
-        self._backend.prepare_to_run(parameters)
+        # self._backend.prepare_to_run(parameters)
+        self._backend.prepare_structural()
+        self._backend.prepare_dynamic(parameters)
 
         if solver == SolverType.STOCHASTIC:
             # Run the model in 'stochastic mode'.

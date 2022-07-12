@@ -15,20 +15,6 @@ from summer.population import get_rebalanced_population
 from summer.parameters import get_model_param_value
 
 
-def cached(func):
-    cache = dict()
-
-    def func_t(t, *args, **kwargs):
-        res = cache.get(t)
-        if res is None:
-            cache[t] = f = func(t, *args, **kwargs)
-            return f
-        else:
-            return res
-
-    return func_t
-
-
 class ModelRunner(ABC):
     """
     Base runner.
@@ -88,22 +74,7 @@ class ModelRunner(ABC):
         return comp_vals
 
     @abstractmethod
-    def prepare_to_run(self, parameters: dict = None):
-        """
-        Pre-run setup.
-        Here we do any calculations/preparation are possible to do before the model runs.
-        """
-
-        # FIXME:
-        # This should be split into structural model preparations, and those that
-        # are dependant on parameters
-        # I.e reusable vs run-specific
-
-        self.parameters = parameters
-
-        # FIXME: Not yet implemented properly...
-        self.model.initial_population = self.calculate_initial_population(self.parameters)
-
+    def prepare_structural(self):
         # Re-order flows so that they are executed in the correct order:
         #   - exit flows
         #   - entry flows (depends on exit flows for 'replace births' functionality)
@@ -143,9 +114,34 @@ class ModelRunner(ABC):
             (i, f) for i, f in enumerate(self.model._flows) if not isinstance(f, flows.FunctionFlow)
         ]
 
-        # Resolve anything related to parameterization here
+        for k, proc in self.model._computed_value_processors.items():
+            proc.prepare_to_run(self.model.compartments, self.model._flows)
 
-        # Mixing matrices are their own special category
+        cvcg = ComputeGraph(self.model._computed_values_graph_dict, "computed_values")
+
+        self.computed_values_runner = cvcg.get_callable(nested_params=False)
+
+        # Create a matrix that tracks which categories each compartment is in.
+        # A matrix with size (num_cats x num_comps).
+        # This is a very sparse static matrix, and there's almost certainly a much
+        # faster way of using it than naive matrix multiplication
+        num_comps = len(self.model.compartments)
+        self.num_categories = len(self.model._mixing_categories)
+        self._category_lookup = {}  # Map compartments to categories.
+        self._category_matrix = np.zeros((self.num_categories, num_comps))
+        for i, category in enumerate(self.model._mixing_categories):
+            for j, comp in enumerate(self.model.compartments):
+                if all(comp.has_stratum(k, v) for k, v in category.items()):
+                    self._category_matrix[i][j] = 1
+                    self._category_lookup[j] = i
+        self._compartment_category_map = binary_matrix_to_sparse_pairs(self._category_matrix)
+
+    @abstractmethod
+    def prepare_dynamic(self, parameters: dict = None):
+
+        # Calculate initial population based on possible parameterization
+        self.parameters = parameters
+        self.model.initial_population = self.calculate_initial_population(self.parameters)
 
         """
         Pre-run calculations to help determine force of infection multiplier at runtime.
@@ -186,6 +182,7 @@ class ModelRunner(ABC):
         Finally, at runtime, we can lookup which category a given compartment is in and look up its
         infectious multiplier (density or frequency).
         """
+
         # Find out the relative infectiousness of each compartment, for each strain.
         # If no strains have been created, we assume a default strain name.
         self._compartment_infectiousness = {
@@ -193,33 +190,11 @@ class ModelRunner(ABC):
             for strain_name in self.model._disease_strains
         }
 
-        # Create a matrix that tracks which categories each compartment is in.
-        # A matrix with size (num_cats x num_comps).
-        # This is a very sparse static matrix, and there's almost certainly a much
-        # faster way of using it than naive matrix multiplication
-        num_comps = len(self.model.compartments)
-        self.num_categories = len(self.model._mixing_categories)
-        self._category_lookup = {}  # Map compartments to categories.
-        self._category_matrix = np.zeros((self.num_categories, num_comps))
-        for i, category in enumerate(self.model._mixing_categories):
-            for j, comp in enumerate(self.model.compartments):
-                if all(comp.has_stratum(k, v) for k, v in category.items()):
-                    self._category_matrix[i][j] = 1
-                    self._category_lookup[j] = i
-        self._compartment_category_map = binary_matrix_to_sparse_pairs(self._category_matrix)
-
-        # Initialize the components of processing subsystems
-
-        # Computed value processors - these compute values based on time and current model state
-        # (compartment values)
-        # Cannot manipulate state or access model flows
-        # This step initialises the processors based on model structure
-        for k, proc in self.model._computed_value_processors.items():
-            proc.prepare_to_run(self.model.compartments, self.model._flows)
-
-        cvcg = ComputeGraph(self.model._computed_values_graph_dict, "computed_values")
-
-        self.computed_values_runner = cvcg.get_callable(nested_params=False)
+    # FIXME:
+    # This is now only used by tests, and should never called in any production code
+    def prepare_to_run(self, parameters: dict = None):
+        self.prepare_structural()
+        self.prepare_dynamic(parameters)
 
     def _get_compartment_infectiousness_for_strain(self, strain: str):
         """

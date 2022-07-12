@@ -13,12 +13,16 @@ class ReferenceRunner(ModelRunner):
     def __init__(self, model):
         super().__init__(model)
 
-    def prepare_to_run(self, parameters: dict = None):
-        super().prepare_to_run(parameters)
+    def prepare_structural(self):
+        return super().prepare_structural()
+
+    def prepare_dynamic(self, parameters: dict = None):
+        return super().prepare_dynamic(parameters)
 
     def get_compartment_rates(self, compartment_values: np.ndarray, time: float):
         """
-        Interface for the ODE solver: this function is passed to solve_ode func and defines the dynamics of the model.
+        Interface for the ODE solver: this function is passed to solve_ode func and defines
+        the dynamics of the model.
         Returns the rate of change of the compartment values for a given state and time.
         """
         comp_vals = self._clean_compartment_values(compartment_values)
@@ -27,7 +31,8 @@ class ReferenceRunner(ModelRunner):
 
     def get_flow_rates(self, compartment_values: np.ndarray, time: float):
         """
-        Returns the contribution of each flow to compartment rate of change for a given state and time.
+        Returns the contribution of each flow to compartment rate of change for a given
+        state and time.
         """
         comp_vals = self._clean_compartment_values(compartment_values)
         _, flow_rates = self._get_rates(comp_vals, time)
@@ -47,7 +52,9 @@ class ReferenceRunner(ModelRunner):
         # Calculate infection frequency/density for all disease strains
         self._calculate_strain_infection_values(compartment_values, mixing_matrix)
 
-    def _get_rates(self, compartment_vals: np.ndarray, time: float) -> Tuple[np.ndarray, np.ndarray]:
+    def _get_rates(
+        self, compartment_vals: np.ndarray, time: float
+    ) -> Tuple[np.ndarray, np.ndarray]:
         """
         Calculates inter-compartmental flow rates for a given state and time, including:
             - entry: flows of people into the system
@@ -84,13 +91,16 @@ class ReferenceRunner(ModelRunner):
                 # Track total deaths for any later birth replacement flows.
                 self._timestep_deaths += net_flow
 
-        
-
         if self._iter_function_flows:
             # Evaluate the function flows.
             for flow_idx, flow in self._iter_function_flows:
                 net_flow = flow.get_net_flow(
-                    self.model.compartments, compartment_vals, self.model._flows, flow_rates, computed_values, time
+                    self.model.compartments,
+                    compartment_vals,
+                    self.model._flows,
+                    flow_rates,
+                    computed_values,
+                    time,
                 )
                 flow_rates[flow_idx] = net_flow
                 comp_rates[flow.source.idx] -= net_flow
