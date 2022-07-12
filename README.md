@@ -124,8 +124,10 @@ Releases are numbered using [Semantic Versioning](https://semver.org/)
   - Update computegraph and add additional param awareness
 - 3.1.2
   - Initial population/stratification now param aware
-- 3.3.3
+- 3.1.3
   - More jax implementation (strain stratification)
+- 3.1.4
+  - Bugfix release (jax imported even though optional)
 
 ## Release process
 
