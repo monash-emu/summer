@@ -24,10 +24,8 @@ class VectorizedRunner(ModelRunner):
     def __init__(self, model):
         super().__init__(model)
 
-    def prepare_to_run(self, parameters: dict = None):
-        """Do all precomputation here"""
-
-        super().prepare_to_run(parameters)
+    def prepare_structural(self):
+        super().prepare_structural()
 
         self.infectious_flow_indices = np.array(
             [i for i, f in self._iter_non_function_flows if isinstance(f, flows.BaseInfectionFlow)],
@@ -72,6 +70,11 @@ class VectorizedRunner(ModelRunner):
             if type(f) == flows.ReplacementBirthFlow:
                 self._has_replacement = True
                 self._replacement_flow_idx = i
+
+    def prepare_dynamic(self, parameters: dict = None):
+        """Do all precomputation here"""
+
+        super().prepare_dynamic(parameters)
 
         self._precompute_flow_weights()
         self._precompute_flow_maps()
