@@ -1,6 +1,6 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING, Any
-from computegraph.types import Variable, Function
+from computegraph.types import Variable, Function, Data  # noqa: F401
 from computegraph.utils import extract_variables, is_var
 
 if TYPE_CHECKING:

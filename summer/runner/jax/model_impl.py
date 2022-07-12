@@ -3,20 +3,12 @@
 This is a mess right now!
 """
 
-import os
-
 from jax import numpy as jnp
 from jax.experimental import ode
-from jax.config import config as jax_config
 
 from .stratify import get_calculate_initial_pop
 
 from summer.parameters import get_model_param_value
-
-# Jax configuration
-# FIXME: We need to find a more appropriate place to ensure this happens globally
-jax_config.update("jax_enable_x64", True)
-os.environ["XLA_FLAGS"] = "--xla_cpu_multi_thread_eigen=false intra_op_parallelism_threads=1"
 
 
 def clean_compartments(compartment_values: jnp.ndarray):
