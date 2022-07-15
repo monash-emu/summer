@@ -72,7 +72,7 @@ class Multiply(BaseAdjustment):
             float: The new, adjusted value.
 
         """
-        return get_model_param_value(self.param, time, computed_values, parameters) * value
+        return get_model_param_value(self.param, time, computed_values, parameters, True) * value
 
 
 class Overwrite(BaseAdjustment):
@@ -110,7 +110,7 @@ class Overwrite(BaseAdjustment):
             float: The new, adjusted value.
 
         """
-        return get_model_param_value(self.param, time, computed_values, parameters)
+        return get_model_param_value(self.param, time, computed_values, parameters, True)
 
 
 def enforce_wrapped(value, allowed, wrap):

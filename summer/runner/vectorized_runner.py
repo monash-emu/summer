@@ -163,7 +163,7 @@ class VectorizedRunner(ModelRunner):
         # flow param/adjustment structure,
         # but are still specified as operating on individual flows
         for (param, adjustments), flow_idx in self.flow_block_maps.items():
-            value = get_model_param_value(param, time, computed_values, self.parameters)
+            value = get_model_param_value(param, time, computed_values, self.parameters, True)
             for a in adjustments:
                 value = a.get_new_value(value, computed_values, time, self.parameters)
             self.flow_weights[flow_idx] = value

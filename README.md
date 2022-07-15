@@ -130,6 +130,8 @@ Releases are numbered using [Semantic Versioning](https://semver.org/)
   - Bugfix release (jax imported even though optional)
 - 3.1.5
   - Bugfix and minor improvements search for parameters
+- 3.1.6
+  - Support lists of adjustments and flow params
 
 ## Release process
 

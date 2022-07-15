@@ -56,20 +56,24 @@ def is_func(param) -> bool:
     return isinstance(param, Function) or callable(param)
 
 
-def get_model_param_value(param, time, computed_values, parameters) -> Any:
-    """_summary_
+def get_model_param_value(
+    param: Any, time: float, computed_values: dict, parameters: dict, mul_outputs=False
+) -> Any:
+    """Get the value of anything that might be possibly be used as as a parameter
+    Variable, Function, list of parameters, callable, or just return a python object
 
     Args:
-        param (_type_): _description_
-        time (_type_): _description_
-        computed_values (_type_): _description_
-        parameters (_type_): _description_
+        param: Any
+        time: Model supplied time
+        computed_values: Model supplied computed values
+        parameters: Parameters dictionary
+        mul_outputs: If param is a list, return the product of its components
 
     Raises:
-        Exception: _description_
+        Exception: Raised if param is a Variable with unknown source
 
     Returns:
-        float: _description_
+        Any: Parameter output
     """
     if isinstance(param, Variable):
         if param.source == "parameters":
@@ -86,6 +90,13 @@ def get_model_param_value(param, time, computed_values, parameters) -> Any:
         return param.func(*args, **kwargs)
     elif callable(param):
         return param(time, computed_values)
+    elif isinstance(param, list):
+        if mul_outputs:
+            value = 1.0
+            for subparam in param:
+                value *= get_model_param_value(subparam, time, computed_values, parameters)
+            return value
+
     else:
         return param
 

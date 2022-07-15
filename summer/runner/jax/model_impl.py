@@ -124,7 +124,7 @@ def build_get_flow_weights(runner):
     def get_flow_weights(static_flow_weights, computed_values, parameters, time):
         flow_weights = static_flow_weights.copy()
         for (param, adjustments, flow_idx) in flow_block_maps:
-            value = get_model_param_value(param, time, computed_values, parameters)
+            value = get_model_param_value(param, time, computed_values, parameters, True)
             for a in adjustments:
                 value = a.get_new_value(value, computed_values, time, parameters)
             flow_weights = flow_weights.at[flow_idx].set(value)
