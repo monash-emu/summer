@@ -128,6 +128,8 @@ Releases are numbered using [Semantic Versioning](https://semver.org/)
   - More jax implementation (strain stratification)
 - 3.1.4
   - Bugfix release (jax imported even though optional)
+- 3.1.5
+  - Bugfix and minor improvements search for parameters
 
 ## Release process
 
