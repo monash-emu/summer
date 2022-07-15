@@ -149,8 +149,16 @@ def find_all_parameters(m: CompartmentalModel):
         if params:
             append_list(out_params, params, ("FlowParam", f))
 
+    # Initial population
+
+    ipop_params = extract_params(m._initial_population_distribution)
+    append_list(out_params, ipop_params, ("InitialPopulation", m._initial_population_distribution))
+
     # Inside stratifications - we have retained some useful information...
     for s in m._stratifications:
+        params = extract_params(s.population_split)
+        append_list(out_params, params, ("PopulationSplit", s, s.population_split))
+
         # Flow adjustments live here quite happily
         # Flow _parameters_ however are stratified to oblivion, hence the section above ^^^^^
         for fname, adjustments in s.flow_adjustments.items():

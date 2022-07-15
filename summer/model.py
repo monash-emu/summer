@@ -21,6 +21,7 @@ from summer.compartment import Compartment
 from summer.compute import ComputedValueProcessor
 from summer.derived_outputs import DerivedOutputRequest, calculate_derived_outputs
 from summer.parameters import params
+from summer.parameters.params import find_all_parameters
 from summer.runner import ReferenceRunner, VectorizedRunner
 from summer.solver import SolverType, solve_ode
 from summer.stratification import Stratification
@@ -921,6 +922,7 @@ class CompartmentalModel:
 
         # Calculate any requested derived outputs, based on the calculated compartment sizes.
         self.derived_outputs, self._derived_outputs_idx_cache = self._calculate_derived_outputs()
+        return self
 
     def _set_backend(self, backend: str, backend_args: dict = None):
         backend_args = backend_args or {}
@@ -1392,3 +1394,6 @@ class CompartmentalModel:
     def get_derived_outputs_df(self):
         idx = self._get_ref_idx()
         return pd.DataFrame(self.derived_outputs, index=idx)
+
+    def get_input_parameters(self):
+        return find_all_parameters(self)
