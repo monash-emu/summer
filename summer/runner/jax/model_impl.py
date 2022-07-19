@@ -351,4 +351,12 @@ def build_run_model(runner):
 
         return outputs
 
-    return run_model
+    runner_dict = {
+        "get_rates": get_rates,
+        "get_comp_rates": get_comp_rates,
+        "calc_initial_pop": calc_initial_pop,
+        "get_compartment_infectiousness": get_compartment_infectiousness,
+        "get_jode_solution": get_jode_solution,
+    }
+
+    return run_model, runner_dict

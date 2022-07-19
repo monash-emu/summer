@@ -82,7 +82,6 @@ def get_calculate_initial_pop(model: CompartmentalModel):
         if isinstance(distribution, dict):
             for idx, comp in enumerate(model._original_compartment_names):
                 pop = distribution.get(comp.name, 0)
-                assert pop >= 0, f"Population for {comp.name} cannot be negative: {pop}"
                 initial_population = initial_population.at[idx].set(pop)
 
             for action in model.tracker.all_actions:

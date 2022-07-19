@@ -10,6 +10,7 @@ from computegraph.utils import is_var
 from summer.adjust import Multiply, Overwrite, enforce_multiply
 from summer.compartment import Compartment
 from summer.parameters import is_func, Parameter, get_static_param_value
+from summer.parameters.param_impl import get_modelparameter_from_param
 
 Adjustment = Union[Multiply, Overwrite]
 MixingMatrix = Union[np.ndarray, Callable[[float], np.ndarray]]
@@ -254,6 +255,10 @@ class Stratification:
         assert set(adjustments.keys()) == set(self.strata), msg
 
         adjustments = {k: enforce_multiply(v) for k, v in adjustments.items()}
+
+        for k, v in adjustments.items():
+            if v is not None:
+                v.param = get_modelparameter_from_param(v.param)
 
         msg = "All infectiousness adjustments must be Multiply, Overwrite or None."
         assert all(

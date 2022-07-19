@@ -36,7 +36,7 @@ class ModelVariable(Variable):
         super().__init__(name, "model_variables")
 
     def __repr__(self):
-        return f"DerivedOutput {self.name}"
+        return f"ModelVariable {self.name}"
 
 
 CompartmentValues = ModelVariable("compartment_values")
@@ -52,8 +52,14 @@ def is_func(param) -> bool:
     Returns:
         bool: Is a function or function wrapper
     """
+    from .param_impl import GraphFunction, PyFunction
 
-    return isinstance(param, Function) or callable(param)
+    return (
+        isinstance(param, Function)
+        or callable(param)
+        or isinstance(param, GraphFunction)
+        or isinstance(param, PyFunction)
+    )
 
 
 def get_model_param_value(
@@ -75,6 +81,8 @@ def get_model_param_value(
     Returns:
         Any: Parameter output
     """
+    if isinstance(param, float):
+        return param
     if isinstance(param, Variable):
         if param.source == "parameters":
             return parameters[param.name]
@@ -90,18 +98,16 @@ def get_model_param_value(
         return param.func(*args, **kwargs)
     elif callable(param):
         return param(time, computed_values)
-    elif isinstance(param, list):
-        if mul_outputs:
-            value = 1.0
-            for subparam in param:
-                value *= get_model_param_value(subparam, time, computed_values, parameters)
-            return value
-
+    elif (isinstance(param, list) or isinstance(param, tuple)) and mul_outputs:
+        value = 1.0
+        for subparam in param:
+            value *= get_model_param_value(subparam, time, computed_values, parameters)
+        return value
     else:
         return param
 
 
-def get_static_param_value(obj: Any, parameters: dict) -> Any:
+def get_static_param_value(obj: Any, parameters: dict, mul_outputs: bool = False) -> Any:
     """Get the value of a parameter, or of a function that depends only on parameters,
        or return obj if any other type
 
@@ -112,10 +118,21 @@ def get_static_param_value(obj: Any, parameters: dict) -> Any:
     Returns:
         The value of the object
     """
-    if is_var(obj, "parameters"):
+    from .param_impl import ModelParameter
+
+    if isinstance(obj, ModelParameter):
+        return obj.get_value(0.0, {}, parameters)
+    elif isinstance(obj, float):
+        return obj
+    elif is_var(obj, "parameters"):
         return parameters[obj.name]
     elif isinstance(obj, Function):
         return obj.call(sources={"parameters": parameters})
+    elif mul_outputs and (isinstance(obj, list) or isinstance(obj, tuple)):
+        value = 1.0
+        for subparam in obj:
+            value *= get_static_param_value(subparam, parameters)
+        return value
     else:
         return obj
 

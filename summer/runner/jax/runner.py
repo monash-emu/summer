@@ -95,7 +95,15 @@ class JaxRunner(ModelRunner):
         flow_block_maps = {}
         for i in self.time_varying_weight_indices:
             f = self.model._flows[i]
-            key = (f.param, tuple(f.adjustments))
+
+            def get_key(f):
+                if isinstance(f.param, list):
+                    param = tuple(f.param)
+                else:
+                    param = f.param
+                return (param, tuple(f.adjustments))
+
+            key = get_key(f)
             if key not in flow_block_maps:
                 flow_block_maps[key] = []
             flow_block_maps[key].append(i)

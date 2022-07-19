@@ -9,7 +9,7 @@ import numpy as np
 
 from summer.adjust import BaseAdjustment, FlowParam, Multiply
 from summer.compartment import Compartment
-from summer.parameters import is_func, get_model_param_value
+from summer.parameters import is_func
 from summer.stratification import Stratification
 from summer.compute import find_sum
 
@@ -66,7 +66,8 @@ class BaseFlow(ABC):
         compartment) at a given time.
         Applies any stratification adjustments to the base parameter.
         """
-        flow_rate = get_model_param_value(self.param, time, computed_values, parameters, True)
+        # flow_rate = get_model_param_value(self.param, time, computed_values, parameters, True)
+        flow_rate = self.param.get_value(time, computed_values, parameters)
         for adjustment in self.adjustments:
             flow_rate = adjustment.get_new_value(flow_rate, computed_values, time, parameters)
 

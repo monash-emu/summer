@@ -4,7 +4,7 @@ This module contains classes which define adjustments to model parameters.
 from abc import ABC, abstractmethod
 from typing import Callable, Union
 
-from summer.parameters import get_model_param_value
+from summer.parameters import get_static_param_value
 
 FlowParam = Union[float, Callable[[float], float]]
 
@@ -72,7 +72,10 @@ class Multiply(BaseAdjustment):
             float: The new, adjusted value.
 
         """
-        return get_model_param_value(self.param, time, computed_values, parameters, True) * value
+        # resolved_self = get_model_param_value(self.param, time, computed_values, parameters, True)
+        resolved_self = self.param.get_value(time, computed_values, parameters)
+        resolved_input = get_static_param_value(value, parameters, True)
+        return resolved_self * resolved_input
 
 
 class Overwrite(BaseAdjustment):
@@ -110,7 +113,8 @@ class Overwrite(BaseAdjustment):
             float: The new, adjusted value.
 
         """
-        return get_model_param_value(self.param, time, computed_values, parameters, True)
+        return self.param.get_value(time, computed_values, parameters)
+        # return get_model_param_value(self.param, time, computed_values, parameters, True)
 
 
 def enforce_wrapped(value, allowed, wrap):
