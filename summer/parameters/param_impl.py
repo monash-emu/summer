@@ -1,4 +1,4 @@
-from summer.parameters.params import build_args, is_var, Function
+from summer.parameters.params import build_args, is_var, Function, ComputedValue
 
 
 class ModelParameter:
@@ -19,6 +19,9 @@ class FloatParameter(ModelParameter):
     def __hash__(self):
         return hash(self.value)
 
+    def __repr__(self):
+        return f"FloatParameter: {self.value}"
+
 
 class GraphParameter(ModelParameter):
     def __init__(self, name):
@@ -30,8 +33,11 @@ class GraphParameter(ModelParameter):
     def __hash__(self):
         return hash((self.name, "parameters"))
 
+    def __repr__(self):
+        return f"GraphParameter: {self.name}"
 
-class ComputedValue(ModelParameter):
+
+class ComputedValueParameter(ModelParameter):
     def __init__(self, name):
         self.name = name
 
@@ -40,6 +46,9 @@ class ComputedValue(ModelParameter):
 
     def __hash__(self):
         return hash((self.name, "computed_values"))
+
+    def __repr__(self):
+        return f"ComputedValue: {self.name}"
 
 
 class GraphFunction(ModelParameter):
@@ -56,6 +65,9 @@ class GraphFunction(ModelParameter):
     def __hash__(self):
         return hash(self.func)
 
+    def __repr__(self):
+        return f"GraphFunction: {self.func}"
+
 
 class PyFunction(ModelParameter):
     def __init__(self, func):
@@ -67,18 +79,25 @@ class PyFunction(ModelParameter):
     def __hash__(self):
         return hash(self.func)
 
+    def __repr__(self):
+        return f"PyFunction: {self.func}"
+
 
 class CompoundParameter(ModelParameter):
     def __init__(self, group):
-        subparams = [get_modelparameter_from_param(p) for p in group]
-        self.base_param = subparams[0]
-        self.subparams = subparams[1:]
+        self.subparams = tuple([get_modelparameter_from_param(p) for p in group])
 
     def get_value(self, time: float, computed_values: dict, parameters: dict):
-        value = self.base_param.get_value(time, computed_values, parameters)
-        for subp in self.subparams:
+        value = self.subparams[0].get_value(time, computed_values, parameters)
+        for subp in self.subparams[1:]:
             value *= subp.get_value(time, computed_values, parameters)
         return value
+
+    def __hash__(self):
+        return hash(self.subparams)
+
+    def __repr__(self):
+        return f"CompoundParameter: {self.subparams}"
 
 
 def get_modelparameter_from_param(param):
@@ -92,6 +111,8 @@ def get_modelparameter_from_param(param):
         return CompoundParameter(param)
     elif callable(param):
         return PyFunction(param)
+    elif isinstance(param, ComputedValue):
+        return ComputedValueParameter(param.name)
     elif isinstance(param, ModelParameter):
         # We've already updated this parameter
         return param
@@ -112,6 +133,7 @@ def replace_with_typed_params(m):
     for s in m._stratifications:
         # Once a model is built, these become meaningless,
         # so it needs to happen at the start...
+        # Keep this code here for now just in case we want to implement this in a different order
 
         # Flow adjustments live here quite happily
         # Flow _parameters_ however are stratified to oblivion, hence the section above ^^^^^
@@ -119,4 +141,6 @@ def replace_with_typed_params(m):
             for adj, source_strata, dest_strata in adjustments:
                 for k, v in adj.items():
                     if v is not None:
-                        v.param = get_modelparameter_from_param(v.param)
+                        # Do nothing, reinstate if we reorder this
+                        pass
+                        # v.param = get_modelparameter_from_param(v.param)
