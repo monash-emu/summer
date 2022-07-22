@@ -1,4 +1,4 @@
-from summer.parameters.params import build_args, is_var, Function, ComputedValue
+from summer.parameters.params import build_args, is_var, Function, ComputedValue, Time
 
 
 class ModelParameter:
@@ -7,6 +7,9 @@ class ModelParameter:
 
     def __eq__(self, other):
         return hash(other) == hash(self)
+
+    def is_time_varying(self):
+        return False
 
 
 class FloatParameter(ModelParameter):
@@ -50,6 +53,9 @@ class ComputedValueParameter(ModelParameter):
     def __repr__(self):
         return f"ComputedValue: {self.name}"
 
+    def is_time_varying(self):
+        return True
+
 
 class GraphFunction(ModelParameter):
     def __init__(self, func):
@@ -68,6 +74,15 @@ class GraphFunction(ModelParameter):
     def __repr__(self):
         return f"GraphFunction: {self.func}"
 
+    def is_time_varying(self):
+        has_time_var = Time in self.func.args or Time in self.func.kwargs.values()
+        has_computed_value = any([isinstance(arg, ComputedValue) for arg in self.func.args])
+        has_computed_value = has_computed_value or any(
+            [isinstance(arg, ComputedValue) for arg in self.func.kwargs.values()]
+        )
+
+        return has_time_var or has_computed_value
+
 
 class PyFunction(ModelParameter):
     def __init__(self, func):
@@ -81,6 +96,9 @@ class PyFunction(ModelParameter):
 
     def __repr__(self):
         return f"PyFunction: {self.func}"
+
+    def is_time_varying(self):
+        return True
 
 
 class CompoundParameter(ModelParameter):
@@ -98,6 +116,9 @@ class CompoundParameter(ModelParameter):
 
     def __repr__(self):
         return f"CompoundParameter: {self.subparams}"
+
+    def is_time_varying(self):
+        return any([sp.is_time_varying() for sp in self.subparams])
 
 
 def get_modelparameter_from_param(param):
