@@ -21,6 +21,7 @@ from summer.compartment import Compartment
 from summer.compute import ComputedValueProcessor
 from summer.derived_outputs import DerivedOutputRequest, calculate_derived_outputs
 from summer.parameters import params
+from summer.parameters.param_impl import replace_with_typed_params
 from summer.parameters.params import find_all_parameters
 from summer.runner import ReferenceRunner, VectorizedRunner
 from summer.solver import SolverType, solve_ode
@@ -903,6 +904,8 @@ class CompartmentalModel:
         self._update_compartment_indices()
 
         self._finalized = True
+
+        replace_with_typed_params(self)
 
         self._set_backend(backend, backend_args)
         # self._backend.prepare_to_run(parameters)

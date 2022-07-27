@@ -272,7 +272,7 @@ class Stratification:
         # FIXME: This should work for computegraph Functions that are not time dependant,
         # (and fail for those that are), but it's tricky to check...
         msg = "Cannot use time varying functions for infectiousness adjustments."
-        assert not any([callable(adj.param) for adj in adjustments.values() if adj]), msg
+        assert not any([adj.param.is_time_varying() for adj in adjustments.values() if adj]), msg
 
         self.infectiousness_adjustments[compartment_name] = adjustments
 

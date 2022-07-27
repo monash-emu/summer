@@ -25,19 +25,19 @@ def test_is_match():
     source = Compartment("S")
     dest = Compartment("I")
 
-    trans_flow = TransitionFlow("x", source, dest, None, None)
+    trans_flow = TransitionFlow("x", source, dest, 1, None)
     assert trans_flow.is_match("x", source_strata={}, dest_strata={})
     assert not trans_flow.is_match("y", source_strata={}, dest_strata={})
     assert not trans_flow.is_match("x", source_strata={"thing": "good"}, dest_strata={})
     assert not trans_flow.is_match("x", source_strata={}, dest_strata={"thing": "good"})
 
-    entry_flow = EntryFlow("x", dest, None, None)
+    entry_flow = EntryFlow("x", dest, 1, None)
     assert entry_flow.is_match("x", source_strata={}, dest_strata={})
     assert not entry_flow.is_match("y", source_strata={}, dest_strata={})
     assert entry_flow.is_match("x", source_strata={"thing": "good"}, dest_strata={})
     assert not entry_flow.is_match("x", source_strata={}, dest_strata={"thing": "good"})
 
-    exit_flow = ExitFlow("x", source, None, None)
+    exit_flow = ExitFlow("x", source, 1, None)
     assert exit_flow.is_match("x", source_strata={}, dest_strata={})
     assert not exit_flow.is_match("y", source_strata={}, dest_strata={})
     assert not exit_flow.is_match("x", source_strata={"thing": "good"}, dest_strata={})
@@ -46,7 +46,7 @@ def test_is_match():
     source = Compartment("S", {"thing": "good", "color": "red"})
     dest = Compartment("I", {"thing": "good", "color": "red"})
 
-    trans_flow = TransitionFlow("x", source, dest, None, None)
+    trans_flow = TransitionFlow("x", source, dest, 1, None)
     assert trans_flow.is_match("x", source_strata={}, dest_strata={})
     assert not trans_flow.is_match("y", source_strata={}, dest_strata={})
 
@@ -61,7 +61,7 @@ def test_is_match():
     assert not trans_flow.is_match("x", source_strata={"thing": "bad"}, dest_strata={})
     assert not trans_flow.is_match("x", source_strata={}, dest_strata={"thing": "bad"})
 
-    entry_flow = EntryFlow("x", dest, None, None)
+    entry_flow = EntryFlow("x", dest, 1, None)
     assert entry_flow.is_match("x", source_strata={}, dest_strata={})
     assert not entry_flow.is_match("y", source_strata={}, dest_strata={})
 
@@ -70,7 +70,7 @@ def test_is_match():
     assert entry_flow.is_match("x", source_strata={"thing": "bad"}, dest_strata={})
     assert not entry_flow.is_match("x", source_strata={}, dest_strata={"thing": "bad"})
 
-    exit_flow = ExitFlow("x", source, None, None)
+    exit_flow = ExitFlow("x", source, 1, None)
     assert exit_flow.is_match("x", source_strata={}, dest_strata={})
     assert not exit_flow.is_match("y", source_strata={}, dest_strata={})
     assert exit_flow.is_match("x", source_strata={"thing": "good"}, dest_strata={})
@@ -86,16 +86,16 @@ DEST = Compartment("dest")
 def test_update_compartment_indices():
     mapping = {"source": 2, "dest": 7}
 
-    trans_flow = TransitionFlow("x", SOURCE, DEST, None, None)
+    trans_flow = TransitionFlow("x", SOURCE, DEST, 1, None)
     trans_flow.update_compartment_indices(mapping)
     assert trans_flow.source.idx == 2
     assert trans_flow.dest.idx == 7
 
-    entry_flow = EntryFlow("x", DEST, None, None)
+    entry_flow = EntryFlow("x", DEST, 1, None)
     entry_flow.update_compartment_indices(mapping)
     assert entry_flow.dest.idx == 7
 
-    exit_flow = ExitFlow("x", SOURCE, None, None)
+    exit_flow = ExitFlow("x", SOURCE, 1, None)
     exit_flow.update_compartment_indices(mapping)
     assert exit_flow.source.idx == 2
 

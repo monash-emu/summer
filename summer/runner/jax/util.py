@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Tuple
 
 from summer.runner.jax.runner import JaxRunner
 
@@ -16,11 +16,19 @@ def get_runner(m: CompartmentalModel):
     return runner
 
 
-def build_model_with_jax(build_func: callable):
+def build_model_with_jax(build_func: callable) -> Tuple[CompartmentalModel, callable]:
+    """This exists primarily as a test shim and should not be considered the main entry point
+
+    Args:
+        build_func (callable): A build model function taking a use_jax boolean argument
+
+    Returns:
+        Tuple of non-Jax ComparmentalModel, and a (jittable) Jax callable
+    """
     m = build_func(use_jax=True)
     runner = get_runner(m)
 
-    run_model = build_run_model(runner)
+    run_model, runner_dict = build_run_model(runner)
 
     m_nojax = build_func(use_jax=False)
 

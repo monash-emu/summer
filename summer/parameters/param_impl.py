@@ -1,3 +1,5 @@
+from numbers import Real
+
 from summer.parameters.params import build_args, is_var, Function, ComputedValue, Time
 
 
@@ -126,7 +128,7 @@ def get_modelparameter_from_param(param):
         return GraphParameter(param.name)
     elif isinstance(param, Function):
         return GraphFunction(param)
-    elif isinstance(param, float):
+    elif isinstance(param, Real):
         return FloatParameter(param)
     elif isinstance(param, list) or isinstance(param, tuple):
         return CompoundParameter(param)
@@ -138,7 +140,7 @@ def get_modelparameter_from_param(param):
         # We've already updated this parameter
         return param
     else:
-        raise Exception("", param)
+        raise TypeError(f"Unsupported type {type(param)}", param)
 
 
 def replace_with_typed_params(m):

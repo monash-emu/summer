@@ -1,7 +1,6 @@
 import numpy as np
 import pytest
 from numpy.testing import assert_array_equal
-from unittest.mock import Mock
 
 from summer import CompartmentalModel, stochastic
 from summer.compartment import Compartment
@@ -141,7 +140,7 @@ def test_solve_stochastic(monkeypatch):
     # Mock out flow rate calculation - tested elsewhere and tricky to predict.
     def mock_get_rates(*args, **kwargs):
         # Return the flow rates that will be used to solve the model
-        return np.array([float(f.param) for f in model._flows])
+        return np.array([float(f.param.value) for f in model._flows])
 
     model._set_backend(BackendType.REFERENCE)
     model._backend.prepare_to_run()

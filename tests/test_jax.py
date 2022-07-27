@@ -15,7 +15,7 @@ def test_model_params():
     m, jrun = build_model_with_jax(build_model_params)
 
     m.run(solver=SolverType.ODE_INT, parameters=params, rtol=1.4e-8, atol=1.4e-8)
-    joutputs = jrun(params)
+    joutputs = np.array(jrun(params)["outputs"])
 
     np.testing.assert_allclose(joutputs, m.outputs, atol=1e-5)
 
@@ -25,7 +25,7 @@ def test_model_mm_func():
     m, jrun = build_model_with_jax(build_model_mixing_func)
 
     m.run(solver=SolverType.ODE_INT, parameters=params, rtol=1.4e-8, atol=1.4e-8)
-    joutputs = jrun(params)
+    joutputs = np.array(jrun(params)["outputs"])
 
     np.testing.assert_allclose(joutputs, m.outputs, atol=1e-5)
 
@@ -74,6 +74,6 @@ def test_model_multistrat_strains():
     m_nojax, jaxrun = build_model_with_jax(build_model)
 
     m_nojax.run(parameters=parameters)
-    joutputs = jaxrun(parameters)
+    joutputs = jaxrun(parameters)["outputs"]
 
     np.testing.assert_allclose(joutputs, m_nojax.outputs, atol=1e-5)

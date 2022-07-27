@@ -5,6 +5,7 @@ from abc import ABC, abstractmethod
 from typing import Callable, Union
 
 from summer.parameters import get_static_param_value
+from summer.parameters.param_impl import get_modelparameter_from_param
 
 FlowParam = Union[float, Callable[[float], float]]
 
@@ -15,7 +16,7 @@ class BaseAdjustment(ABC):
     """
 
     def __init__(self, param: FlowParam):
-        self.param = param
+        self.param = get_modelparameter_from_param(param)
 
     @abstractmethod
     def get_new_value(

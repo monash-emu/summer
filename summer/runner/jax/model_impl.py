@@ -7,6 +7,7 @@ from jax import numpy as jnp
 from jax.experimental import ode
 
 from .stratify import get_calculate_initial_pop
+from .derived_outputs import build_derived_outputs_runner
 
 from summer.parameters import get_model_param_value
 
@@ -28,6 +29,7 @@ def build_get_mixing_matrix(runner):
                 # a function of time that returns one.
                 # mm = mm_func(time) if callable(mm_func) else mm_func
                 mm = get_model_param_value(mm_func, time, None, parameters)
+                # mm = mm_func.get_value(time, {}, parameters)
                 # Get Kronecker product of old and new mixing matrices.
                 # Only do this if we actually need to
                 if mixing_matrix is None:
@@ -124,7 +126,9 @@ def build_get_flow_weights(runner):
     def get_flow_weights(static_flow_weights, computed_values, parameters, time):
         flow_weights = static_flow_weights.copy()
         for (param, adjustments, flow_idx) in flow_block_maps:
-            value = get_model_param_value(param, time, computed_values, parameters, True)
+            value = param.get_value(time, computed_values, parameters)
+
+            # value = get_model_param_value(param, time, computed_values, parameters, True)
             for a in adjustments:
                 value = a.get_new_value(value, computed_values, time, parameters)
             flow_weights = flow_weights.at[flow_idx].set(value)
@@ -196,7 +200,7 @@ def build_get_flow_rates(runner):
             flow_rates[infectious_flow_indices] * infect_mul
         )
 
-        return flow_rates
+        return flow_rates, computed_values
 
     return get_flow_rates
 
@@ -222,12 +226,12 @@ def build_get_rates(runner):
     get_compartment_rates = build_get_compartment_rates(runner)
 
     def get_rates(compartment_values, time, parameters, model_data):
-        flow_rates = get_flow_rates(compartment_values, time, parameters, model_data)
+        flow_rates, _ = get_flow_rates(compartment_values, time, parameters, model_data)
         comp_rates = get_compartment_rates(compartment_values, flow_rates)
 
-        return comp_rates, flow_rates
+        return flow_rates, comp_rates
 
-    return get_rates
+    return {"get_flow_rates": get_flow_rates, "get_rates": get_rates}
 
 
 def get_accumulation_maps(runner):
@@ -329,10 +333,16 @@ def build_compartment_infectiousness_calc(model):
 
 
 def build_run_model(runner):
-    get_rates = build_get_rates(runner)
+    rates_funcs = build_get_rates(runner)
+    get_rates = rates_funcs["get_rates"]
+    get_flow_rates = rates_funcs["get_flow_rates"]
+
+    from jax import vmap
+
+    get_flows_for_outputs = vmap(get_flow_rates, in_axes=(0, 0, None, None), out_axes=(0))
 
     def get_comp_rates(comp_vals, t, parameters, model_data):
-        return get_rates(comp_vals, t, parameters, model_data)[0]
+        return get_rates(comp_vals, t, parameters, model_data)[1]
 
     def get_jode_solution(initial_population, times, parameters, model_data):
         return ode.odeint(get_comp_rates, initial_population, times, parameters, model_data)
@@ -342,6 +352,8 @@ def build_run_model(runner):
     calc_initial_pop = get_calculate_initial_pop(runner.model)
     get_compartment_infectiousness = build_compartment_infectiousness_calc(runner.model)
 
+    calc_derived_outputs = build_derived_outputs_runner(runner.model)
+
     def run_model(parameters):
         initial_population = calc_initial_pop(parameters)
         compartment_infectiousness = get_compartment_infectiousness(parameters)
@@ -349,14 +361,24 @@ def build_run_model(runner):
 
         outputs = get_jode_solution(initial_population, times, parameters, model_data)
 
-        return outputs
+        out_flows = get_flows_for_outputs(outputs, times, parameters, model_data)[0]
+
+        model_variables = {"outputs": outputs, "flows": out_flows}
+
+        derived_outputs = calc_derived_outputs(
+            parameters=parameters, model_variables=model_variables
+        )
+
+        return {"outputs": outputs, "derived_outputs": derived_outputs, "model_data": model_data}
 
     runner_dict = {
         "get_rates": get_rates,
+        "get_flow_rates": get_flow_rates,
         "get_comp_rates": get_comp_rates,
         "calc_initial_pop": calc_initial_pop,
         "get_compartment_infectiousness": get_compartment_infectiousness,
         "get_jode_solution": get_jode_solution,
+        "calc_derived_outputs": calc_derived_outputs,
     }
 
     return run_model, runner_dict

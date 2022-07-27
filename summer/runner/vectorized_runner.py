@@ -134,7 +134,7 @@ class VectorizedRunner(ModelRunner):
             else:
                 self.timevarying_param_idx[param] = idx
 
-    def _precompute_flow_weights(self):
+    def _precompute_flow_weights_DEP(self):
         """Calculate all static flow weights before running,
         and build indices for time-varying weights"""
         self.flow_weights = np.zeros(len(self.model._flows))
@@ -213,9 +213,12 @@ class VectorizedRunner(ModelRunner):
         #     for a in adjustments:
         #         value = a.get_new_value(value, computed_values, time, self.parameters)
         #     self.flow_weights[flow_idx] = value
+        flow_weights = self.flow_weights.copy()
 
         for param, idx in self.timevarying_param_idx.items():
-            self.flow_weights[idx] *= param.get_value(time, computed_values, self.parameters)
+            flow_weights[idx] *= param.get_value(time, computed_values, self.parameters)
+
+        return flow_weights
 
     def _get_infectious_multipliers(self) -> np.ndarray:
         """Get multipliers for all infectious flows
@@ -316,7 +319,7 @@ class VectorizedRunner(ModelRunner):
 
         computed_values = self._calc_computed_values(compartment_vals, time)
 
-        self._apply_flow_weights_at_time(time, computed_values)
+        flow_weights = self._apply_flow_weights_at_time(time, computed_values)
 
         # These will be filled in afterwards
         populations = compartment_vals[self.population_idx]
@@ -326,7 +329,7 @@ class VectorizedRunner(ModelRunner):
         if self._has_crude_birth:
             populations[self._crude_birth_idx] = find_sum(compartment_vals)
 
-        flow_rates = self.flow_weights * populations
+        flow_rates = flow_weights * populations
 
         # Calculate infection flows
         infect_mul = self._get_infectious_multipliers()
