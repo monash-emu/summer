@@ -114,11 +114,25 @@ class VectorizedRunner(ModelRunner):
                 cur_idx_table.append(idx)
 
         for flow_idx, flow in self._iter_non_function_flows:
-            update_table(flow.param, flow_idx)
+            # Build a list of multiplicative effects for this flow,
+            # discarding previous effects if there is an Overwrite
+            flow_updates = [flow.param]
             for adj in flow.adjustments:
-                if isinstance(adj, Overwrite):
-                    raise NotImplementedError()
-                update_table(adj.param, flow_idx)
+                if adj is not None:
+                    if isinstance(adj, Overwrite):
+                        flow_updates = [adj.param]
+                    else:
+                        flow_updates.append(adj.param)
+
+            # Add these to the update table
+            for fparam in flow_updates:
+                update_table(fparam, flow_idx)
+
+            # update_table(flow.param, flow_idx)
+            # for adj in flow.adjustments:
+            #    if isinstance(adj, Overwrite):
+            #        raise NotImplementedError()
+            #    update_table(adj.param, flow_idx)
 
         self.param_idx_table = {}
 

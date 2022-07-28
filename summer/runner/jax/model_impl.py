@@ -4,7 +4,7 @@ This is a mess right now!
 """
 
 from jax import numpy as jnp
-from jax.experimental import ode
+from summer.runner.jax import ode
 
 from .stratify import get_calculate_initial_pop
 from .derived_outputs import build_derived_outputs_runner

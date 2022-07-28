@@ -140,7 +140,7 @@ def get_modelparameter_from_param(param):
         # We've already updated this parameter
         return param
     else:
-        raise TypeError(f"Unsupported type {type(param)}", param)
+        raise TypeError(f"Unsupported model parameter type {type(param)}", param)
 
 
 def replace_with_typed_params(m):

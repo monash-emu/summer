@@ -154,6 +154,17 @@ def build_args(args: tuple, kwargs: dict, sources: dict):
 
 
 def extract_params(obj):
+    from .param_impl import GraphFunction, GraphParameter, CompoundParameter
+
+    if isinstance(obj, GraphParameter):
+        return [Parameter(obj.name)]
+    elif isinstance(obj, CompoundParameter):
+        out_params = []
+        for sp in obj.subparams:
+            out_params += extract_params(sp)
+        return out_params
+    elif isinstance(obj, GraphFunction):
+        obj = obj.func
     return extract_variables(obj, source="parameters")
 
 
