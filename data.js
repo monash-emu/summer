@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1657866739958,
+  "lastUpdate": 1658977061445,
   "repoUrl": "https://github.com/monash-emu/summer",
   "entries": {
     "Benchmark": [
@@ -5339,6 +5339,58 @@ window.BENCHMARK_DATA = {
             "unit": "iter/sec",
             "range": "stddev: 0.05054078958764283",
             "extra": "mean: 4.123434499000003 sec\nrounds: 3"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "james.trauer@monash.edu",
+            "name": "James Trauer",
+            "username": "jtrauer"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "82515de7ae67ff6e26908b074d269ed489870267",
+          "message": "Merge pull request #26 from monash-emu/textbook-structure\n\nDevelop a summer-based series of notebooks for a textbook in infectious disease epidemiology",
+          "timestamp": "2022-07-28T12:55:21+10:00",
+          "tree_id": "4182d59fc837d5af0f25af8d3be205d02eb87025",
+          "url": "https://github.com/monash-emu/summer/commit/82515de7ae67ff6e26908b074d269ed489870267"
+        },
+        "date": 1658977060889,
+        "tool": "pytest",
+        "benches": [
+          {
+            "name": "tests/test_benchmarks.py::test_benchmark_vectorized_backend",
+            "value": 7.628232223751458,
+            "unit": "iter/sec",
+            "range": "stddev: 0.04755791394204767",
+            "extra": "mean: 131.09197133332864 msec\nrounds: 3"
+          },
+          {
+            "name": "tests/test_benchmarks.py::test_benchmark_default_ode_solver",
+            "value": 8.931434072809695,
+            "unit": "iter/sec",
+            "range": "stddev: 0.027179430674717557",
+            "extra": "mean: 111.9641024999936 msec\nrounds: 10"
+          },
+          {
+            "name": "tests/test_benchmarks.py::test_benchmark_rk4_ode_solver",
+            "value": 3.138525315468817,
+            "unit": "iter/sec",
+            "range": "stddev: 0.04374630706759637",
+            "extra": "mean: 318.62097624999564 msec\nrounds: 4"
+          },
+          {
+            "name": "tests/test_benchmarks.py::test_benchmark_stochastic_solver",
+            "value": 0.22665173250141019,
+            "unit": "iter/sec",
+            "range": "stddev: 0.01580930531861066",
+            "extra": "mean: 4.412055398666666 sec\nrounds: 3"
           }
         ]
       }
