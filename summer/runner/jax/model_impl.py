@@ -110,8 +110,12 @@ def build_get_infectious_multipliers(runner):
 
             # full_multipliers is the length of the infectious compartments - ie the same as the
             # above mask
-            full_multipliers = full_multipliers.at[strain_ifectcomp_mask].mul(
-                strain_ifect_bcast[strain_ifectcomp_mask]
+            # full_multipliers = full_multipliers.at[strain_ifectcomp_mask].mul(
+            #    strain_ifect_bcast[strain_ifectcomp_mask]
+            # )
+
+            full_multipliers = full_multipliers.at[strain_ifectcomp_mask].set(
+                full_multipliers[strain_ifectcomp_mask] * strain_ifect_bcast[strain_ifectcomp_mask]
             )
 
         return full_multipliers
@@ -368,7 +372,7 @@ def build_run_model(runner):
         derived_outputs = calc_derived_outputs(
             parameters=parameters, model_variables=model_variables
         )
-
+        # return {"outputs": outputs, "model_data": model_data}
         return {"outputs": outputs, "derived_outputs": derived_outputs, "model_data": model_data}
 
     runner_dict = {
