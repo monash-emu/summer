@@ -24,6 +24,7 @@ from summer.parameters import params
 from summer.parameters.param_impl import replace_with_typed_params
 from summer.parameters.params import find_all_parameters
 from summer.runner import ReferenceRunner, VectorizedRunner
+from summer.runner.jax.runner import JaxRunner
 from summer.solver import SolverType, solve_ode
 from summer.stratification import Stratification
 from summer.utils import get_scenario_start_index, ref_times_to_dti
@@ -38,6 +39,7 @@ FlowRateFunction = Callable[[List[Compartment], np.ndarray, np.ndarray, float], 
 class BackendType:
     REFERENCE = "reference"
     VECTORIZED = "vectorized"
+    JAX = "jax"
 
 
 class CompartmentalModel:
@@ -912,6 +914,15 @@ class CompartmentalModel:
         self._backend.prepare_structural()
         self._backend.prepare_dynamic(parameters)
 
+        if backend == BackendType.JAX:
+            from summer.runner.jax.model_impl import build_run_model
+
+            jax_run_func, jax_runner_dict = build_run_model(self._backend, solver)
+            res = jax_run_func(parameters=parameters)
+            self.outputs = np.array(res["outputs"])
+            self.derived_outputs = {k: np.array(v) for k, v in res["derived_outputs"].items()}
+            return self
+
         if solver == SolverType.STOCHASTIC:
             # Run the model in 'stochastic mode'.
             seed = kwargs.get("seed")
@@ -933,6 +944,8 @@ class CompartmentalModel:
             self._backend = ReferenceRunner(self, **backend_args)
         elif backend == BackendType.VECTORIZED:
             self._backend = VectorizedRunner(self, **backend_args)
+        elif backend == BackendType.JAX:
+            self._backend = JaxRunner(self, **backend_args)
         else:
             msg = f"Invalid backend: {backend}"
             raise ValueError(msg)

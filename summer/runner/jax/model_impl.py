@@ -5,6 +5,9 @@ This is a mess right now!
 
 from jax import numpy as jnp
 from summer.runner.jax import ode
+from summer.runner.jax import solvers
+
+from summer.solver import SolverType
 
 from .stratify import get_calculate_initial_pop
 from .derived_outputs import build_derived_outputs_runner
@@ -336,7 +339,7 @@ def build_compartment_infectiousness_calc(model):
     return get_compartment_infectiousness
 
 
-def build_run_model(runner):
+def build_run_model(runner, solver=None):
     rates_funcs = build_get_rates(runner)
     get_rates = rates_funcs["get_rates"]
     get_flow_rates = rates_funcs["get_flow_rates"]
@@ -348,8 +351,26 @@ def build_run_model(runner):
     def get_comp_rates(comp_vals, t, parameters, model_data):
         return get_rates(comp_vals, t, parameters, model_data)[1]
 
-    def get_jode_solution(initial_population, times, parameters, model_data):
-        return ode.odeint(get_comp_rates, initial_population, times, parameters, model_data)
+    if solver is None or solver == SolverType.SOLVE_IVP:
+        solver = SolverType.ODE_INT
+
+    if solver == SolverType.ODE_INT:
+
+        def get_ode_solution(initial_population, times, parameters, model_data):
+            return ode.odeint(get_comp_rates, initial_population, times, parameters, model_data)
+
+    elif solver == SolverType.RUNGE_KUTTA:
+
+        def get_ode_solution(initial_population, times, parameters, model_data):
+            return solvers.rk4(get_comp_rates, initial_population, times, parameters, model_data)
+
+    elif solver == SolverType.EULER:
+
+        def get_ode_solution(initial_population, times, parameters, model_data):
+            return solvers.euler(get_comp_rates, initial_population, times, parameters, model_data)
+
+    else:
+        raise NotImplementedError("Incompatible SolverType for Jax runner", solver)
 
     times = jnp.array(runner.model.times)
 
@@ -363,7 +384,7 @@ def build_run_model(runner):
         compartment_infectiousness = get_compartment_infectiousness(parameters)
         model_data = {"compartment_infectiousness": compartment_infectiousness}
 
-        outputs = get_jode_solution(initial_population, times, parameters, model_data)
+        outputs = get_ode_solution(initial_population, times, parameters, model_data)
 
         out_flows = get_flows_for_outputs(outputs, times, parameters, model_data)[0]
 
@@ -381,7 +402,7 @@ def build_run_model(runner):
         "get_comp_rates": get_comp_rates,
         "calc_initial_pop": calc_initial_pop,
         "get_compartment_infectiousness": get_compartment_infectiousness,
-        "get_jode_solution": get_jode_solution,
+        "get_ode_solution": get_ode_solution,
         "calc_derived_outputs": calc_derived_outputs,
     }
 
