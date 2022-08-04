@@ -132,6 +132,8 @@ Releases are numbered using [Semantic Versioning](https://semver.org/)
   - Bugfix and minor improvements search for parameters
 - 3.1.6
   - Support lists of adjustments and flow params
+- 4.0.0a
+  - Full jax support with ModelBuilder wrapper
 
 ## Release process
 
