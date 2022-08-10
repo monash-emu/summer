@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1660102985547,
+  "lastUpdate": 1660103280504,
   "repoUrl": "https://github.com/monash-emu/summer",
   "entries": {
     "Benchmark": [
@@ -5963,6 +5963,58 @@ window.BENCHMARK_DATA = {
             "unit": "iter/sec",
             "range": "stddev: 0.011393075986085766",
             "extra": "mean: 4.031995827333314 sec\nrounds: 3"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "james.trauer@monash.edu",
+            "name": "jtrauer",
+            "username": "jtrauer"
+          },
+          "committer": {
+            "email": "james.trauer@monash.edu",
+            "name": "jtrauer",
+            "username": "jtrauer"
+          },
+          "distinct": true,
+          "id": "c60f98dedf2b7093b7b21efe9ecfaeff39a57a9f",
+          "message": "Add environment installation for Colab",
+          "timestamp": "2022-08-10T13:45:00+10:00",
+          "tree_id": "cc3903bc50b12fc3caf663d0180644656d41a367",
+          "url": "https://github.com/monash-emu/summer/commit/c60f98dedf2b7093b7b21efe9ecfaeff39a57a9f"
+        },
+        "date": 1660103279443,
+        "tool": "pytest",
+        "benches": [
+          {
+            "name": "tests/test_benchmarks.py::test_benchmark_vectorized_backend",
+            "value": 8.075251198656455,
+            "unit": "iter/sec",
+            "range": "stddev: 0.03640606050180869",
+            "extra": "mean: 123.83515699999255 msec\nrounds: 3"
+          },
+          {
+            "name": "tests/test_benchmarks.py::test_benchmark_default_ode_solver",
+            "value": 9.178004086085732,
+            "unit": "iter/sec",
+            "range": "stddev: 0.021548422874311014",
+            "extra": "mean: 108.95615110000278 msec\nrounds: 10"
+          },
+          {
+            "name": "tests/test_benchmarks.py::test_benchmark_rk4_ode_solver",
+            "value": 3.375447221546388,
+            "unit": "iter/sec",
+            "range": "stddev: 0.033354411411891376",
+            "extra": "mean: 296.25703925000835 msec\nrounds: 4"
+          },
+          {
+            "name": "tests/test_benchmarks.py::test_benchmark_stochastic_solver",
+            "value": 0.24414406358078183,
+            "unit": "iter/sec",
+            "range": "stddev: 0.0036461537122383972",
+            "extra": "mean: 4.095942311000006 sec\nrounds: 3"
           }
         ]
       }
