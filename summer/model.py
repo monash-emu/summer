@@ -21,8 +21,10 @@ from summer.compartment import Compartment
 from summer.compute import ComputedValueProcessor
 from summer.derived_outputs import DerivedOutputRequest, calculate_derived_outputs
 from summer.parameters import params
-from summer.parameters.param_impl import replace_with_typed_params
-from summer.parameters.params import find_all_parameters
+
+# from summer.parameters.param_impl import replace_with_typed_params
+from summer.parameters.params import find_all_parameters, Function
+from summer.parameters.param_impl import finalize_parameters
 from summer.runner import ReferenceRunner, VectorizedRunner
 from summer.runner.jax.runner import JaxRunner
 from summer.solver import SolverType, solve_ode
@@ -160,6 +162,9 @@ class CompartmentalModel:
             self._defer_actions = False
         self._finalized = False
 
+        self.builder = None
+        self._lazy_params = set()
+
     def _update_compartment_indices(self):
         """
         Update the mapping of compartment name to idx for quicker lookups.
@@ -199,8 +204,14 @@ class CompartmentalModel:
 
             self._original_init_population = self.initial_population.copy()
 
-        elif not is_var(distribution, "parameters"):
-            raise TypeError("Initial population must be dict or Parameter", distribution)
+        elif not (is_var(distribution, "parameters") or isinstance(distribution, Function)):
+            raise TypeError("Initial population must be dict, Parameter, or Function", distribution)
+
+    def finalize(self):
+        if not self._finalized:
+            all_params = finalize_parameters(self, self.builder)
+            self._input_params = all_params
+            self._finalized = True
 
     def set_validation_enabled(self, validate: bool):
         """
@@ -905,9 +916,9 @@ class CompartmentalModel:
         # flow constructors
         self._update_compartment_indices()
 
-        self._finalized = True
+        self.finalize()
 
-        replace_with_typed_params(self)
+        # replace_with_typed_params(self, self.builder)
 
         self._set_backend(backend, backend_args)
         # self._backend.prepare_to_run(parameters)
@@ -1412,4 +1423,6 @@ class CompartmentalModel:
         return pd.DataFrame(self.derived_outputs, index=idx)
 
     def get_input_parameters(self):
-        return find_all_parameters(self)
+        if not self._finalized:
+            raise Exception("Cannot trace input parameters before model is finalized")
+        return self._input_params

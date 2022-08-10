@@ -15,6 +15,7 @@ def test_compare_default_vectorized_outputs():
     model.run(backend="reference", solver=SolverType.RUNGE_KUTTA)
     default_outputs = model.outputs.copy()
 
+    model = get_test_model(times=[0, 5])
     model.run(backend="vectorized", solver=SolverType.RUNGE_KUTTA)
     vectorized_outputs = model.outputs
 
@@ -33,6 +34,7 @@ def test_compare_default_jax_outputs():
     model.run(backend="reference", solver=SolverType.RUNGE_KUTTA, step_size=1.0)
     default_outputs = model.outputs.copy()
 
+    model = get_test_model(times=[0, 5])
     model.run(backend="jax", solver=SolverType.RUNGE_KUTTA, parameters={})
     jax_outputs = model.outputs
 

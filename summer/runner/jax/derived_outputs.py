@@ -112,6 +112,10 @@ def build_function_output(request):
     return Function(func, inputs)
 
 
+def build_computed_value_output(request, name):
+    return Function(lambda x: x[name], [ModelVariable("computed_values")])
+
+
 def build_derived_outputs_runner(model):
     graph_dict = {}
     out_keys = []
@@ -131,6 +135,8 @@ def build_derived_outputs_runner(model):
             graph_dict[name] = build_cumulative_output(request, name, model.times)
         elif req_type == "func":
             graph_dict[name] = build_function_output(request)
+        elif req_type == "computed_value":
+            graph_dict[name] = build_computed_value_output(request, name)
         else:
             raise NotImplementedError(request)
         if request["save_results"]:

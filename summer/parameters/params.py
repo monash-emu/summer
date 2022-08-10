@@ -154,10 +154,12 @@ def build_args(args: tuple, kwargs: dict, sources: dict):
 
 
 def extract_params(obj):
-    from .param_impl import GraphFunction, GraphParameter, CompoundParameter
+    from .param_impl import GraphFunction, GraphParameter, CompoundParameter, LazyGraphParameter
 
     if isinstance(obj, GraphParameter):
         return [Parameter(obj.name)]
+    elif isinstance(obj, LazyGraphParameter):
+        return [Parameter(k) for k in obj.param_keys]
     elif isinstance(obj, CompoundParameter):
         out_params = []
         for sp in obj.subparams:
@@ -165,6 +167,13 @@ def extract_params(obj):
         return out_params
     elif isinstance(obj, GraphFunction):
         obj = obj.func
+    if isinstance(obj, Function):
+        out_params = []
+        for a in obj.args:
+            out_params += extract_params(a)
+        for a in obj.kwargs.values():
+            out_params += extract_params(a)
+        return out_params
     return extract_variables(obj, source="parameters")
 
 
@@ -200,16 +209,16 @@ def find_all_parameters(m: CompartmentalModel):
 
         # Flow adjustments live here quite happily
         # Flow _parameters_ however are stratified to oblivion, hence the section above ^^^^^
-        for fname, adjustments in s.flow_adjustments.items():
-            for adj, source_strata, dest_strata in adjustments:
-                for k, v in adj.items():
-                    if v is not None:
-                        params = extract_params(v.param)
-                        append_list(
-                            out_params,
-                            params,
-                            ("FlowAdjustment", fname, source_strata, dest_strata),
-                        )
+        # for fname, adjustments in s.flow_adjustments.items():
+        #    for adj, source_strata, dest_strata in adjustments:
+        #        for k, v in adj.items():
+        # if v is not None:
+        #     params = extract_params(v.param)
+        #     append_list(
+        #         out_params,
+        #         params,
+        #         ("FlowAdjustment", fname, source_strata, dest_strata),
+        #     )
 
         for comp, adjustments in s.infectiousness_adjustments.items():
             for strain, adjustment in adjustments.items():

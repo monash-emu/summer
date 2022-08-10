@@ -5,7 +5,7 @@ from abc import ABC, abstractmethod
 from typing import Callable, Union
 
 from summer.parameters import get_static_param_value
-from summer.parameters.param_impl import get_modelparameter_from_param
+from summer.parameters.param_impl import ModelParameter
 
 FlowParam = Union[float, Callable[[float], float]]
 
@@ -16,7 +16,7 @@ class BaseAdjustment(ABC):
     """
 
     def __init__(self, param: FlowParam):
-        self.param = get_modelparameter_from_param(param)
+        self.param = param
 
     @abstractmethod
     def get_new_value(
@@ -74,7 +74,12 @@ class Multiply(BaseAdjustment):
 
         """
         # resolved_self = get_model_param_value(self.param, time, computed_values, parameters, True)
-        resolved_self = self.param.get_value(time, computed_values, parameters)
+        if isinstance(self.param, ModelParameter):
+            resolved_self = self.param.get_value(time, computed_values, parameters)
+        elif callable(self.param):
+            resolved_self = self.param(time, computed_values)
+        else:
+            resolved_self = self.param
         resolved_input = get_static_param_value(value, parameters, True)
         return resolved_self * resolved_input
 
@@ -114,7 +119,12 @@ class Overwrite(BaseAdjustment):
             float: The new, adjusted value.
 
         """
-        return self.param.get_value(time, computed_values, parameters)
+        if isinstance(self.param, ModelParameter):
+            return self.param.get_value(time, computed_values, parameters)
+        elif callable(self.param):
+            return self.param(time, computed_values)
+        else:
+            return self.param
         # return get_model_param_value(self.param, time, computed_values, parameters, True)
 
 

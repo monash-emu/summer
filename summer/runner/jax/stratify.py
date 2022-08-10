@@ -5,7 +5,8 @@ from typing import List, TYPE_CHECKING
 
 from jax import numpy as jnp
 
-from summer.parameters import get_static_param_value, is_var
+from summer.parameters import get_static_param_value, is_var, Function
+from summer.parameters.param_impl import ModelParameter
 from summer.stratification import Stratification
 
 if TYPE_CHECKING:
@@ -78,6 +79,8 @@ def get_calculate_initial_pop(model: CompartmentalModel):
 
         if is_var(distribution, "parameters"):
             distribution = parameters[distribution.name]
+        elif isinstance(distribution, Function) or isinstance(distribution, ModelParameter):
+            distribution = get_static_param_value(distribution, parameters)
 
         if isinstance(distribution, dict):
             for idx, comp in enumerate(model._original_compartment_names):

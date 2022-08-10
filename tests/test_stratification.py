@@ -347,16 +347,6 @@ def test_create_stratification__with_infectiousness_adjustments():
             },
         )
 
-    # Fail coz a time-varying function was used (not currently supported!)
-    with pytest.raises(AssertionError):
-        strat.add_infectiousness_adjustments(
-            compartment_name="S",
-            adjustments={
-                "rural": Multiply(1.2),
-                "urban": Multiply(lambda t, cv: 2),
-            },
-        )
-
     strat.add_infectiousness_adjustments(
         compartment_name="S",
         adjustments={

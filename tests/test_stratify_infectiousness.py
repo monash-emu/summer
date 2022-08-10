@@ -52,6 +52,27 @@ def test_strat_infectiousness__with_adjustments(backend):
     for infectee, infector in zip(infectees, infectors):
         assert model._get_infection_frequency_multiplier(infectee, infector) == expected_frequency
 
+
+def test_strat_infectiousness__with_multiple_adjustments(backend):
+    """
+    Ensure multiply infectiousness adjustment is applied.
+    """
+    # Create a model
+    model = CompartmentalModel(
+        times=[0, 5], compartments=["S", "I", "R"], infectious_compartments=["I"]
+    )
+    model._set_backend(backend)
+    model.set_initial_population(distribution={"S": 900, "I": 100})
+    strat = Stratification("age", ["baby", "child", "adult"], ["S", "I", "R"])
+    strat.set_population_split({"baby": 0.1, "child": 0.3, "adult": 0.6})
+    strat.add_infectiousness_adjustments(
+        "I", {"child": adjust.Multiply(3), "adult": adjust.Multiply(0.5), "baby": None}
+    )
+    model.stratify_with(strat)
+    assert_array_equal(
+        model.initial_population,
+        np.array([90, 270, 540, 10, 30, 60, 0, 0, 0]),
+    )
     # Stratify again, now with overwrites
     strat = Stratification("location", ["urban", "rural"], ["S", "I", "R"])
     strat.add_infectiousness_adjustments(

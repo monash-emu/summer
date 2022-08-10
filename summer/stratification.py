@@ -256,9 +256,9 @@ class Stratification:
 
         adjustments = {k: enforce_multiply(v) for k, v in adjustments.items()}
 
-        for k, v in adjustments.items():
-            if v is not None:
-                v.param = get_modelparameter_from_param(v.param)
+        # for k, v in adjustments.items():
+        #    if v is not None:
+        #        v.param = get_modelparameter_from_param(v.param)
 
         msg = "All infectiousness adjustments must be Multiply, Overwrite or None."
         assert all(
@@ -271,8 +271,8 @@ class Stratification:
 
         # FIXME: This should work for computegraph Functions that are not time dependant,
         # (and fail for those that are), but it's tricky to check...
-        msg = "Cannot use time varying functions for infectiousness adjustments."
-        assert not any([adj.param.is_time_varying() for adj in adjustments.values() if adj]), msg
+        # msg = "Cannot use time varying functions for infectiousness adjustments."
+        # assert not any([adj.param.is_time_varying() for adj in adjustments.values() if adj]), msg
 
         self.infectiousness_adjustments[compartment_name] = adjustments
 

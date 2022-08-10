@@ -1,23 +1,33 @@
+from __future__ import annotations
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from summer import CompartmentalModel
+
 from inspect import getfullargspec
 from typing import Union, Any
 
 from collections.abc import Iterable
 from numbers import Real
 
-from pydantic import BaseModel
-from pydantic.main import ModelMetaclass
+# from pydantic import BaseModel
+# from pydantic.main import ModelMetaclass
 
-from summer import CompartmentalModel
 from summer.parameters import Parameter, Function, Data
 from computegraph import ComputeGraph
 from computegraph.utils import expand_nested_dict, is_var
 
+from .abstract_parameter import AbstractParameter
+
 GraphObj = Union[Function, Data]
 
 
+class ParamStruct:
+    pass
+
+
 class ModelBuilder:
-    def __init__(self, model: CompartmentalModel, params: dict, param_class: ModelMetaclass):
-        self.model = model
+    def __init__(self, params: dict, param_class: ParamStruct):
         self._params = params
         self._params_expanded = expand_nested_dict(params, include_parents=True)
         self.params = self._pyd_params = param_class(**params)
@@ -30,8 +40,9 @@ class ModelBuilder:
             raise Exception(f"Key {key} already exists in graph as {self.input_graph[key]}")
         self.input_graph[key] = graph_obj
 
-    def finalize(self):
-        self.run = get_full_runner(self)
+    def set_model(self, model: CompartmentalModel):
+        self.model = model
+        model.builder = self
 
     def _get_func_args(self, key):
         return [Parameter(k) for k in [*self._params_expanded[key]]]
@@ -88,7 +99,7 @@ class ModelBuilder:
         else:
             raise KeyError("Key not found in initial parameters", key)
 
-    def get_mapped_func(self, func: callable, param_obj: BaseModel, kwargs=None):
+    def get_mapped_func(self, func: callable, param_obj: ParamStruct, kwargs=None):
         argspec = getfullargspec(func)
 
         kwargs = {} if kwargs is None else kwargs
@@ -105,6 +116,7 @@ class ModelBuilder:
         return Function(func, [], mapped_args)
 
     def get_jax_runner(self, jit=True):
+        self.model.finalize()
         run_everything, run_inputs, _, _ = get_full_runner(self, True)
         if jit:
             from jax import jit as _jit
@@ -113,7 +125,7 @@ class ModelBuilder:
         return run_everything
 
 
-def find_key_from_obj(obj: Any, pydparams: BaseModel, params: dict, layer=None, is_dict=False):
+def find_key_from_obj(obj: Any, pydparams: ParamStruct, params: dict, layer=None, is_dict=False):
     if layer is None:
         layer = []
     for k, v in params.items():
@@ -123,7 +135,7 @@ def find_key_from_obj(obj: Any, pydparams: BaseModel, params: dict, layer=None, 
         else:
             cur_pydobj = getattr(pydparams, k)
         if cur_pydobj is obj:
-            if isinstance(cur_pydobj, BaseModel) or isinstance(cur_pydobj, _AbstractParameter):
+            if isinstance(cur_pydobj, ParamStruct) or isinstance(cur_pydobj, AbstractParameter):
                 return ".".join(layer + [k])
             else:
                 raise TypeError("Cannot match against type", type(obj))
@@ -131,7 +143,7 @@ def find_key_from_obj(obj: Any, pydparams: BaseModel, params: dict, layer=None, 
             res = find_key_from_obj(obj, cur_pydobj, v, layer + [k], True)
             if res is not None:
                 return res
-        elif isinstance(cur_pydobj, BaseModel):
+        elif isinstance(cur_pydobj, ParamStruct):
             assert isinstance(v, dict)
             res = find_key_from_obj(obj, cur_pydobj, v, layer + [k])
             if res is not None:
@@ -141,7 +153,7 @@ def find_key_from_obj(obj: Any, pydparams: BaseModel, params: dict, layer=None, 
         raise Exception(f"Unable to match {obj} in parameters dictionary", obj, pydparams, layer)
 
 
-def find_obj_from_key(key: str, pydparams: BaseModel) -> Any:
+def find_obj_from_key(key: str, pydparams: ParamStruct) -> Any:
     """Find the matching object within a BaseModel for a given key
 
     Args:
@@ -156,7 +168,7 @@ def find_obj_from_key(key: str, pydparams: BaseModel) -> Any:
     """
     cur_obj = pydparams
     for layer in key.split("."):
-        if isinstance(cur_obj, BaseModel):
+        if isinstance(cur_obj, ParamStruct):
             cur_obj = getattr(cur_obj, layer)
         elif isinstance(cur_obj, Iterable):
             cur_obj = cur_obj[layer]
@@ -175,18 +187,18 @@ def get_full_runner(builder, use_jax=False):
         jrunner = get_runner(builder.model)
         jax_run_func, jax_runner_dict = build_run_model(jrunner)
 
-    model_input_p = [p.name for p in list(builder.model.get_input_parameters())]
+    model_input_p = builder.model.get_input_parameters()
 
-    def run_everything(param_updates=None, **kwargs):
+    def run_everything(parameters=None, **kwargs):
 
-        parameters = builder._params_expanded.copy()
-        if param_updates is not None:
-            parameters.update(param_updates)
+        params_base = builder._params_expanded.copy()
+        if parameters is not None:
+            params_base.update(parameters)
 
-        graph_outputs = graph_run(parameters=parameters)
-        parameters.update(graph_outputs)
+        graph_outputs = graph_run(parameters=params_base)
+        params_base.update(graph_outputs)
 
-        model_params = {k: v for k, v in parameters.items() if k in model_input_p}
+        model_params = {k: v for k, v in params_base.items() if k in model_input_p}
 
         if use_jax:
             return jax_run_func(parameters=model_params)
@@ -211,10 +223,6 @@ def get_full_runner(builder, use_jax=False):
         return run_everything
 
 
-class _AbstractParameter:
-    pass
-
-
 def is_real(v):
     return isinstance(v, Real)
 
@@ -223,17 +231,20 @@ def parameter_class(constraint_func=is_real, description: str = None):
 
     _description = description
 
-    class ContinuousParameter(float, _AbstractParameter):
+    class ConcreteParameter(AbstractParameter):
 
         constraint = constraint_func
         description = _description
+
+        def __init__(self, value):
+            self.value = value
 
         def __repr__(self):
             if self.description:
                 desc_str = f" {self.description} "
             else:
                 desc_str = ""
-            return f"Parameter:{desc_str}({float(self)})"
+            return f"Parameter:{desc_str}({self.value})"
 
         @classmethod
         def __get_validators__(cls):
@@ -247,9 +258,4 @@ def parameter_class(constraint_func=is_real, description: str = None):
                 raise ValueError(f"Constraint failed", cls.constraint, v)
             return cls(v)
 
-    return ContinuousParameter
-
-
-# This union type should be checked against for anything that expects
-# to able to call model.run() and have a CompartmentalModel returned
-RunnableModel = Union[CompartmentalModel, ModelBuilder]
+    return ConcreteParameter

@@ -10,6 +10,7 @@ if TYPE_CHECKING:
 
 
 def get_runner(m: CompartmentalModel):
+    m.finalize()
     runner = JaxRunner(m)
     runner.prepare_structural()
     m._backend = runner

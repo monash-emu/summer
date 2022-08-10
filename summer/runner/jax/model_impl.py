@@ -13,6 +13,7 @@ from .stratify import get_calculate_initial_pop
 from .derived_outputs import build_derived_outputs_runner
 
 from summer.parameters import get_model_param_value
+from summer.experimental.abstract_parameter import evaluate_lazy
 
 
 def clean_compartments(compartment_values: jnp.ndarray):
@@ -69,7 +70,9 @@ def build_get_infectious_multipliers(runner):
 
     # FIXME: We are hardcoding this for frequency only right now
     if not runner._infection_frequency_only:
-        raise NotImplementedError("Infection density models not yet supported by Jax runner")
+        raise NotImplementedError(
+            "Model must have at least one infection frequency flow, and no infection density"
+        )
 
     # FIXME: This could desparately use a tidy-up - all the indexing is a nightmare
     def get_infectious_multipliers(
@@ -380,15 +383,21 @@ def build_run_model(runner, solver=None):
     calc_derived_outputs = build_derived_outputs_runner(runner.model)
 
     def run_model(parameters):
+        lazy_parameters = {
+            f"_lazy_{hash(p)}": evaluate_lazy(p, parameters) for p in runner.model._lazy_params
+        }
+
+        parameters.update(lazy_parameters)
+
         initial_population = calc_initial_pop(parameters)
         compartment_infectiousness = get_compartment_infectiousness(parameters)
         model_data = {"compartment_infectiousness": compartment_infectiousness}
 
         outputs = get_ode_solution(initial_population, times, parameters, model_data)
 
-        out_flows = get_flows_for_outputs(outputs, times, parameters, model_data)[0]
+        out_flows, out_cv = get_flows_for_outputs(outputs, times, parameters, model_data)
 
-        model_variables = {"outputs": outputs, "flows": out_flows}
+        model_variables = {"outputs": outputs, "flows": out_flows, "computed_values": out_cv}
 
         derived_outputs = calc_derived_outputs(
             parameters=parameters, model_variables=model_variables

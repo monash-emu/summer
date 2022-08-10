@@ -12,7 +12,8 @@ from summer.compute import binary_matrix_to_sparse_pairs, sparse_pairs_accum
 from summer.compartment import Compartment
 from summer.population import get_rebalanced_population
 
-from summer.parameters import get_model_param_value
+from summer.parameters import get_model_param_value, get_static_param_value, is_var, Function
+from summer.parameters.param_impl import ModelParameter
 
 
 class ModelRunner(ABC):
@@ -193,6 +194,7 @@ class ModelRunner(ABC):
     # FIXME:
     # This is now only used by tests, and should never called in any production code
     def prepare_to_run(self, parameters: dict = None):
+        self.model.finalize()
         self.prepare_structural()
         self.prepare_dynamic(parameters)
 
@@ -373,6 +375,8 @@ class ModelRunner(ABC):
 
         if is_var(distribution, "parameters"):
             distribution = self.parameters[distribution.name]
+        elif isinstance(distribution, Function) or isinstance(distribution, ModelParameter):
+            distribution = get_static_param_value(distribution, parameters)
 
         if isinstance(distribution, dict):
             for idx, comp in enumerate(self.model._original_compartment_names):

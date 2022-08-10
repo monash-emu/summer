@@ -10,7 +10,7 @@ import numpy as np
 from summer.adjust import BaseAdjustment, FlowParam, Multiply
 from summer.compartment import Compartment
 from summer.parameters import is_func
-from summer.parameters.param_impl import get_modelparameter_from_param
+from summer.parameters.param_impl import ModelParameter
 from summer.stratification import Stratification
 from summer.compute import find_sum
 
@@ -68,7 +68,12 @@ class BaseFlow(ABC):
         Applies any stratification adjustments to the base parameter.
         """
         # flow_rate = get_model_param_value(self.param, time, computed_values, parameters, True)
-        flow_rate = self.param.get_value(time, computed_values, parameters)
+        if isinstance(self.param, ModelParameter):
+            flow_rate = self.param.get_value(time, computed_values, parameters)
+        elif callable(self.param):
+            flow_rate = self.param(time, computed_values)
+        else:
+            flow_rate = self.param
         for adjustment in self.adjustments:
             flow_rate = adjustment.get_new_value(flow_rate, computed_values, time, parameters)
 
@@ -152,7 +157,7 @@ class BaseEntryFlow(BaseFlow):
         self.name = name
         self.adjustments = [a for a in (adjustments or []) if a and a.param is not None]
         self.dest = dest
-        self.param = get_modelparameter_from_param(param)
+        self.param = param
 
     def stratify(self, strat: Stratification) -> List[BaseFlow]:
         """
@@ -224,7 +229,7 @@ class BaseExitFlow(BaseFlow):
         self.name = name
         self.adjustments = [a for a in (adjustments or []) if a and a.param is not None]
         self.source = source
-        self.param = get_modelparameter_from_param(param)
+        self.param = param
 
     def stratify(self, strat: Stratification) -> List[BaseFlow]:
         """
@@ -284,7 +289,7 @@ class BaseTransitionFlow(BaseFlow):
         self.adjustments = [a for a in (adjustments or []) if a and a.param is not None]
         self.source = source
         self.dest = dest
-        self.param = get_modelparameter_from_param(param)
+        self.param = param
 
     def stratify(self, strat: Stratification) -> List[BaseFlow]:
         """
@@ -521,7 +526,13 @@ class FunctionFlow(BaseTransitionFlow):
         computed_values: dict,
         time: float,
     ) -> float:
-        flow_rate = self.param.func(
+        if callable(self.param):
+            # Plain python function
+            param = self.param
+        else:
+            # PyFunction ModelParameter object
+            param = self.param.func
+        flow_rate = param(
             self, compartments, compartment_values, flows, flow_rates, computed_values, time
         )
         for adjustment in self.adjustments:
@@ -546,7 +557,7 @@ class BaseInfectionFlow(BaseTransitionFlow):
         self.adjustments = [a for a in (adjustments or []) if a and a.param is not None]
         self.source = source
         self.dest = dest
-        self.param = get_modelparameter_from_param(param)
+        self.param = param
         self.find_infectious_multiplier = find_infectious_multiplier
 
     def get_net_flow(
