@@ -197,8 +197,8 @@ def build_compound_parameter(param: Iterable, builder: ModelBuilder = None):
 
 
 class CompoundParameter(ModelParameter):
-    def __init__(self, subparams: Tuple[ModelParameter], builder):
-        self.subparams = subparams
+    def __init__(self, subparams: Tuple[ModelParameter]):
+        self.subparams = tuple(subparams)
 
     def get_value(self, time: float, computed_values: dict, parameters: dict):
         value = self.subparams[0].get_value(time, computed_values, parameters)

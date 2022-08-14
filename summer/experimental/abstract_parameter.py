@@ -26,6 +26,8 @@ def children(lazy_obj):
 
 
 def set_keys(lazy_obj, builder):
+    # FIXME: Probably should be deprecated/removed,
+    # since we handle this in ModelBuilder itself now
     out_keys = []
     if isinstance(lazy_obj, AbstractParameter):
         obj_key = builder.find_key_from_obj(lazy_obj)
@@ -33,7 +35,20 @@ def set_keys(lazy_obj, builder):
         out_keys = out_keys + [obj_key]
     else:
         for child in children(lazy_obj):
-            out_keys = out_keys = set_keys(child, builder)
+            out_keys = out_keys + set_keys(child, builder)
+    return out_keys
+
+
+def get_param_keys(lazy_obj):
+    # FIXME: Probably should be deprecated/removed,
+    # since we handle this in ModelBuilder itself now
+    out_keys = []
+    if isinstance(lazy_obj, AbstractParameter):
+        obj_key = lazy_obj._param_key
+        out_keys = out_keys + [obj_key]
+    else:
+        for child in children(lazy_obj):
+            out_keys = out_keys + get_param_keys(child)
     return out_keys
 
 

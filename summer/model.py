@@ -836,6 +836,20 @@ class CompartmentalModel:
                     if v not in s.strata:
                         raise ValueError(f"Invalid stratum {v} for {s}")
 
+    def get_stratification(self, name: str) -> Stratification:
+        """Return Stratification matching name, or None if not found
+
+        Args:
+            name: Name of stratificaton to get
+
+        Returns:
+            Stratification
+        """
+        for stratification in self._stratifications:
+            if stratification.name == name:
+                return stratification
+        return None
+
     def adjust_population_split(self, strat: str, dest_filter: dict, proportions: dict):
         """Adjust the initial population to redistribute the population for a particular
         stratification, over a subset of some other strata
@@ -1194,6 +1208,9 @@ class CompartmentalModel:
             save_results (optional): Whether to save or discard the results.
         """
         strata = strata or {}
+
+        if isinstance(compartments, str):
+            compartments = [compartments]
 
         if self._should_validate:
             msg = f"A derived output named {name} already exists."

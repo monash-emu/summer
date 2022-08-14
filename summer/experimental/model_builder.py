@@ -27,10 +27,11 @@ class ParamStruct:
 
 
 class ModelBuilder:
-    def __init__(self, params: dict, param_class: ParamStruct):
+    def __init__(self, params: dict, param_class: type):
         self._params = params
         self._params_expanded = expand_nested_dict(params, include_parents=True)
         self.params = self._pyd_params = param_class(**params)
+        label_parameters(self.params, params)
         self.input_graph = {}
 
         self.required_outputs = set()
@@ -64,7 +65,7 @@ class ModelBuilder:
         Args:
             key: Key of the parameter
             create: Add this parameter as an output if required - will raise an exception
-                    if False if key is not already present in the input parameters
+                    if False and key is not already present in the input parameters
 
         Returns:
             computegraph Parameter
@@ -115,14 +116,52 @@ class ModelBuilder:
         mapped_args.update(kwargs)
         return Function(func, [], mapped_args)
 
-    def get_jax_runner(self, jit=True):
+    def get_jax_runner(self, jit=True, solver=None):
         self.model.finalize()
-        run_everything, run_inputs, _, _ = get_full_runner(self, True)
+        run_everything, run_inputs, _, _ = get_full_runner(self, True, solver=solver)
         if jit:
             from jax import jit as _jit
 
             run_everything = _jit(run_everything)
         return run_everything
+
+    def get_input_parameters(self):
+        cg = ComputeGraph(self.input_graph)
+        model_p = self.model.get_input_parameters()
+        cg_p = [p.name for p in cg.get_input_variables() if p.source == "parameters"]
+        return model_p.union(cg_p).difference(self.input_graph)
+
+    def get_default_parameters(self) -> dict:
+        default_params = {
+            k: v for k, v in self._params_expanded.items() if k in self.get_input_parameters()
+        }
+        return default_params
+
+
+def label_parameters(pstruct: ParamStruct, pdict: dict, layer: list = None):
+    """Walk the parameter dictionary pdict, alongside the ParamStruct,
+       setting concrete parameter names for each AbstractParameter encountered
+
+    Args:
+        pstruct (ParamStruct): The ParamStruct describing the model
+        pdict (dict): The parameter dictionary used as constructor for pstruct
+        layer: The current naming layer (used internally, do not set)
+    """
+    if layer is None:
+        layer = []
+    for k, v in pdict.items():
+        if isinstance(pstruct, dict):
+            cur_pstruct = pstruct[k]
+        else:
+            cur_pstruct = getattr(pstruct, k)
+        if isinstance(cur_pstruct, AbstractParameter):
+            param_key = ".".join(layer + [k])
+            cur_pstruct._set_key(param_key)
+        elif isinstance(cur_pstruct, dict):
+            label_parameters(cur_pstruct, v, layer + [k])
+        elif isinstance(cur_pstruct, ParamStruct):
+            assert isinstance(v, dict)
+            label_parameters(cur_pstruct, v, layer + [k])
 
 
 def find_key_from_obj(obj: Any, pydparams: ParamStruct, params: dict, layer=None, is_dict=False):
@@ -177,7 +216,7 @@ def find_obj_from_key(key: str, pydparams: ParamStruct) -> Any:
     return cur_obj
 
 
-def get_full_runner(builder, use_jax=False):
+def get_full_runner(builder, use_jax=False, solver=None):
     graph_run = ComputeGraph(builder.input_graph).get_callable()
 
     if use_jax:
@@ -185,7 +224,7 @@ def get_full_runner(builder, use_jax=False):
         from summer.runner.jax.model_impl import build_run_model
 
         jrunner = get_runner(builder.model)
-        jax_run_func, jax_runner_dict = build_run_model(jrunner)
+        jax_run_func, jax_runner_dict = build_run_model(jrunner, solver=solver)
 
     model_input_p = builder.model.get_input_parameters()
 
@@ -227,24 +266,24 @@ def is_real(v):
     return isinstance(v, Real)
 
 
-def parameter_class(constraint_func=is_real, description: str = None):
+def parameter_class(constraint_func=is_real, desc: str = None, full_desc: str = None):
 
-    _description = description
+    _desc = desc
+    _full_desc = full_desc
 
     class ConcreteParameter(AbstractParameter):
 
         constraint = constraint_func
-        description = _description
+        description = _desc
+        full_description = _full_desc
 
         def __init__(self, value):
             self.value = value
+            self._param_key = None
 
         def __repr__(self):
-            if self.description:
-                desc_str = f" {self.description} "
-            else:
-                desc_str = ""
-            return f"Parameter:{desc_str}({self.value})"
+            pkey = self._param_key or self.description or "param"
+            return f"{pkey}({self.value})"
 
         @classmethod
         def __get_validators__(cls):

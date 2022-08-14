@@ -120,7 +120,10 @@ def get_static_param_value(obj: Any, parameters: dict, mul_outputs: bool = False
     """
     from .param_impl import ModelParameter
 
-    if isinstance(obj, ModelParameter):
+    # Might have some nested special classes
+    if isinstance(obj, dict):
+        return {k: get_static_param_value(v) for k, v in obj.items()}
+    elif isinstance(obj, ModelParameter):
         return obj.get_value(0.0, {}, parameters)
     elif isinstance(obj, float):
         return obj
