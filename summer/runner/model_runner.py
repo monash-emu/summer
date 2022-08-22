@@ -118,9 +118,11 @@ class ModelRunner(ABC):
         for k, proc in self.model._computed_value_processors.items():
             proc.prepare_to_run(self.model.compartments, self.model._flows)
 
-        cvcg = ComputeGraph(self.model._computed_values_graph_dict, "computed_values")
+        cvcg = ComputeGraph(
+            self.model._computed_values_graph_dict, "computed_values", is_traced=True
+        )
 
-        self.computed_values_runner = cvcg.get_callable(nested_params=False)
+        self.computed_values_runner = cvcg.get_callable()
 
         # Create a matrix that tracks which categories each compartment is in.
         # A matrix with size (num_cats x num_comps).

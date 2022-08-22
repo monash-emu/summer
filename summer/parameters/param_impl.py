@@ -1,6 +1,8 @@
 from typing import Tuple, List, Iterable, Any
 from numbers import Real
 
+from computegraph.types import GraphObject
+
 from summer.parameters.params import build_args, is_var, Function, Variable, ComputedValue, Time
 from summer.experimental.model_builder import AbstractParameter, ModelBuilder
 from summer.experimental.abstract_parameter import LazyParameter, set_keys
@@ -115,7 +117,7 @@ def concretize_arg(arg: Any, builder: ModelBuilder) -> Tuple[Any, List[str]]:
         lazy_p, pkeys = build_lazy_parameter(arg, builder)
         return Variable(lazy_p._pkey, "parameters"), pkeys
     elif is_var(arg, "parameters"):
-        return arg, [arg.name]
+        return arg, [arg.key]
     else:
         return arg, []
 
@@ -216,6 +218,26 @@ class CompoundParameter(ModelParameter):
         return any([sp.is_time_varying() for sp in self.subparams])
 
 
+class GraphObjectParameter(ModelParameter):
+    def __init__(self, obj):
+        self.obj = obj
+
+    def get_value(self, time: float, computed_values: dict, parameters: dict):
+        sources = dict(
+            computed_values=computed_values, parameters=parameters, model_variables={"time": time}
+        )
+        return self.obj.evaluate(**sources)
+
+    def __hash__(self):
+        return hash(self.obj)
+
+    def __eq__(self, other):
+        return self.obj == other.obj
+
+    def is_time_varying(self):
+        return True
+
+
 def get_modelparameter_from_param(
     param, builder: ModelBuilder = None, allow_any=False
 ) -> Tuple[ModelParameter, List[str]]:
@@ -238,67 +260,19 @@ def get_modelparameter_from_param(
     if isinstance(param, ModelParameter):
         # We've already transformed this parameter
         return param, []
-    elif isinstance(param, AbstractParameter):
-        if builder is not None:
-            pkey = builder.find_key_from_obj(param)
-            return GraphParameter(pkey), [pkey]
-        else:
-            raise Exception("AbstractParameter encountered with no ModelBuilder for lookup", param)
-    elif isinstance(param, LazyParameter):
-        if builder is not None:
-            return build_lazy_parameter(param, builder)
-        else:
-            raise Exception(
-                "Lazy AbstractParameter encountered with no ModelBuilder for lookup", param
-            )
-    elif is_var(param, "parameters"):
-        return GraphParameter(param.name), [param.name]
-    elif isinstance(param, Function):
-        return build_graph_function(param, builder)
+    elif isinstance(param, GraphObject):
+        return GraphObjectParameter(param), []
     elif isinstance(param, Real):
         return FloatParameter(param), []
-    elif isinstance(param, list) or isinstance(param, tuple):
-        return build_compound_parameter(param, builder)
     elif callable(param):
         return PyFunction(param), []
     elif isinstance(param, ComputedValue):
-        return ComputedValueParameter(param.name), []
+        return ComputedValueParameter(param.key), []
     else:
         if allow_any:
             return DataParameter(param), []
         else:
             raise TypeError(f"Unsupported model parameter type {type(param)}", param)
-
-
-def replace_with_typed_params(m, builder):
-    # Inside flows
-    for f in m._flows:
-        f.param = get_modelparameter_from_param(f.param, builder)
-
-        for adj in f.adjustments:
-            if adj is not None:
-                adj.param = get_modelparameter_from_param(adj.param, builder)
-
-    for k, v in m._derived_output_requests.items():
-        req_type = v["request_type"]
-        if req_type == "param_func":
-            v["func"] = concretize_function_args(v["func"], builder)
-
-    # Inside stratifications - we have retained some useful information...
-    for s in m._stratifications:
-        # Once a model is built, these become meaningless,
-        # so it needs to happen at the start...
-        # Keep this code here for now just in case we want to implement this in a different order
-
-        # Flow adjustments live here quite happily
-        # Flow _parameters_ however are stratified to oblivion, hence the section above ^^^^^
-        for fname, adjustments in s.flow_adjustments.items():
-            for adj, source_strata, dest_strata in adjustments:
-                for k, v in adj.items():
-                    if v is not None:
-                        # Do nothing, reinstate if we reorder this
-                        pass
-                        # v.param = get_modelparameter_from_param(v.param)
 
 
 def finalize_parameters(model, builder: ModelBuilder = None):

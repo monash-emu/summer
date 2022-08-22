@@ -1,6 +1,6 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING, Any
-from computegraph.types import Variable, Function, Data  # noqa: F401
+from computegraph.types import Variable, Function, GraphObject, Data, build_args  # noqa: F401
 from computegraph.utils import extract_variables, is_var
 
 if TYPE_CHECKING:
@@ -12,7 +12,7 @@ class Parameter(Variable):
         super().__init__(name, "parameters")
 
     def __repr__(self):
-        return f"Parameter {self.name}"
+        return f"Parameter {self.key}"
 
 
 class ComputedValue(Variable):
@@ -20,7 +20,7 @@ class ComputedValue(Variable):
         super().__init__(name, "computed_values")
 
     def __repr__(self):
-        return f"ComputedValue {self.name}"
+        return f"ComputedValue {self.key}"
 
 
 class DerivedOutput(Variable):
@@ -28,7 +28,7 @@ class DerivedOutput(Variable):
         super().__init__(name, "derived_outputs")
 
     def __repr__(self):
-        return f"DerivedOutput {self.name}"
+        return f"DerivedOutput {self.key}"
 
 
 class ModelVariable(Variable):
@@ -36,7 +36,7 @@ class ModelVariable(Variable):
         super().__init__(name, "model_variables")
 
     def __repr__(self):
-        return f"ModelVariable {self.name}"
+        return f"ModelVariable {self.key}"
 
 
 CompartmentValues = ModelVariable("compartment_values")
@@ -83,11 +83,16 @@ def get_model_param_value(
     """
     if isinstance(param, float):
         return param
-    if isinstance(param, Variable):
+    elif isinstance(param, GraphObject):
+        sources = dict(
+            computed_values=computed_values, parameters=parameters, model_variables={"time": time}
+        )
+        return param.evaluate(**sources)
+    elif isinstance(param, Variable):
         if param.source == "parameters":
-            return parameters[param.name]
+            return parameters[param.key]
         elif param.source == "computed_values":
-            return computed_values[param.name]
+            return computed_values[param.key]
         else:
             raise Exception("Unsupported variable source", param, param.source)
     elif isinstance(param, Function):
@@ -122,13 +127,13 @@ def get_static_param_value(obj: Any, parameters: dict, mul_outputs: bool = False
 
     # Might have some nested special classes
     if isinstance(obj, dict):
-        return {k: get_static_param_value(v) for k, v in obj.items()}
+        return {k: get_static_param_value(v, parameters) for k, v in obj.items()}
     elif isinstance(obj, ModelParameter):
         return obj.get_value(0.0, {}, parameters)
     elif isinstance(obj, float):
         return obj
     elif is_var(obj, "parameters"):
-        return parameters[obj.name]
+        return parameters[obj.key]
     elif isinstance(obj, Function):
         return obj.call(sources={"parameters": parameters})
     elif mul_outputs and (isinstance(obj, list) or isinstance(obj, tuple)):
@@ -138,22 +143,6 @@ def get_static_param_value(obj: Any, parameters: dict, mul_outputs: bool = False
         return value
     else:
         return obj
-
-
-def build_args(args: tuple, kwargs: dict, sources: dict):
-    out_args = []
-    for a in args:
-        if isinstance(a, Variable):
-            out_args.append(sources[a.source][a.name])
-        else:
-            out_args.append(a)
-    out_kwargs = {}
-    for k, v in kwargs.items():
-        if isinstance(v, Variable):
-            out_kwargs[k] = sources[v.source][v.name]
-        else:
-            out_kwargs[k] = v
-    return out_args, out_kwargs
 
 
 def extract_params(obj):

@@ -27,8 +27,11 @@ def query_flows(
     m: CompartmentalModel, flow_name: str = None, source: dict = None, dest: dict = None
 ):
     if flow_name is not None:
-        re_pat = re.compile(flow_name)
-        flows = [f for f in m._flows if re_pat.match(f.name)]
+        if isinstance(flow_name, str):
+            re_pat = re.compile(flow_name)
+            flows = [f for f in m._flows if re_pat.match(f.name)]
+        else:
+            flows = flow_name
     else:
         flows = m._flows
 

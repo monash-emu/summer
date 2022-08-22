@@ -6,10 +6,11 @@ from typing import Callable, Dict, List, Optional, Union
 
 import numpy as np
 from computegraph.utils import is_var
+from computegraph.types import GraphObject
 
 from summer.adjust import Multiply, Overwrite, enforce_multiply
 from summer.compartment import Compartment
-from summer.parameters import is_func, Parameter, get_static_param_value
+from summer.parameters import is_func, get_static_param_value
 from summer.parameters.param_impl import get_modelparameter_from_param
 
 Adjustment = Union[Multiply, Overwrite]
@@ -288,7 +289,7 @@ class Stratification:
         msg = "Mixing matrix must be a NumPy array, or return a NumPy array."
         assert (
             (isinstance(mixing_matrix, np.ndarray))
-            or isinstance(mixing_matrix, Parameter)
+            or isinstance(mixing_matrix, GraphObject)
             or is_func(mixing_matrix)
         ), msg
 
