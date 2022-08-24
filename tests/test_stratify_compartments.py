@@ -5,6 +5,7 @@ import numpy as np
 from numpy.testing import assert_allclose, assert_array_equal
 
 from summer import Compartment, CompartmentalModel, Stratification
+from summer.population import calculate_initial_population
 
 
 def test_stratify__single__validate_compartments():
@@ -20,7 +21,7 @@ def test_stratify__single__validate_compartments():
     # Each compartment knows its index
     assert [c.idx for c in model.compartments] == list(range(len(model.compartments)))
     # Compartments have the correct population
-    assert_array_equal(model.initial_population, np.array([900, 90, 10]))
+    assert_array_equal(calculate_initial_population(model), np.array([900, 90, 10]))
 
     # Stratify the model
     strat = Stratification(name="age", strata=["child", "adult"], compartments=["S", "I", "R"])
@@ -38,7 +39,7 @@ def test_stratify__single__validate_compartments():
         Compartment("R", {"age": "adult"}),
     ]
     expected_pop_arr = np.array([450, 450, 45, 45, 5, 5])
-    assert_array_equal(model.initial_population, expected_pop_arr)
+    assert_array_equal(calculate_initial_population(model), expected_pop_arr)
 
 
 def test_stratify__single_with_pop_split__validate_compartments():
@@ -55,7 +56,7 @@ def test_stratify__single_with_pop_split__validate_compartments():
     # Each compartment knows its index
     assert [c.idx for c in model.compartments] == list(range(len(model.compartments)))
     # Compartments have the correct population
-    assert_array_equal(model.initial_population, np.array([900, 90, 10]))
+    assert_array_equal(calculate_initial_population(model), np.array([900, 90, 10]))
 
     # Stratify the model
     strat = Stratification(name="age", strata=["child", "adult"], compartments=["S", "I", "R"])
@@ -74,7 +75,7 @@ def test_stratify__single_with_pop_split__validate_compartments():
         Compartment("R", {"age": "adult"}),
     ]
     expected_pop_arr = np.array([720, 180, 72, 18, 8, 2])
-    assert_array_equal(model.initial_population, expected_pop_arr)
+    assert_array_equal(calculate_initial_population(model), expected_pop_arr)
 
 
 def test_stratify__single_with_split_and_partial__validate_compartments():
@@ -87,7 +88,7 @@ def test_stratify__single_with_split_and_partial__validate_compartments():
     # Each compartment knows its index
     assert [c.idx for c in model.compartments] == list(range(len(model.compartments)))
     # Compartments have the correct population
-    assert_array_equal(model.initial_population, np.array([900, 90, 10]))
+    assert_array_equal(calculate_initial_population(model), np.array([900, 90, 10]))
 
     # Stratify the model
     strat = Stratification(name="age", strata=["child", "adult"], compartments=["S", "R"])
@@ -105,7 +106,7 @@ def test_stratify__single_with_split_and_partial__validate_compartments():
         Compartment("R", {"age": "adult"}),
     ]
     expected_pop_arr = np.array([720, 180, 90, 8, 2])
-    assert_array_equal(model.initial_population, expected_pop_arr)
+    assert_array_equal(calculate_initial_population(model), expected_pop_arr)
 
 
 def test_stratify__double_with_split_and_partial__validate_compartments():
@@ -118,7 +119,7 @@ def test_stratify__double_with_split_and_partial__validate_compartments():
     # Each compartment knows its index
     assert [c.idx for c in model.compartments] == list(range(len(model.compartments)))
     # Compartments have the correct population
-    assert_array_equal(model.initial_population, np.array([900, 90, 10]))
+    assert_array_equal(calculate_initial_population(model), np.array([900, 90, 10]))
 
     # Stratify the model
     age_strat = Stratification(name="age", strata=["child", "adult"], compartments=["S", "R"])
@@ -136,7 +137,7 @@ def test_stratify__double_with_split_and_partial__validate_compartments():
         Compartment("R", {"age": "adult"}),
     ]
     expected_pop_arr = np.array([720, 180, 90, 8, 2])
-    assert_array_equal(model.initial_population, expected_pop_arr)
+    assert_array_equal(calculate_initial_population(model), expected_pop_arr)
 
     # Stratify the model again!
     loc_strat = Stratification(
@@ -162,4 +163,4 @@ def test_stratify__double_with_split_and_partial__validate_compartments():
         Compartment("R", {"age": "adult"}),
     ]
     expected_pop_arr = np.array([504, 144, 72, 126, 36, 18, 63, 18, 9, 8, 2])
-    assert_allclose(model.initial_population, expected_pop_arr, atol=1e-9, rtol=0)
+    assert_allclose(calculate_initial_population(model), expected_pop_arr, atol=1e-9, rtol=0)

@@ -4,6 +4,8 @@ which can be applied to the model.
 """
 from typing import Callable, Dict, List, Optional, Union
 
+from numbers import Real
+
 import numpy as np
 from computegraph.utils import is_var
 from computegraph.types import GraphObject
@@ -88,17 +90,19 @@ class Stratification:
             - Sum to 1 +/- error defined above
 
         """
-        if is_var(proportions, "parameters"):
-            self.population_split = proportions
-        else:
-            msg = f"All strata must be specified when setting population split: {proportions}"
-            assert set(list(proportions.keys())) == set(self.strata), msg
-            msg = f"All proportions must be >= 0 when setting population split: {proportions}"
-            assert all([v >= 0 for v in proportions.values()]), msg
-            msg = f"All proportions sum to 1+/-{COMP_SPLIT_REQUEST_ERROR} when setting \
-                population split: {proportions}"
-            assert abs(1 - sum(proportions.values())) < COMP_SPLIT_REQUEST_ERROR, msg
+        if all([isinstance(v, Real) for v in proportions.values()]):
+            self.validate_population_split(proportions)
+
         self.population_split = proportions
+
+    def validate_population_split(self, proportions: dict):
+        msg = f"All strata must be specified when setting population split: {proportions}"
+        assert set(list(proportions.keys())) == set(self.strata), msg
+        msg = f"All proportions must be >= 0 when setting population split: {proportions}"
+        assert all([v >= 0 for v in proportions.values()]), msg
+        msg = f"All proportions sum to 1+/-{COMP_SPLIT_REQUEST_ERROR} when setting \
+            population split: {proportions}"
+        assert abs(1 - sum(proportions.values())) < COMP_SPLIT_REQUEST_ERROR, msg
 
     def set_flow_adjustments(
         self,

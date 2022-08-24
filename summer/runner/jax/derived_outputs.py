@@ -143,4 +143,4 @@ def build_derived_outputs_runner(model):
             out_keys.append(name)
 
     cg = ComputeGraph(graph_dict)
-    return cg.get_callable(False, False, out_keys=out_keys)
+    return cg.get_callable(targets=out_keys)

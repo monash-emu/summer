@@ -3,6 +3,9 @@ from typing import Tuple
 import numpy as np
 import numba
 
+from computegraph import ComputeGraph
+from computegraph.utils import is_var
+
 import summer.flows as flows
 from summer.compute import (
     accumulate_positive_flow_contributions,
@@ -38,18 +41,14 @@ class VectorizedRunner(ModelRunner):
             [f.source.idx if f.source else 0 for i, f in self._iter_non_function_flows], dtype=int
         )
 
-        func_pops = np.array(
-            [f.source.idx if f.source else 0 for i, f in self._iter_function_flows], dtype=int
-        )
-
-        self.population_idx = np.concatenate((non_func_pops, func_pops))
+        self.population_idx = non_func_pops
 
         # Store indices of flows that are not population dependent
         self._non_pop_flow_idx = np.array(
             [
                 i
                 for i, f in self._iter_non_function_flows
-                if (type(f) in (flows.ReplacementBirthFlow, flows.ImportFlow))
+                if (type(f) in (flows.ReplacementBirthFlow, flows.ImportFlow, flows.AbsoluteFlow))
             ],
             dtype=int,
         )
@@ -74,8 +73,18 @@ class VectorizedRunner(ModelRunner):
 
         super().prepare_dynamic(parameters)
 
-        self.map_flows_flat()
-        self.precompute_flow_weights()
+        #
+        source_inputs = {"parameters": parameters}
+
+        # Can replace this with calibration parameters later
+        dyn_vars = self.model.graph.get_input_variables()
+        self.param_frozen_cg = self.model.graph.freeze(dyn_vars, source_inputs)
+
+        ts_vars = [v for v in dyn_vars if is_var(v, "model_variables")]
+        self.timestep_cg = self.param_frozen_cg.freeze(ts_vars, source_inputs)
+
+        self.run_graph_ts = self.timestep_cg.get_callable()
+
         self._precompute_flow_maps()
 
         self._build_infectious_multipliers_lookup()
@@ -89,106 +98,11 @@ class VectorizedRunner(ModelRunner):
         self._infection_density_flat = np.empty((num_strains, num_cats), dtype=float)
         self._infection_frequency_flat = np.empty((num_strains, num_cats), dtype=float)
 
-    def map_flows_flat(self):
-        """Builds a table of param: index for every unique flow (and flow adjustment) parameter
-
-        Raises:
-            NotImplementedError: Doesn't handle Overwrite adjustments, yet
-        """
-
-        from summer.parameters.param_impl import CompoundParameter
-        from summer.adjust import Overwrite
-
-        param_table = {}
-
-        def update_table(param, idx):
-            if param is None:
-                return
-            if isinstance(param, CompoundParameter):
-                for sp in param.subparams:
-                    update_table(sp, idx)
-            else:
-                if param not in param_table:
-                    param_table[param] = []
-                cur_idx_table = param_table[param]
-                cur_idx_table.append(idx)
-
-        for flow_idx, flow in self._iter_non_function_flows:
-            # Build a list of multiplicative effects for this flow,
-            # discarding previous effects if there is an Overwrite
-            flow_updates = [flow.param]
-            for adj in flow.adjustments:
-                if adj is not None:
-                    if isinstance(adj, Overwrite):
-                        flow_updates = [adj.param]
-                    else:
-                        flow_updates.append(adj.param)
-
-            # Add these to the update table
-            for fparam in flow_updates:
-                update_table(fparam, flow_idx)
-
-            # update_table(flow.param, flow_idx)
-            # for adj in flow.adjustments:
-            #    if isinstance(adj, Overwrite):
-            #        raise NotImplementedError()
-            #    update_table(adj.param, flow_idx)
-
-        self.param_idx_table = {}
-
-        for k, v in param_table.items():
-            self.param_idx_table[k] = np.array(v, dtype=int)
-
-    def precompute_flow_weights(self):
-        self.flow_weights = np.ones(len(self.model._flows), dtype=np.float64)
-        self.timevarying_param_idx = {}
-        for param, idx in self.param_idx_table.items():
-            if not param.is_time_varying():
-                self.flow_weights[idx] *= param.get_value(0.0, {}, self.parameters)
-            else:
-                self.timevarying_param_idx[param] = idx
-
-    def _precompute_flow_weights_DEP(self):
-        """Calculate all static flow weights before running,
-        and build indices for time-varying weights"""
-        self.flow_weights = np.zeros(len(self.model._flows))
-        time_varying_weight_indices = []
-        for i, f in self._iter_non_function_flows:
-            weight_type = f.weight_type()
-            if weight_type == flows.WeightType.STATIC:
-                weight = f.get_weight_value(0, None, self.parameters)
-                self.flow_weights[i] = weight
-            elif weight_type == flows.WeightType.FUNCTION:
-                time_varying_weight_indices.append(i)
-
-        self.time_varying_weight_indices = np.array(time_varying_weight_indices, dtype=int)
-
-        self._map_blocks()
-
-    def _map_blocks(self):
-
-        flow_block_maps = {}
-        for i in self.time_varying_weight_indices:
-            f = self.model._flows[i]
-            key = (f.param, tuple(f.adjustments))
-            if key not in flow_block_maps:
-                flow_block_maps[key] = []
-            flow_block_maps[key].append(i)
-
-        self.flow_block_maps = dict(
-            [(k, np.array(v, dtype=int)) for k, v in flow_block_maps.items()]
-        )
-
     def _precompute_flow_maps(self):
         """Build fast-access arrays of flow indices"""
         f_pos_map = []
         f_neg_map = []
         for i, f in self._iter_non_function_flows:
-            if f.source:
-                f_neg_map.append((i, f.source.idx))
-            if f.dest:
-                f_pos_map.append((i, f.dest.idx))
-        for i, f in self._iter_function_flows:
             if f.source:
                 f_neg_map.append((i, f.source.idx))
             if f.dest:
@@ -211,6 +125,16 @@ class VectorizedRunner(ModelRunner):
 
         self._calculate_strain_infection_values(compartment_values, mixing_matrix)
 
+        model_variables = {
+            "time": time,
+            "compartment_values": compartment_values,
+            "computed_values": {},
+        }
+
+        self._cur_graph_outputs = self.run_graph_ts(
+            parameters=self.parameters, model_variables=model_variables
+        )
+
     def _apply_flow_weights_at_time(self, time, computed_values):
         """Calculate time dependent flow weights and insert them into our weights array
 
@@ -218,19 +142,14 @@ class VectorizedRunner(ModelRunner):
             time (float): Time in model.times coordinates
         """
 
-        # Compute flow value blocks; these are 'chunked' blocks of flows that have a common
-        # flow param/adjustment structure,
-        # but are still specified as operating on individual flows
-        # for (param, adjustments), flow_idx in self.flow_block_maps.items():
-        #     # value = get_model_param_value(param, time, computed_values, self.parameters, True)
-        #     value = param.get_value(time, computed_values, self.parameters)
-        #     for a in adjustments:
-        #         value = a.get_new_value(value, computed_values, time, self.parameters)
-        #     self.flow_weights[flow_idx] = value
-        flow_weights = self.flow_weights.copy()
+        # flow_weights = self.flow_weights.copy()
+        flow_weights = np.zeros(len(self.model._flows))
 
-        for param, idx in self.timevarying_param_idx.items():
-            flow_weights[idx] *= param.get_value(time, computed_values, self.parameters)
+        for i, f in enumerate(self.model._flows):
+            flow_weights[i] = self._cur_graph_outputs[f._graph_key]
+
+        # for param, idx in self.timevarying_param_idx.items():
+        #    flow_weights[idx] *= param.get_value(time, computed_values, self.parameters)
 
         return flow_weights
 
@@ -320,6 +239,18 @@ class VectorizedRunner(ModelRunner):
             self._infection_frequency[strain] = infection_frequency
             self._infection_frequency_flat[strain_idx] = infection_frequency
 
+    def _calc_computed_values(self, compartment_vals: np.ndarray, time: float) -> dict:
+        computed_values = {}
+        for k, proc in self.model._computed_value_processors.items():
+            computed_values[k] = proc.process(compartment_vals, computed_values, time)
+
+        # model_variables = {"compartment_values": compartment_vals, "time": time}
+
+        for k in self.model._computed_values_graph_dict:
+            computed_values[k] = self._cur_graph_outputs[f"computed_values.{k}"]
+
+        return computed_values
+
     def _get_flow_rates(self, compartment_vals: np.ndarray, time: float) -> np.ndarray:
         """Get current flow rates, equivalent to calling get_net_flow on all (non-function) flows
 
@@ -355,23 +286,7 @@ class VectorizedRunner(ModelRunner):
             self._timestep_deaths = flow_rates[self.death_flow_indices].sum()
             flow_rates[self._replacement_flow_idx] = self._timestep_deaths
 
-        self._apply_function_flow_rates(compartment_vals, flow_rates, computed_values, time)
-
         return flow_rates
-
-    def _apply_function_flow_rates(self, comp_vals, flow_rates, computed_values, time):
-        if self._iter_function_flows:
-            # Evaluate the function flows.
-            for flow_idx, flow in self._iter_function_flows:
-                net_flow = flow.get_net_flow(
-                    self.model.compartments,
-                    comp_vals,
-                    self.model._flows,
-                    flow_rates,
-                    computed_values,
-                    time,
-                )
-                flow_rates[flow_idx] = net_flow
 
     def _get_rates(self, comp_vals: np.ndarray, time: float) -> Tuple[np.ndarray, np.ndarray]:
         """Calculates inter-compartmental flow rates for a given state and time, as well

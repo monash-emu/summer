@@ -8,8 +8,8 @@ if TYPE_CHECKING:
 
 
 class Parameter(Variable):
-    def __init__(self, name: str):
-        super().__init__(name, "parameters")
+    def __init__(self, key: str):
+        super().__init__(key, "parameters")
 
     def __repr__(self):
         return f"Parameter {self.key}"
@@ -40,6 +40,7 @@ class ModelVariable(Variable):
 
 
 CompartmentValues = ModelVariable("compartment_values")
+ComputedValuesDict = ModelVariable("computed_values")
 Time = ModelVariable("time")
 
 
@@ -52,14 +53,9 @@ def is_func(param) -> bool:
     Returns:
         bool: Is a function or function wrapper
     """
-    from .param_impl import GraphFunction, PyFunction
+    from .param_impl import GraphObjectParameter
 
-    return (
-        isinstance(param, Function)
-        or callable(param)
-        or isinstance(param, GraphFunction)
-        or isinstance(param, PyFunction)
-    )
+    return isinstance(param, Function) or callable(param)
 
 
 def get_model_param_value(
@@ -85,7 +81,9 @@ def get_model_param_value(
         return param
     elif isinstance(param, GraphObject):
         sources = dict(
-            computed_values=computed_values, parameters=parameters, model_variables={"time": time}
+            computed_values=computed_values,
+            parameters=parameters,
+            model_variables={"time": time, "computed_values": computed_values},
         )
         return param.evaluate(**sources)
     elif isinstance(param, Variable):
@@ -191,8 +189,8 @@ def find_all_parameters(m: CompartmentalModel):
 
     # Initial population
 
-    ipop_params = extract_params(m._initial_population_distribution)
-    append_list(out_params, ipop_params, ("InitialPopulation", m._initial_population_distribution))
+    ipop_params = extract_params(m._init_pop_dist)
+    append_list(out_params, ipop_params, ("InitialPopulation", m._init_pop_dist))
 
     # Inside stratifications - we have retained some useful information...
     for s in m._stratifications:

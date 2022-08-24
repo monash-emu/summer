@@ -7,6 +7,7 @@ from numpy.testing import assert_allclose, assert_array_equal
 
 from summer import Compartment as C
 from summer import CompartmentalModel, StrainStratification, Stratification, adjust
+from summer.population import calculate_initial_population
 
 
 def test_strat_infectiousness__with_adjustments(backend):
@@ -26,7 +27,7 @@ def test_strat_infectiousness__with_adjustments(backend):
     )
     model.stratify_with(strat)
     assert_array_equal(
-        model.initial_population,
+        calculate_initial_population(model),
         np.array([90, 270, 540, 10, 30, 60, 0, 0, 0]),
     )
 
@@ -38,7 +39,7 @@ def test_strat_infectiousness__with_adjustments(backend):
     )
 
     # Do pre-iteration force of infection calcs
-    model._backend._prepare_time_step(0, model.initial_population)
+    model._backend._prepare_time_step(0, calculate_initial_population(model))
 
     # Get multipliers
     infectees = model.compartments[0:3]
@@ -70,7 +71,7 @@ def test_strat_infectiousness__with_multiple_adjustments(backend):
     )
     model.stratify_with(strat)
     assert_array_equal(
-        model.initial_population,
+        calculate_initial_population(model),
         np.array([90, 270, 540, 10, 30, 60, 0, 0, 0]),
     )
     # Stratify again, now with overwrites
@@ -80,7 +81,7 @@ def test_strat_infectiousness__with_multiple_adjustments(backend):
     )
     model.stratify_with(strat)
     assert_array_equal(
-        model.initial_population,
+        calculate_initial_population(model),
         np.array([45, 45, 135, 135, 270.0, 270, 5, 5, 15, 15, 30, 30, 0, 0, 0, 0, 0, 0]),
     )
 
@@ -91,7 +92,7 @@ def test_strat_infectiousness__with_multiple_adjustments(backend):
         np.array([0, 0, 0, 0, 0, 0, 1, 7, 1, 21, 1, 3.5, 0, 0, 0, 0, 0, 0]),
     )
     # Do pre-iteration force of infection calcs
-    model._backend._prepare_time_step(0, model.initial_population)
+    model._backend._prepare_time_step(0, calculate_initial_population(model))
 
     # Get multipliers
     infectees = model.compartments[0:6]

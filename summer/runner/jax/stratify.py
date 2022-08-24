@@ -74,17 +74,12 @@ def get_calculate_initial_pop(model: CompartmentalModel):
         # FIXME:
         # Work in progress; correctly recalculates non-parameterized
         # populations, but does not include population rebalances etc
-        distribution = model._initial_population_distribution
+        distribution = model._init_pop_dist
         initial_population = jnp.zeros(len(model._original_compartment_names))
-
-        if is_var(distribution, "parameters"):
-            distribution = parameters[distribution.name]
-        elif isinstance(distribution, Function) or isinstance(distribution, ModelParameter):
-            distribution = get_static_param_value(distribution, parameters)
 
         if isinstance(distribution, dict):
             for idx, comp in enumerate(model._original_compartment_names):
-                pop = distribution.get(comp.name, 0)
+                pop = get_static_param_value(distribution[comp.name], parameters)
                 initial_population = initial_population.at[idx].set(pop)
 
             for action in model.tracker.all_actions:

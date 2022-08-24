@@ -10,7 +10,7 @@ import summer.flows as flows
 from summer.adjust import Overwrite
 from summer.compute import binary_matrix_to_sparse_pairs, sparse_pairs_accum
 from summer.compartment import Compartment
-from summer.population import get_rebalanced_population
+from summer.population import calculate_initial_population
 
 from summer.parameters import get_model_param_value, get_static_param_value, is_var, Function
 from summer.parameters.param_impl import ModelParameter
@@ -88,14 +88,9 @@ class ModelRunner(ABC):
             f for f in self.model._flows if issubclass(f.__class__, flows.BaseEntryFlow)
         ]
         _transition_flows = [
-            f
-            for f in self.model._flows
-            if issubclass(f.__class__, flows.BaseTransitionFlow)
-            and not isinstance(f, flows.FunctionFlow)
+            f for f in self.model._flows if issubclass(f.__class__, flows.BaseTransitionFlow)
         ]
-        _function_flows = [f for f in self.model._flows if isinstance(f, flows.FunctionFlow)]
-        self._has_function_flows = bool(_function_flows)
-        self.model._flows = _exit_flows + _entry_flows + _transition_flows + _function_flows
+        self.model._flows = _exit_flows + _entry_flows + _transition_flows
         # Check we didn't miss any flows
         assert len(self.model._flows) == num_flows, "Some flows were lost when preparing to run."
 
@@ -107,13 +102,7 @@ class ModelRunner(ABC):
             if len(f.adjustments) and isinstance(f.adjustments[-1], Overwrite):
                 f.adjustments = [f.adjustments[-1]]
 
-        # Split flows into two groups for runtime.
-        self._iter_function_flows = [
-            (i, f) for i, f in enumerate(self.model._flows) if isinstance(f, flows.FunctionFlow)
-        ]
-        self._iter_non_function_flows = [
-            (i, f) for i, f in enumerate(self.model._flows) if not isinstance(f, flows.FunctionFlow)
-        ]
+        self._iter_non_function_flows = [(i, f) for i, f in enumerate(self.model._flows)]
 
         for k, proc in self.model._computed_value_processors.items():
             proc.prepare_to_run(self.model.compartments, self.model._flows)
@@ -369,42 +358,4 @@ class ModelRunner(ABC):
         Called to recalculate the initial population from either fixed dictionary, or a dict
         supplied as a parameter
         """
-        # FIXME:
-        # Work in progress; correctly recalculates non-parameterized
-        # populations, but does not include population rebalances etc
-        distribution = self.model._initial_population_distribution
-        initial_population = np.zeros_like(self.model._original_compartment_names, dtype=float)
-
-        if is_var(distribution, "parameters"):
-            distribution = self.parameters[distribution.name]
-        elif isinstance(distribution, Function) or isinstance(distribution, ModelParameter):
-            distribution = get_static_param_value(distribution, parameters)
-
-        if isinstance(distribution, dict):
-            for idx, comp in enumerate(self.model._original_compartment_names):
-                pop = distribution.get(comp.name, 0)
-                assert pop >= 0, f"Population for {comp.name} cannot be negative: {pop}"
-                initial_population[idx] = pop
-
-            comps = self.model._original_compartment_names
-
-            for action in self.model.tracker.all_actions:
-                if action.action_type == "stratify":
-                    strat = action.kwargs["strat"]
-                    # for strat in self.model._stratifications:
-                    # Stratify compartments, split according to split_proportions
-                    prev_compartment_names = comps  # copy.copy(self.compartments)
-                    comps = strat._stratify_compartments(comps)
-                    initial_population = strat._stratify_compartment_values(
-                        prev_compartment_names, initial_population, parameters
-                    )
-                elif action.action_type == "adjust_pop_split":
-                    initial_population = get_rebalanced_population(
-                        self.model, initial_population, parameters, **action.kwargs
-                    )
-            return initial_population
-        else:
-            raise TypeError(
-                "Initial population distribution must be a dict or a Function that returns one",
-                distribution,
-            )
+        return calculate_initial_population(self.model, parameters)

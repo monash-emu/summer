@@ -4,6 +4,8 @@ from numpy.testing import assert_array_equal
 
 from summer import Compartment, CompartmentalModel
 
+from summer.population import calculate_initial_population
+
 
 def test_create_model():
     model = CompartmentalModel(
@@ -82,10 +84,12 @@ def test_set_initial_population():
     model = CompartmentalModel(
         times=[0, 5], compartments=["S", "I", "R"], infectious_compartments=["I"]
     )
-    assert_array_equal(model.initial_population, np.array([0, 0, 0]))
+    CIP = calculate_initial_population
+
+    assert_array_equal(CIP(model), np.array([0, 0, 0]))
     model.set_initial_population({"S": 100})
-    assert_array_equal(model.initial_population, np.array([100, 0, 0]))
+    assert_array_equal(CIP(model), np.array([100, 0, 0]))
     model.set_initial_population({"I": 100})
-    assert_array_equal(model.initial_population, np.array([0, 100, 0]))
+    assert_array_equal(CIP(model), np.array([0, 100, 0]))
     model.set_initial_population({"R": 1, "S": 50, "I": 99})
-    assert_array_equal(model.initial_population, np.array([50, 99, 1]))
+    assert_array_equal(CIP(model), np.array([50, 99, 1]))

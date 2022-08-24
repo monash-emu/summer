@@ -12,8 +12,6 @@ import networkx
 import numpy as np
 import pandas as pd
 
-from computegraph.utils import is_var
-
 import summer.flows as flows
 from summer import stochastic
 from summer.adjust import BaseAdjustment, FlowParam, Multiply
@@ -22,9 +20,8 @@ from summer.compute import ComputedValueProcessor
 from summer.derived_outputs import DerivedOutputRequest, calculate_derived_outputs
 from summer.parameters import params
 
-# from summer.parameters.param_impl import replace_with_typed_params
-from summer.parameters.params import find_all_parameters, Function
 from summer.parameters.param_impl import finalize_parameters
+from summer.parameters.utils import build_model_graph
 from summer.runner import ReferenceRunner, VectorizedRunner
 from summer.runner.jax.runner import JaxRunner
 from summer.solver import SolverType, solve_ode
@@ -162,9 +159,6 @@ class CompartmentalModel:
             self._defer_actions = False
         self._finalized = False
 
-        self.builder = None
-        self._lazy_params = set()
-
     def _update_compartment_indices(self):
         """
         Update the mapping of compartment name to idx for quicker lookups.
@@ -194,23 +188,24 @@ class CompartmentalModel:
 
         error_msg = "Cannot set initial population after the model has been stratified"
         assert not self._stratifications, error_msg
-        self._initial_population_distribution = distribution
 
-        if isinstance(distribution, dict):
-            for idx, comp in enumerate(self.compartments):
-                pop = distribution.get(comp.name, 0)
-                assert pop >= 0, f"Population for {comp.name} cannot be negative: {pop}"
-                self.initial_population[idx] = pop
+        assert isinstance(distribution, dict)
 
-            self._original_init_population = self.initial_population.copy()
+        # Make sure we're not supplying any eroneous compartment names
+        for k, v in distribution.items():
+            assert k in self.compartments
 
-        elif not (is_var(distribution, "parameters") or isinstance(distribution, Function)):
-            raise TypeError("Initial population must be dict, Parameter, or Function", distribution)
+        self._init_pop_dist = distribution.copy()
+
+        # Ensure dictionary contains all comparments (default to 0 if not supplied)
+        for idx, comp in enumerate(self.compartments):
+            if comp.name not in self._init_pop_dist:
+                self._init_pop_dist[comp.name] = 0
 
     def finalize(self):
         if not self._finalized:
-            all_params = finalize_parameters(self, self.builder)
-            self._input_params = all_params
+            finalize_parameters(self)
+            self.graph = build_model_graph(self)
             self._finalized = True
 
     def set_validation_enabled(self, validate: bool):
@@ -581,43 +576,6 @@ class CompartmentalModel:
             expected_flow_count,
         )
 
-    def add_function_flow(
-        self,
-        name: str,
-        flow_rate_func: FlowRateFunction,
-        source: str,
-        dest: str,
-        source_strata: Optional[Dict[str, str]] = None,
-        dest_strata: Optional[Dict[str, str]] = None,
-        expected_flow_count: Optional[int] = None,
-    ):
-        """
-        A flow that transfers people from a source to a destination based on a user-defined function
-        This can be used to define more complex flows if required. See `flows.FunctionFlow` for more
-        details on the arguments to the function.
-
-        Args:
-            name: The name of the new flow.
-            flow_rate_func:  A function that returns the flow rate, before adjustments.
-            source: The name of the source compartment.
-            dest: The name of the destination compartment.
-            source_strata (optional): A whitelist of strata to filter the source compartments.
-            dest_strata (optional): A whitelist of strata to filter the destination compartments.
-            expected_flow_count (optional): Used to assert that a particular number of flows are
-                                            created.
-
-        """
-        self._add_transition_flow(
-            flows.FunctionFlow,
-            name,
-            flow_rate_func,
-            source,
-            dest,
-            source_strata,
-            dest_strata,
-            expected_flow_count,
-        )
-
     def _add_transition_flow(
         self,
         flow_cls,
@@ -931,8 +889,6 @@ class CompartmentalModel:
         self._update_compartment_indices()
 
         self.finalize()
-
-        # replace_with_typed_params(self, self.builder)
 
         self._set_backend(backend, backend_args)
         # self._backend.prepare_to_run(parameters)
@@ -1364,7 +1320,7 @@ class CompartmentalModel:
         assert name not in self._derived_output_requests, msg
         for k, v in func.kwargs.items():
             if isinstance(v, params.DerivedOutput):
-                source = v.name
+                source = v.key
                 assert (
                     source in self._derived_output_requests
                 ), f"Source {source} has not been requested."

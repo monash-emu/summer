@@ -17,8 +17,6 @@ from summer.parameters import Parameter, Function, Data
 from computegraph import ComputeGraph
 from computegraph.utils import expand_nested_dict, is_var
 
-from .abstract_parameter import AbstractParameter
-
 GraphObj = Union[Function, Data]
 
 
@@ -154,9 +152,9 @@ def label_parameters(pstruct: ParamStruct, pdict: dict, layer: list = None):
             cur_pstruct = pstruct[k]
         else:
             cur_pstruct = getattr(pstruct, k)
-        if isinstance(cur_pstruct, AbstractParameter):
+        if isinstance(cur_pstruct, Parameter):
             param_key = ".".join(layer + [k])
-            cur_pstruct._set_key(param_key)
+            cur_pstruct.set_key(param_key)
         elif isinstance(cur_pstruct, dict):
             label_parameters(cur_pstruct, v, layer + [k])
         elif isinstance(cur_pstruct, ParamStruct):
@@ -174,7 +172,7 @@ def find_key_from_obj(obj: Any, pydparams: ParamStruct, params: dict, layer=None
         else:
             cur_pydobj = getattr(pydparams, k)
         if cur_pydobj is obj:
-            if isinstance(cur_pydobj, ParamStruct) or isinstance(cur_pydobj, AbstractParameter):
+            if isinstance(cur_pydobj, ParamStruct) or isinstance(cur_pydobj, Parameter):
                 return ".".join(layer + [k])
             else:
                 raise TypeError("Cannot match against type", type(obj))
@@ -271,18 +269,18 @@ def parameter_class(constraint_func=is_real, desc: str = None, full_desc: str = 
     _desc = desc
     _full_desc = full_desc
 
-    class ConcreteParameter(AbstractParameter):
+    class ConcreteParameter(Parameter):
 
         constraint = constraint_func
         description = _desc
         full_description = _full_desc
 
         def __init__(self, value):
+            super().__init__(key=None)
             self.value = value
-            self._param_key = None
 
         def __repr__(self):
-            pkey = self._param_key or self.description or "param"
+            pkey = self.key or self.description or "param"
             return f"{pkey}({self.value})"
 
         @classmethod

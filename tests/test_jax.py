@@ -32,7 +32,7 @@ def test_model_mm_func():
 
 def test_model_multistrat_strains():
     parameters = {
-        "age_split": {"young": 0.8, "old": 0.2},
+        "age_split.young": 0.8,
         "contact_rate": 0.1,
         "strain_infect_adjust.wild_type": 1.1,
         "strain_infect_adjust.variant1": 0.9,
@@ -49,7 +49,13 @@ def test_model_multistrat_strains():
         model.set_initial_population(get_ipop_dist(1000.0, 0.4))
 
         strat = Stratification("age", ["young", "old"], ["S", "I", "R"])
-        strat.set_population_split(Parameter("age_split"))
+
+        pop_split = {
+            "young": Parameter("age_split.young"),
+            "old": 1.0 - Parameter("age_split.young"),
+        }
+
+        strat.set_population_split(pop_split)
         model.stratify_with(strat)
 
         model.add_infection_frequency_flow("infection", Parameter("contact_rate"), "S", "I")

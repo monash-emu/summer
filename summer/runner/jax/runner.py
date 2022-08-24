@@ -28,11 +28,7 @@ class JaxRunner(ModelRunner):
             [f.source.idx if f.source else 0 for i, f in self._iter_non_function_flows], dtype=int
         )
 
-        func_pops = np.array(
-            [f.source.idx if f.source else 0 for i, f in self._iter_function_flows], dtype=int
-        )
-
-        self.population_idx = np.concatenate((non_func_pops, func_pops))
+        self.population_idx = non_func_pops
 
         # Store indices of flows that are not population dependent
         self._non_pop_flow_idx = np.array(
@@ -76,15 +72,6 @@ class JaxRunner(ModelRunner):
         time_varying_weight_indices = []
         for i, f in self._iter_non_function_flows:
             # FIXME:
-            # Unlike vectorized runner, we just blindly calculate
-            # everything every timestep.  It's a bad scene,
-            # but let's just get things working for now...
-
-            # weight_type = f.weight_type()
-            # if weight_type == flows.WeightType.STATIC:
-            #    weight = f.get_weight_value(0, None, self.parameters)
-            #    self.flow_weights[i] = weight
-            # elif weight_type == flows.WeightType.FUNCTION:
             time_varying_weight_indices.append(i)
 
         self.time_varying_weight_indices = np.array(time_varying_weight_indices, dtype=int)
@@ -117,11 +104,6 @@ class JaxRunner(ModelRunner):
         f_pos_map = []
         f_neg_map = []
         for i, f in self._iter_non_function_flows:
-            if f.source:
-                f_neg_map.append((i, f.source.idx))
-            if f.dest:
-                f_pos_map.append((i, f.dest.idx))
-        for i, f in self._iter_function_flows:
             if f.source:
                 f_neg_map.append((i, f.source.idx))
             if f.dest:

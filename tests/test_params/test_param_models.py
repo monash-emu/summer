@@ -115,15 +115,13 @@ def test_param_model_computed_values():
 def test_param_initial_pop():
     model = CompartmentalModel((0, 100), ["S", "I", "R"], ["I"])
 
-    def get_ipop_dist(total, infected_prop):
-        num_infected = total * infected_prop
-        return {"S": total - num_infected, "I": num_infected, "R": 0}
+    total_pop = 1000.0
+    num_infected = total_pop * Parameter("infected_prop")
 
-    ipop_param = Parameter("initial_pop_distribution")
-
+    ipop_param = {"S": total_pop - num_infected, "I": num_infected}
     model.set_initial_population(ipop_param)
 
-    parameters = {"initial_pop_distribution": get_ipop_dist(1000.0, 0.4)}
+    parameters = {"infected_prop": 0.4}
     model.run(parameters=parameters)
     assert (model.outputs[0] == np.array((600, 400, 0))).all()
 

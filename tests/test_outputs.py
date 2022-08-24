@@ -370,26 +370,3 @@ def test_strat_model__with_age_and_starting_proportion__expect_ageing(backend):
         ]
     )
     assert_allclose(model.outputs, expected_arr, atol=0.1, verbose=True)
-
-def test_model__with_single_function_flow(backend):
-    """
-    Ensure that models with only function flows run correctly
-    """
-    model = CompartmentalModel(times=[0, 10], compartments=["S", "I", "R"], infectious_compartments=["I"])
-    model.set_initial_population(distribution={"S": 650, "I": 100, "R": 0})
-
-    def get_vaccination_flow_rate(flow, comp_names, comp_vals, flows, flow_rates, computed_values, time):
-        if time < 2:
-            # Vaccinate 10 people per day until day 5
-            return 10
-        elif 2 < time < 7:
-            # Vaccinate 5% of the total population per day until day 15
-            return 0.05 * comp_vals.sum()
-        else:
-            # After day 15 stop vaccinations, because we ran out of money
-            return 0
-    
-    # Use a custom function to model vaccinations
-    model.add_function_flow("vacinnation", flow_rate_func=get_vaccination_flow_rate, source="S", dest="R")
-
-    model.run(backend=backend)

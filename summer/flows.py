@@ -79,21 +79,6 @@ class BaseFlow(ABC):
 
         return flow_rate
 
-    def weight_type(self) -> str:
-        """Returns a WeightType enum value
-
-            'static': Fixed floating point value
-            'function': Calculated from a callable function
-
-        Returns:
-            bool: False if weight is time-varying, otherwise True
-        """
-        is_time_varying = is_func(self.param) or sum([is_func(a.param) for a in self.adjustments])
-        if not is_time_varying:
-            return WeightType.STATIC
-        else:
-            return WeightType.FUNCTION
-
     def update_compartment_indices(self, mapping: Dict[str, float]):
         """
         Update index which maps flow compartments to compartment value array.
@@ -499,47 +484,16 @@ class TransitionFlow(BaseTransitionFlow):
         return parameter_value * population
 
 
-class FunctionFlow(BaseTransitionFlow):
-    """
-    A flow that transfers people from a source to a destination based on a user-defined function.
-    Note that the rate is NOT multiplied by the size of the source compartment.
-    This can be used to define more complex flows if required.
-    Important to be careful that compartment sizes do not go negative with these flows, as this is
-    not guaranteed.
-
-    Args:
-        name: The flow name.
-        source: The source compartment.
-        dest: The destination compartment.
-        param: A function that returns the flow rate, before adjustments. See `get_net_flow` for
-        this function's arguments.
-        adjustments: Adjustments to the flow rate.
-
-    """
-
+class AbsoluteFlow(BaseTransitionFlow):
     def get_net_flow(
         self,
-        compartments: List[Compartment],
         compartment_values: np.ndarray,
-        flows: List[BaseFlow],
-        flow_rates: np.ndarray,
         computed_values: dict,
         time: float,
+        parameters: dict = None,
     ) -> float:
-        if callable(self.param):
-            # Plain python function
-            param = self.param
-        else:
-            # PyFunction ModelParameter object
-            param = self.param.func
-        flow_rate = param(
-            self, compartments, compartment_values, flows, flow_rates, computed_values, time
-        )
-        for adjustment in self.adjustments:
-            flow_rate = adjustment.get_new_value(flow_rate, time, computed_values)
-
-        return flow_rate
-
+        parameter_value = self.get_weight_value(time, computed_values, parameters)
+        return parameter_value
 
 class BaseInfectionFlow(BaseTransitionFlow):
     def __init__(

@@ -96,6 +96,8 @@ def test_strat_get_infection_multiplier__with_age_strat_and_simple_mixing(backen
     strat.set_mixing_matrix(mixing_matrix)
     model.stratify_with(strat)
 
+    model._backend.prepare_to_run()
+
     assert model._mixing_categories == [{"age": "child"}, {"age": "adult"}]
     assert model.compartments == [
         C("S", {"age": "child"}),
@@ -168,6 +170,8 @@ def test_strat_get_infection_multiplier__with_age_split_and_simple_mixing(backen
     strat.set_population_split({"child": 0.2, "adult": 0.8})
     model.stratify_with(strat)
 
+    model._backend.prepare_to_run()
+
     assert model._mixing_categories == [{"age": "child"}, {"age": "adult"}]
     assert model.compartments == [
         C("S", {"age": "child"}),
@@ -239,6 +243,8 @@ def test_strat_get_infection_multiplier__with_age_strat_and_mixing(backend):
     strat.set_population_split({"child": 0.2, "adult": 0.8})
     model.stratify_with(strat)
 
+    model._backend.prepare_to_run()
+
     assert model._mixing_categories == [{"age": "child"}, {"age": "adult"}]
     assert model.compartments == [
         C("S", {"age": "child"}),
@@ -307,6 +313,8 @@ def test_strat_get_infection_multiplier__with_double_strat_and_no_mixing(backend
     strat = Stratification("location", ["urban", "rural"], ["S", "I", "R"])
     model.stratify_with(strat)
 
+    model._backend.prepare_to_run()
+
     assert model._mixing_categories == [{}]
     assert model.compartments == [
         C("S", {"age": "child", "location": "urban"}),
@@ -326,7 +334,6 @@ def test_strat_get_infection_multiplier__with_double_strat_and_no_mixing(backend
     assert_array_equal(model.initial_population, expected_comp_vals)
 
     # Do pre-run force of infection calcs.
-    model._backend.prepare_to_run()
     expected_compartment_infectiousness = np.array([0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0])
     expected_category_matrix = np.array([[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]])
     expected_lookup = {n: 0 for n in range(12)}
@@ -377,6 +384,8 @@ def test_strat_get_infection_multiplier__with_double_strat_and_first_strat_mixin
     strat = Stratification("location", ["urban", "rural"], ["S", "I", "R"])
     model.stratify_with(strat)
 
+    model._backend.prepare_to_run()
+
     assert model._mixing_categories == [{"age": "child"}, {"age": "adult"}]
     assert model.compartments == [
         C("S", {"age": "child", "location": "urban"}),
@@ -396,7 +405,7 @@ def test_strat_get_infection_multiplier__with_double_strat_and_first_strat_mixin
     assert_array_equal(model.initial_population, expected_comp_vals)
 
     # Do pre-run force of infection calcs.
-    model._backend.prepare_to_run()
+
     exp_lookup = {0: 0, 1: 0, 2: 1, 3: 1, 4: 0, 5: 0, 6: 1, 7: 1, 8: 0, 9: 0, 10: 1, 11: 1}
     exp_matrix = np.array(
         [[1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0], [0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1]]
@@ -460,6 +469,8 @@ def test_strat_get_infection_multiplier__with_double_strat_and_second_strat_mixi
     strat.set_mixing_matrix(location_mixing)
     model.stratify_with(strat)
 
+    model._backend.prepare_to_run()
+
     assert model._mixing_categories == [{"location": "urban"}, {"location": "rural"}]
     assert model.compartments == [
         C("S", {"age": "child", "location": "urban"}),
@@ -479,7 +490,7 @@ def test_strat_get_infection_multiplier__with_double_strat_and_second_strat_mixi
     assert_array_equal(model.initial_population, expected_comp_vals)
 
     # Do pre-run force of infection calcs.
-    model._backend.prepare_to_run()
+
     exp_lookup = {0: 0, 1: 1, 2: 0, 3: 1, 4: 0, 5: 1, 6: 0, 7: 1, 8: 0, 9: 1, 10: 0, 11: 1}
     exp_matrix = np.array(
         [
@@ -548,6 +559,8 @@ def test_strat_get_infection_multiplier__with_double_strat_and_both_strats_mixin
     strat.set_mixing_matrix(lm)
     model.stratify_with(strat)
 
+    model._backend.prepare_to_run()
+
     expected_mixing = np.array(
         [
             [2 * 11, 2 * 13, 3 * 11, 3 * 13],
@@ -581,7 +594,7 @@ def test_strat_get_infection_multiplier__with_double_strat_and_both_strats_mixin
     assert_array_equal(model.initial_population, expected_comp_vals)
 
     # Do pre-run force of infection calcs.
-    model._backend.prepare_to_run()
+
     exp_lookup = {
         0: 0,  # S age: child location: urban -> children at urban
         1: 1,  # S age: child location: rural -> children at rural

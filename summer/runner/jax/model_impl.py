@@ -13,7 +13,6 @@ from .stratify import get_calculate_initial_pop
 from .derived_outputs import build_derived_outputs_runner
 
 from summer.parameters import get_model_param_value
-from summer.experimental.abstract_parameter import evaluate_lazy
 
 
 def clean_compartments(compartment_values: jnp.ndarray):
@@ -383,11 +382,6 @@ def build_run_model(runner, solver=None):
     calc_derived_outputs = build_derived_outputs_runner(runner.model)
 
     def run_model(parameters):
-        lazy_parameters = {
-            f"_lazy_{hash(p)}": evaluate_lazy(p, parameters) for p in runner.model._lazy_params
-        }
-
-        parameters.update(lazy_parameters)
 
         initial_population = calc_initial_pop(parameters)
         compartment_infectiousness = get_compartment_infectiousness(parameters)

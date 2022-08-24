@@ -1,6 +1,6 @@
 import numpy as np
 
-from summer import has_jax
+from computegraph.jaxify import has_jax
 from summer.solver import SolverType
 
 from .model_setup import get_test_model
