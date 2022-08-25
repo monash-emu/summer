@@ -68,26 +68,41 @@ class VectorizedRunner(ModelRunner):
                 self._has_replacement = True
                 self._replacement_flow_idx = i
 
+        self._precompute_flow_maps()
+        self._build_infectious_multipliers_lookup()
+
     def prepare_dynamic(self, parameters: dict = None):
         """Do all precomputation here"""
 
-        super().prepare_dynamic(parameters)
+        # super().prepare_dynamic(parameters)
+        self.parameters = parameters
+        self.model.initial_population = self.calculate_initial_population(self.parameters)
 
         #
         source_inputs = {"parameters": parameters}
 
         # Can replace this with calibration parameters later
         dyn_vars = self.model.graph.get_input_variables()
+
+        # Graph frozen for all non-calibration parameters
         self.param_frozen_cg = self.model.graph.freeze(dyn_vars, source_inputs)
 
-        ts_vars = [v for v in dyn_vars if is_var(v, "model_variables")]
+        # Query model_variables (ie time-varying sources)
+        ts_vars = self.param_frozen_cg.query("model_variables")
+
+        # Subgraph that does not contain model_variables (ie anything time varying)
+        static_cg = self.param_frozen_cg.filter(exclude=ts_vars)
+        self._static_graph_vals = static_cg.get_callable()(parameters=parameters)
+
+        # Subgraph whose only dynamic inputs are model_variables
         self.timestep_cg = self.param_frozen_cg.freeze(ts_vars, source_inputs)
 
         self.run_graph_ts = self.timestep_cg.get_callable()
 
-        self._precompute_flow_maps()
-
-        self._build_infectious_multipliers_lookup()
+        self._compartment_infectiousness = {
+            strain_name: self._get_compartment_infectiousness_for_strain(strain_name)
+            for strain_name in self.model._disease_strains
+        }
 
         # Initialize arrays for infectious multipliers
         # FIXME Put this in its own function, this is getting messy again
@@ -142,14 +157,10 @@ class VectorizedRunner(ModelRunner):
             time (float): Time in model.times coordinates
         """
 
-        # flow_weights = self.flow_weights.copy()
         flow_weights = np.zeros(len(self.model._flows))
 
         for i, f in enumerate(self.model._flows):
             flow_weights[i] = self._cur_graph_outputs[f._graph_key]
-
-        # for param, idx in self.timevarying_param_idx.items():
-        #    flow_weights[idx] *= param.get_value(time, computed_values, self.parameters)
 
         return flow_weights
 

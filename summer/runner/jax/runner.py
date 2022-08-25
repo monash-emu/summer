@@ -4,7 +4,7 @@ import summer.flows as flows
 from summer.runner.model_runner import ModelRunner
 
 
-class JaxRunner(ModelRunner):
+class __JaxRunner(ModelRunner):
     """
     An optimized, but less accessible model runner.
     """

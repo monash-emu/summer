@@ -208,9 +208,17 @@ class ModelRunner(ABC):
         # Set all infectious compartments to be equally infectious.
         compartment_infectiousness[infectious_mask] = 1
 
+        # for strat in self.model._stratifications:
+        #     for comp_name, adjustments in strat.infectiousness_adjustments.items():
+        #         for stratum, adjustment in adjustments.items():
+        # if adjustment:
+        #             adj_comps = self.model.get_matching_compartments(comp_name, {strat.name: stratum})
+        #             for c in adj_comps:
+        #                 inf_value = compartment_infectiousness[c.idx]
+
         # Apply infectiousness adjustments.
         for idx, comp in enumerate(self.model.compartments):
-            inf_value = compartment_infectiousness[idx]
+            infect_value = compartment_infectiousness[idx]
             for strat in self.model._stratifications:
                 # strat_fs = frozenset({strat.name})
                 for comp_name, adjustments in strat.infectiousness_adjustments.items():
@@ -220,13 +228,21 @@ class ModelRunner(ABC):
                                 strat.name, stratum
                             )
                             if should_apply_adjustment:
+                                # FIXME: Should be able to look up _graph_key here
                                 # Cannot use time-varying functions for infectiousness adjustments,
                                 # because this is calculated before the model starts running.
-                                inf_value = adjustment.get_new_value(
-                                    inf_value, None, None, self.parameters
-                                )
+                                adj_value = self._static_graph_vals[adjustment.param._graph_key]
+                                if isinstance(adjustment, Overwrite):
+                                    infect_value = adj_value
+                                else:
+                                    infect_value = adj_value * infect_value
+                                # else:
 
-            compartment_infectiousness[idx] = inf_value
+                                # inf_value = adjustment.get_new_value(
+                                #    inf_value, None, None, self.parameters
+                                # )
+
+            compartment_infectiousness[idx] = infect_value
 
         if strain != self.model._DEFAULT_DISEASE_STRAIN:
             # FIXME: If there are multiple strains, but one of them is _DEFAULT_DISEASE_STRAIN

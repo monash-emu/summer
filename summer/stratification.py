@@ -290,17 +290,17 @@ class Stratification:
         msg = "Strain stratifications cannot have a mixing matrix."
         assert not self.is_strain(), msg
 
-        msg = "Mixing matrix must be a NumPy array, or return a NumPy array."
-        assert (
-            (isinstance(mixing_matrix, np.ndarray))
-            or isinstance(mixing_matrix, GraphObject)
-            or is_func(mixing_matrix)
-        ), msg
+        # msg = "Mixing matrix must be a NumPy array, or return a NumPy array."
+        # assert (
+        #    (isinstance(mixing_matrix, np.ndarray))
+        #    or isinstance(mixing_matrix, GraphObject)
+        #    or is_func(mixing_matrix)
+        # ), msg
 
-        if isinstance(mixing_matrix, np.ndarray):
-            num_strata = len(self.strata)
-            msg = f"Mixing matrix must have both {num_strata} rows and {num_strata} columns."
-            assert mixing_matrix.shape == (num_strata, num_strata), msg
+        # if isinstance(mixing_matrix, np.ndarray):
+        #    num_strata = len(self.strata)
+        #    msg = f"Mixing matrix must have both {num_strata} rows and {num_strata} columns."
+        #    assert mixing_matrix.shape == (num_strata, num_strata), msg
 
         self.mixing_matrix = mixing_matrix
 
@@ -311,14 +311,19 @@ class Stratification:
         Returns the new compartments.
         """
         new_comps = []
+        idx = 0
         for old_comp in comps:
             should_stratify = old_comp.has_name_in_list(self.compartments)
             if should_stratify:
                 for stratum in self.strata:
                     new_comp = old_comp.stratify(self.name, stratum)
+                    new_comp.idx = idx
                     new_comps.append(new_comp)
+                    idx += 1
             else:
+                old_comp.idx = idx
                 new_comps.append(old_comp)
+                idx += 1
 
         return new_comps
 

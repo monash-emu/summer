@@ -1,14 +1,21 @@
+from __future__ import annotations
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from summer import CompartmentalModel
+
 from typing import Tuple, List, Iterable, Any
 from numbers import Real
 
 from computegraph.types import GraphObject, Data, Function
-from computegraph.utils import defer
+from computegraph.utils import defer, invert_dict, assign
+from computegraph import ComputeGraph
+from computegraph.jaxify import get_modules
+
+fnp = get_modules()["numpy"]
 
 from summer.parameters.params import (
     build_args,
-    is_var,
-    Function,
-    Variable,
     ComputedValue,
     ComputedValuesDict,
     Time,
@@ -24,20 +31,6 @@ class ModelParameter:
 
     def is_time_varying(self):
         return False
-
-
-class FloatParameter(ModelParameter):
-    def __init__(self, value):
-        self.value = value
-
-    def get_value(self, time: float, computed_values: dict, parameters: dict):
-        return self.value
-
-    def __hash__(self):
-        return hash(self.value)
-
-    def __repr__(self):
-        return f"FloatParameter: {self.value}"
 
 
 class ComputedValueParameter(ModelParameter):
@@ -146,6 +139,27 @@ def get_reparameterized_dict(d):
     return {k: get_modelparameter_from_param(v) for k, v in d.items()}
 
 
+def map_flow_keys(m: CompartmentalModel) -> dict:
+
+    from summer.adjust import Overwrite
+
+    realised_flows = {}
+
+    for i, f in enumerate(m._flows):
+        full_flow = [f.param.obj]
+        for a in f.adjustments:
+            if isinstance(a, Overwrite):
+                full_flow = [a.param.obj]
+            else:
+                full_flow.append(a.param.obj)
+        out_func = full_flow[0]
+        for fparam in full_flow[1:]:
+            out_func = out_func * fparam
+        realised_flows[i] = GraphObjectParameter(out_func)
+
+    return realised_flows
+
+
 def finalize_parameters(model):
     """Called as part of model.finalize
     This ensures all parameters (and function calls) have concrete computegraph.Variable
@@ -156,7 +170,29 @@ def finalize_parameters(model):
         model: The CompartmentalModel to finalize
     """
 
-    all_params = []
+    obj_table = {}
+
+    def register_obj_key(obj, base_name, unique=False):
+        if isinstance(obj, dict):
+            for k, v in obj.items():
+                register_obj_key(v, f"{base_name}_{k}")
+        elif isinstance(obj, GraphObjectParameter):
+            if obj.obj not in obj_table:
+                if unique:
+                    name = base_name
+                    if name in obj_table.values():
+                        raise KeyError("Object with name {name} already exists")
+                else:
+                    if base_name in obj_table.values():
+                        name = f"{base_name}_{len(obj_table)}"
+                    else:
+                        name = base_name
+                obj_table[obj.obj] = name
+            obj_key = obj_table[obj.obj]
+            obj._graph_key = obj_key
+            return obj_key
+        else:
+            raise TypeError(obj, base_name)
 
     # Flow parameters and adjustments
     for f in model._flows:
@@ -166,22 +202,75 @@ def finalize_parameters(model):
             if adj is not None:
                 adj.param = get_modelparameter_from_param(adj.param)
 
+    realised_flows = map_flow_keys(model)
+
+    for i, f in enumerate(model._flows):
+        fpkey = register_obj_key(realised_flows[i], f"{f.name}_rate")
+        f._graph_key = fpkey
+
     # Initial population
     model._init_pop_dist = get_reparameterized_dict(model._init_pop_dist)
+    register_obj_key(model._init_pop_dist, "init_pop_dist")
 
+    # Keep track of matrices so we can Kron them together later
+    mixing_matrices = []
     # Stratifications - population split, infectiousness adjustments, mixing matrix
     for s in model._stratifications:
         s.population_split = get_reparameterized_dict(s.population_split)
+        register_obj_key(s.population_split, f"{s.name}_pop_split")
 
         for comp, adjustments in s.infectiousness_adjustments.items():
-            for strain, adjustment in adjustments.items():
+            for stratum, adjustment in adjustments.items():
                 if adjustment is not None:
                     param = get_modelparameter_from_param(adjustment.param)
                     adjustment.param = param
+                    register_obj_key(adjustment.param, f"{s.name}_iadj_{comp}_{stratum}", True)
 
         if s.mixing_matrix is not None:
             param = get_modelparameter_from_param(s.mixing_matrix, True)
             s.mixing_matrix = param
+            matrix_key = f"{s.name}_mixing_matrix"
+            register_obj_key(s.mixing_matrix, matrix_key, True)
+            mixing_matrices.append(param.obj)
+
+    if len(mixing_matrices) == 0:
+        param = get_modelparameter_from_param(Data(fnp.array([[1.0]])))
+        register_obj_key(param, "mixing_matrix", True)
+        model.mixing_matrix = param
+    elif len(mixing_matrices) == 1:
+        mm = mixing_matrices[0]
+        param = get_modelparameter_from_param(defer(assign)(mm))
+        register_obj_key(param, "mixing_matrix", True)
+        model.mixing_matrix = param
+    else:
+
+        def compute_final_matrix(base_matrix, *args):
+            cur_matrix = base_matrix
+            for m in args:
+                cur_matrix = fnp.kron(cur_matrix, m)
+            return cur_matrix
+
+        final_mat_func = defer(compute_final_matrix)(*mixing_matrices)
+        param = get_modelparameter_from_param(final_mat_func)
+        model.mixing_matrix = param
+        register_obj_key(param, "mixing_matrix", True)
+
+    for k, v in model._computed_values_graph_dict.items():
+        name = f"computed_values.{k}"
+        register_obj_key(GraphObjectParameter(v), name, True)
+
+    # Capture computed values in dictionary so that
+    # 'old-style' summer functions (t,cv) can use them
+    def capture_kwargs(*args, **kwargs):
+        return kwargs
+
+    cv_func = Function(capture_kwargs, kwargs=model._computed_values_graph_dict)
+    cv_func.node_name = "gather_cv"
+    register_obj_key(GraphObjectParameter(cv_func), "computed_values", True)
+
+    model_graph = invert_dict(obj_table)
+
+    model.graph = ComputeGraph(model_graph)
 
     # Computed values
     # cv_graph = {}

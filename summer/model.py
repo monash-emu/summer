@@ -12,6 +12,8 @@ import networkx
 import numpy as np
 import pandas as pd
 
+from computegraph import ComputeGraph
+
 import summer.flows as flows
 from summer import stochastic
 from summer.adjust import BaseAdjustment, FlowParam, Multiply
@@ -21,9 +23,7 @@ from summer.derived_outputs import DerivedOutputRequest, calculate_derived_outpu
 from summer.parameters import params
 
 from summer.parameters.param_impl import finalize_parameters
-from summer.parameters.utils import build_model_graph
 from summer.runner import ReferenceRunner, VectorizedRunner
-from summer.runner.jax.runner import JaxRunner
 from summer.solver import SolverType, solve_ode
 from summer.stratification import Stratification
 from summer.utils import get_scenario_start_index, ref_times_to_dti
@@ -102,7 +102,7 @@ class CompartmentalModel:
 
         error_msg = "Infectious compartments must be a subset of compartments"
         assert all(n in compartments for n in infectious_compartments), error_msg
-        self.compartments = [Compartment(n) for n in compartments]
+        self.compartments = [Compartment(n, idx=i) for i, n in enumerate(compartments)]
 
         # Compartment name lookup; needs to be present before adding any flows
         self._update_compartment_name_map()
@@ -113,6 +113,7 @@ class CompartmentalModel:
         self._original_compartment_names = [Compartment.deserialize(n) for n in compartments]
         # Keeps track of Stratifications that have been applied.
         self._stratifications = []
+        self.stratifications = {}
         # Flows to be applied to the model compartments
         self._flows = []
 
@@ -205,8 +206,19 @@ class CompartmentalModel:
     def finalize(self):
         if not self._finalized:
             finalize_parameters(self)
-            self.graph = build_model_graph(self)
             self._finalized = True
+
+    def get_object_graph(self, obj) -> ComputeGraph:
+        """Return the ComputeGraph for this object
+
+        Args:
+            obj: Any summer object with a graph_key
+        """
+        if isinstance(obj, dict):
+            targets = [v._graph_key for v in obj.values()]
+        else:
+            targets = obj._graph_key
+        return self.graph.filter(targets)
 
     def set_validation_enabled(self, validate: bool):
         """
@@ -777,6 +789,7 @@ class CompartmentalModel:
                     )
 
         self._stratifications.append(strat)
+        self.stratifications[strat.name] = strat
 
         self.tracker.append_action(ActionType.STRATIFY, strat=strat)
 
@@ -926,7 +939,7 @@ class CompartmentalModel:
         elif backend == BackendType.VECTORIZED:
             self._backend = VectorizedRunner(self, **backend_args)
         elif backend == BackendType.JAX:
-            self._backend = JaxRunner(self, **backend_args)
+            self._backend = _JaxRunner(self, **backend_args)
         else:
             msg = f"Invalid backend: {backend}"
             raise ValueError(msg)
@@ -1398,4 +1411,5 @@ class CompartmentalModel:
     def get_input_parameters(self):
         if not self._finalized:
             raise Exception("Cannot trace input parameters before model is finalized")
-        return self._input_params
+        all_in_var = self.graph.get_input_variables()
+        return set([v.key for v in all_in_var if v.source == "parameters"])

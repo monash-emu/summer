@@ -30,14 +30,6 @@ class ModelBuilder:
         self._params_expanded = expand_nested_dict(params, include_parents=True)
         self.params = self._pyd_params = param_class(**params)
         label_parameters(self.params, params)
-        self.input_graph = {}
-
-        self.required_outputs = set()
-
-    def add_output(self, key: str, graph_obj: GraphObj):
-        if key in self.input_graph:
-            raise Exception(f"Key {key} already exists in graph as {self.input_graph[key]}")
-        self.input_graph[key] = graph_obj
 
     def set_model(self, model: CompartmentalModel):
         self.model = model
@@ -82,11 +74,6 @@ class ModelBuilder:
                 raise KeyError(f"Parameter {key} not found in input parameters")
         return Parameter(key)
 
-    def get_output(self, key):
-        if key not in self.input_graph:
-            raise KeyError(f"{key} does not exist in builder outputs")
-        return Parameter(key)
-
     def _get_value(self, key: str):
         """Return the initial parameter value for the given key
 
@@ -116,7 +103,7 @@ class ModelBuilder:
 
     def get_jax_runner(self, jit=True, solver=None):
         self.model.finalize()
-        run_everything, run_inputs, _, _ = get_full_runner(self, True, solver=solver)
+        run_everything, _, _ = get_full_runner(self, True, solver=solver)
         if jit:
             from jax import jit as _jit
 
@@ -124,10 +111,7 @@ class ModelBuilder:
         return run_everything
 
     def get_input_parameters(self):
-        cg = ComputeGraph(self.input_graph)
-        model_p = self.model.get_input_parameters()
-        cg_p = [p.name for p in cg.get_input_variables() if p.source == "parameters"]
-        return model_p.union(cg_p).difference(self.input_graph)
+        return self.model.get_input_parameters()
 
     def get_default_parameters(self) -> dict:
         default_params = {
@@ -215,8 +199,6 @@ def find_obj_from_key(key: str, pydparams: ParamStruct) -> Any:
 
 
 def get_full_runner(builder, use_jax=False, solver=None):
-    graph_run = ComputeGraph(builder.input_graph).get_callable()
-
     if use_jax:
         from summer.runner.jax.util import get_runner
         from summer.runner.jax.model_impl import build_run_model
@@ -232,9 +214,6 @@ def get_full_runner(builder, use_jax=False, solver=None):
         if parameters is not None:
             params_base.update(parameters)
 
-        graph_outputs = graph_run(parameters=params_base)
-        params_base.update(graph_outputs)
-
         model_params = {k: v for k, v in params_base.items() if k in model_input_p}
 
         if use_jax:
@@ -243,19 +222,8 @@ def get_full_runner(builder, use_jax=False, solver=None):
             builder.model.run(parameters=model_params, **kwargs)
             return builder.model
 
-    def run_inputs(param_updates=None):
-        parameters = builder._params_expanded.copy()
-        if param_updates is not None:
-            parameters.update(param_updates)
-
-        graph_outputs = graph_run(parameters=parameters)
-        parameters.update(graph_outputs)
-
-        model_params = {k: v for k, v in parameters.items() if k in model_input_p}
-        return model_params
-
     if use_jax:
-        return run_everything, run_inputs, jax_run_func, jax_runner_dict
+        return run_everything, jax_run_func, jax_runner_dict
     else:
         return run_everything
 

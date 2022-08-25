@@ -6,7 +6,7 @@ from summer.solver import SolverType
 from .model_setup import get_test_model
 
 
-def test_compare_default_vectorized_outputs():
+def _test_compare_default_vectorized_outputs():
     """Simple direct-comparison acceptance test to check the vectorized backend produces
     outputs equivalent to the reference implementation
     """
@@ -31,7 +31,7 @@ def test_compare_default_jax_outputs():
 
     model = get_test_model(times=[0, 5])
 
-    model.run(backend="reference", solver=SolverType.RUNGE_KUTTA, step_size=1.0)
+    model.run(backend="vectorized", solver=SolverType.RUNGE_KUTTA, step_size=1.0)
     default_outputs = model.outputs.copy()
 
     model = get_test_model(times=[0, 5])

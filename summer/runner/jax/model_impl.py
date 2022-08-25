@@ -7,6 +7,8 @@ from jax import numpy as jnp
 from summer.runner.jax import ode
 from summer.runner.jax import solvers
 
+from summer.runner import VectorizedRunner
+
 from summer.solver import SolverType
 
 from .stratify import get_calculate_initial_pop
@@ -75,7 +77,7 @@ def build_get_infectious_multipliers(runner):
 
     # FIXME: This could desparately use a tidy-up - all the indexing is a nightmare
     def get_infectious_multipliers(
-        time, compartment_values, parameters, compartment_infectiousness
+        time, compartment_values, cur_graph_outputs, compartment_infectiousness
     ):
 
         infection_frequency = {}
@@ -83,7 +85,7 @@ def build_get_infectious_multipliers(runner):
 
         full_multipliers = jnp.ones(len(runner.infectious_flow_indices))
 
-        mm = get_mixing_matrix(time, parameters)
+        mm = cur_graph_outputs["mixing_matrix"]  # get_mixing_matrix(time, parameters)
         cat_pops = category_matrix @ compartment_values
 
         for strain_idx, strain in enumerate(runner.model._disease_strains):
@@ -128,19 +130,18 @@ def build_get_infectious_multipliers(runner):
     return get_infectious_multipliers
 
 
-def build_get_flow_weights(runner):
+def build_get_flow_weights(runner: VectorizedRunner):
 
-    flow_block_maps = flatten_fbm(runner.flow_block_maps)
+    m = runner.model
 
-    def get_flow_weights(static_flow_weights, computed_values, parameters, time):
-        flow_weights = static_flow_weights.copy()
-        for (param, adjustments, flow_idx) in flow_block_maps:
-            value = param.get_value(time, computed_values, parameters)
+    def get_flow_weights(cur_graph_outputs):
 
-            # value = get_model_param_value(param, time, computed_values, parameters, True)
-            for a in adjustments:
-                value = a.get_new_value(value, computed_values, time, parameters)
-            flow_weights = flow_weights.at[flow_idx].set(value)
+        flow_weights = jnp.zeros(len(m._flows))
+
+        for i, f in enumerate(m._flows):
+            val = cur_graph_outputs[f._graph_key]
+            flow_weights = flow_weights.at[i].set(val)
+
         return flow_weights
 
     return get_flow_weights
@@ -166,29 +167,35 @@ def build_calc_computed_values(runner):
     return calc_computed_values
 
 
-def build_get_flow_rates(runner):
+def build_get_flow_rates(runner, ts_graph_func):
 
     calc_computed_values = build_calc_computed_values(runner)
     get_flow_weights = build_get_flow_weights(runner)
     get_infectious_multipliers = build_get_infectious_multipliers(runner)
 
-    flow_weights_base = jnp.array(runner.flow_weights)
+    # flow_weights_base = jnp.array(runner.flow_weights)
 
     population_idx = jnp.array(runner.population_idx)
     infectious_flow_indices = jnp.array(runner.infectious_flow_indices)
 
-    def get_flow_rates(compartment_values: jnp.array, time, parameters, model_data):
+    def get_flow_rates(compartment_values: jnp.array, time, static_graph_vals, model_data):
 
         # COULD BE JITTED
         compartment_values = clean_compartments(compartment_values)
 
         # runner._prepare_time_step(time, compartment_vals)
+        sources = {
+            "model_variables": {"time": time, "compartment_values": compartment_values},
+            "static_inputs": static_graph_vals,
+        }
+
+        cur_graph_outputs = ts_graph_func(**sources)
 
         # JITTED
-        computed_values = calc_computed_values(compartment_values, time, parameters)
+        # computed_values = calc_computed_values(compartment_values, time, parameters)
 
         # JITTED
-        flow_weights = get_flow_weights(flow_weights_base, computed_values, parameters, time)
+        flow_weights = get_flow_weights(cur_graph_outputs)
 
         populations = compartment_values[population_idx]
 
@@ -203,13 +210,13 @@ def build_get_flow_rates(runner):
         # Calculate infection flows
         # JITTED
         infect_mul = get_infectious_multipliers(
-            time, compartment_values, parameters, model_data["compartment_infectiousness"]
+            time, compartment_values, cur_graph_outputs, model_data["compartment_infectiousness"]
         )
         flow_rates = flow_rates.at[infectious_flow_indices].set(
             flow_rates[infectious_flow_indices] * infect_mul
         )
 
-        return flow_rates, computed_values
+        return flow_rates, cur_graph_outputs["computed_values"]
 
     return get_flow_rates
 
@@ -230,12 +237,12 @@ def build_get_compartment_rates(runner):
     return get_compartment_rates
 
 
-def build_get_rates(runner):
-    get_flow_rates = build_get_flow_rates(runner)
+def build_get_rates(runner, ts_graph_func):
+    get_flow_rates = build_get_flow_rates(runner, ts_graph_func)
     get_compartment_rates = build_get_compartment_rates(runner)
 
-    def get_rates(compartment_values, time, parameters, model_data):
-        flow_rates, _ = get_flow_rates(compartment_values, time, parameters, model_data)
+    def get_rates(compartment_values, time, static_graph_vals, model_data):
+        flow_rates, _ = get_flow_rates(compartment_values, time, static_graph_vals, model_data)
         comp_rates = get_compartment_rates(compartment_values, flow_rates)
 
         return flow_rates, comp_rates
@@ -341,8 +348,33 @@ def build_compartment_infectiousness_calc(model):
     return get_compartment_infectiousness
 
 
-def build_run_model(runner, solver=None):
-    rates_funcs = build_get_rates(runner)
+def build_run_model(runner, base_params=None, dyn_params=None, solver=None):
+
+    if dyn_params is None:
+        dyn_params = runner.model.graph.get_input_variables()
+
+    # Graph frozen for all non-calibration parameters
+    if base_params is None:
+        base_params = {}
+
+    source_inputs = {"parameters": base_params}
+
+    ts_vars = runner.model.graph.query("model_variables")
+
+    dyn_params = set(dyn_params).union(set(ts_vars))
+    print(dyn_params)
+
+    param_frozen_cg = runner.model.graph.freeze(dyn_params, source_inputs)
+
+    # static_cg = param_frozen_cg.filter(exclude=ts_vars)
+    # static_graph_func = static_cg.get_callable()(parameters=base_params)
+
+    timestep_cg, static_cg = param_frozen_cg.freeze(ts_vars)
+
+    timestep_graph_func = timestep_cg.get_callable()
+    static_graph_func = static_cg.get_callable()
+
+    rates_funcs = build_get_rates(runner, timestep_graph_func)
     get_rates = rates_funcs["get_rates"]
     get_flow_rates = rates_funcs["get_flow_rates"]
 
@@ -350,26 +382,32 @@ def build_run_model(runner, solver=None):
 
     get_flows_for_outputs = vmap(get_flow_rates, in_axes=(0, 0, None, None), out_axes=(0))
 
-    def get_comp_rates(comp_vals, t, parameters, model_data):
-        return get_rates(comp_vals, t, parameters, model_data)[1]
+    def get_comp_rates(comp_vals, t, static_graph_vals, model_data):
+        return get_rates(comp_vals, t, static_graph_vals, model_data)[1]
 
     if solver is None or solver == SolverType.SOLVE_IVP:
         solver = SolverType.ODE_INT
 
     if solver == SolverType.ODE_INT:
 
-        def get_ode_solution(initial_population, times, parameters, model_data):
-            return ode.odeint(get_comp_rates, initial_population, times, parameters, model_data)
+        def get_ode_solution(initial_population, times, static_graph_vals, model_data):
+            return ode.odeint(
+                get_comp_rates, initial_population, times, static_graph_vals, model_data
+            )
 
     elif solver == SolverType.RUNGE_KUTTA:
 
-        def get_ode_solution(initial_population, times, parameters, model_data):
-            return solvers.rk4(get_comp_rates, initial_population, times, parameters, model_data)
+        def get_ode_solution(initial_population, times, static_graph_vals, model_data):
+            return solvers.rk4(
+                get_comp_rates, initial_population, times, static_graph_vals, model_data
+            )
 
     elif solver == SolverType.EULER:
 
-        def get_ode_solution(initial_population, times, parameters, model_data):
-            return solvers.euler(get_comp_rates, initial_population, times, parameters, model_data)
+        def get_ode_solution(initial_population, times, static_graph_vals, model_data):
+            return solvers.euler(
+                get_comp_rates, initial_population, times, static_graph_vals, model_data
+            )
 
     else:
         raise NotImplementedError("Incompatible SolverType for Jax runner", solver)
@@ -383,13 +421,15 @@ def build_run_model(runner, solver=None):
 
     def run_model(parameters):
 
+        static_graph_vals = static_graph_func(parameters=parameters)
         initial_population = calc_initial_pop(parameters)
+
         compartment_infectiousness = get_compartment_infectiousness(parameters)
         model_data = {"compartment_infectiousness": compartment_infectiousness}
 
-        outputs = get_ode_solution(initial_population, times, parameters, model_data)
+        outputs = get_ode_solution(initial_population, times, static_graph_vals, model_data)
 
-        out_flows, out_cv = get_flows_for_outputs(outputs, times, parameters, model_data)
+        out_flows, out_cv = get_flows_for_outputs(outputs, times, static_graph_vals, model_data)
 
         model_variables = {"outputs": outputs, "flows": out_flows, "computed_values": out_cv}
 
@@ -407,6 +447,10 @@ def build_run_model(runner, solver=None):
         "get_compartment_infectiousness": get_compartment_infectiousness,
         "get_ode_solution": get_ode_solution,
         "calc_derived_outputs": calc_derived_outputs,
+        "timestep_graph_func": timestep_graph_func,
+        "timestep_cg": timestep_cg,
+        "static_cg": static_cg,
+        "static_graph_func": static_graph_func,
     }
 
     return run_model, runner_dict

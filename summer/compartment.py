@@ -35,13 +35,14 @@ class Compartment:
         self,
         name: str,
         strata: Optional[Dict[str, str]] = None,
-        tags: Optional[list] = None
+        idx: Optional[int] = None,
+        tags: Optional[list] = None,
     ):
         assert type(name) is str, "Name must be a string, not %s." % type(name)
         self.name = name
         self.strata = strata or {}
         self._str = self.serialize()
-        self.idx = None
+        self.idx = idx
         self._strata = frozenset(self.strata.items())
         self.tags = tags or []
 
