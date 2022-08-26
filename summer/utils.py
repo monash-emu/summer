@@ -36,3 +36,15 @@ def ref_times_to_dti(ref_date: datetime, times: Iterable) -> pd.DatetimeIndex:
     """
 
     return pd.DatetimeIndex([ref_date + timedelta(t) for t in times])
+
+
+def clean_compartment_values(compartment_values: np.ndarray):
+    """
+    Zero out -ve compartment sizes in flow rate calculations,
+    to prevent negative values from messing up the direction of flows.
+    We don't expect large -ve values, but there can be small ones due to numerical errors.
+    """
+    comp_vals = compartment_values.copy()
+    zero_mask = comp_vals < 0
+    comp_vals[zero_mask] = 0
+    return comp_vals

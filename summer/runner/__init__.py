@@ -1,2 +1,1 @@
-from .reference_runner import ReferenceRunner
-from .vectorized_runner import VectorizedRunner
+from .model_runner import ModelRunner

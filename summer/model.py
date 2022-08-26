@@ -18,15 +18,14 @@ import summer.flows as flows
 from summer import stochastic
 from summer.adjust import BaseAdjustment, FlowParam, Multiply
 from summer.compartment import Compartment
-from summer.compute import ComputedValueProcessor
 from summer.derived_outputs import DerivedOutputRequest, calculate_derived_outputs
 from summer.parameters import params
 
 from summer.parameters.param_impl import finalize_parameters
-from summer.runner import ReferenceRunner, VectorizedRunner
+from summer.runner import ModelRunner
 from summer.solver import SolverType, solve_ode
 from summer.stratification import Stratification
-from summer.utils import get_scenario_start_index, ref_times_to_dti
+from summer.utils import get_scenario_start_index, ref_times_to_dti, clean_compartment_values
 from summer.population import get_unique_strat_groups, filter_by_strata
 from summer.tracker import ModelBuildTracker, ActionType
 
@@ -36,8 +35,7 @@ FlowRateFunction = Callable[[List[Compartment], np.ndarray, np.ndarray, float], 
 
 
 class BackendType:
-    REFERENCE = "reference"
-    VECTORIZED = "vectorized"
+    PYTHON = "python"
     JAX = "jax"
 
 
@@ -75,7 +73,7 @@ class CompartmentalModel:
 
     _DEFAULT_DISEASE_STRAIN = "default"
     _DEFAULT_MIXING_MATRIX = np.array([[1.0]])
-    _DEFAULT_BACKEND = BackendType.VECTORIZED
+    _DEFAULT_BACKEND = BackendType.PYTHON
 
     def __init__(
         self,
@@ -133,7 +131,6 @@ class CompartmentalModel:
         self._derived_outputs_whitelist = []
 
         # Map of (runtime) computed values
-        self._computed_value_processors = OrderedDict()
         self._computed_values_graph_dict = {}
 
         # Init baseline model to None; can be set via set_baseline if running as a scenario
@@ -177,7 +174,7 @@ class CompartmentalModel:
         error_msg = "Cannot make changes to model that is already finalized"
         assert not self._finalized, error_msg
 
-    def set_initial_population(self, distribution: Dict[str, float]):
+    def set_initial_population(self, distribution: Dict[str, float], force=False):
         """
         Sets the initial population of the model, which is zero by default.
 
@@ -185,23 +182,24 @@ class CompartmentalModel:
             distribution: A map of populations to be assigned to compartments.
 
         """
-        self._assert_not_finalized()
+        if not force:
+            self._assert_not_finalized()
 
-        error_msg = "Cannot set initial population after the model has been stratified"
-        assert not self._stratifications, error_msg
+            error_msg = "Cannot set initial population after the model has been stratified"
+            assert not self._stratifications, error_msg
 
         assert isinstance(distribution, dict)
 
         # Make sure we're not supplying any eroneous compartment names
         for k, v in distribution.items():
-            assert k in self.compartments
+            assert k in self._original_compartment_names
 
         self._init_pop_dist = distribution.copy()
 
         # Ensure dictionary contains all comparments (default to 0 if not supplied)
-        for idx, comp in enumerate(self.compartments):
-            if comp.name not in self._init_pop_dist:
-                self._init_pop_dist[comp.name] = 0
+        for idx, comp in enumerate(self._original_compartment_names):
+            if comp not in self._init_pop_dist:
+                self._init_pop_dist[comp] = 0
 
     def finalize(self):
         if not self._finalized:
@@ -687,6 +685,7 @@ class CompartmentalModel:
             strat: The stratification to apply.
 
         """
+
         self._assert_not_finalized()
         # Enable/disable runtime assertions for strat
         strat._validate = self._should_validate
@@ -911,7 +910,7 @@ class CompartmentalModel:
         if backend == BackendType.JAX:
             from summer.runner.jax.model_impl import build_run_model
 
-            jax_run_func, jax_runner_dict = build_run_model(self._backend, solver)
+            jax_run_func, jax_runner_dict = build_run_model(self._backend, solver=solver)
             res = jax_run_func(parameters=parameters)
             self.outputs = np.array(res["outputs"])
             self.derived_outputs = {k: np.array(v) for k, v in res["derived_outputs"].items()}
@@ -934,12 +933,10 @@ class CompartmentalModel:
 
     def _set_backend(self, backend: str, backend_args: dict = None):
         backend_args = backend_args or {}
-        if backend == BackendType.REFERENCE:
-            self._backend = ReferenceRunner(self, **backend_args)
-        elif backend == BackendType.VECTORIZED:
-            self._backend = VectorizedRunner(self, **backend_args)
+        if backend == BackendType.PYTHON:
+            self._backend = ModelRunner(self, **backend_args)
         elif backend == BackendType.JAX:
-            self._backend = _JaxRunner(self, **backend_args)
+            self._backend = ModelRunner(self, **backend_args)
         else:
             msg = f"Invalid backend: {backend}"
             raise ValueError(msg)
@@ -1023,8 +1020,8 @@ class CompartmentalModel:
             # Calculate the flow rates at this timestep.
             # These describe the rate (people/timeunit) at which people follow the flow.
             # Later we will convert these to probabilities.
-            comp_vals = self._backend._clean_compartment_values(self.outputs[time_idx - 1])
-            flow_rates = self._backend.get_flow_rates(comp_vals, time)
+            comp_vals = clean_compartment_values(self.outputs[time_idx - 1])
+            flow_rates, _ = self._backend.get_flow_rates(comp_vals, time)
 
             # We split the calculatd flow rates into entry or {transition, exit} flows,
             # because we handle them separately with different methods.
@@ -1364,7 +1361,7 @@ class CompartmentalModel:
             "save_results": save_results,
         }
 
-    def add_computed_value_process(self, name: str, processor: ComputedValueProcessor):
+    def add_computed_value_process(self, name: str, processor):
         """
         Calculate (at runtime) values derived from the current compartment values and/or
         functions/input data
@@ -1377,12 +1374,7 @@ class CompartmentalModel:
         """
         # FIXME: We might actually have to keep this for now, at least until modellers get sick of
         # seeing it and change over all the code
-        warn(
-            "Deprecated feature - use model.add_computed_value_func instead",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        self._computed_value_processors[name] = processor
+        raise DeprecationWarning("Use add_computed_value_func instead")
 
     def add_computed_value_func(self, name: str, func: params.Function):
         if name in self._computed_values_graph_dict:
@@ -1390,7 +1382,7 @@ class CompartmentalModel:
         self._computed_values_graph_dict[name] = func
 
     def get_computed_value_keys(self):
-        return list(self._computed_value_processors) + list(self._computed_values_graph_dict)
+        return list(self._computed_values_graph_dict)
 
     def _get_ref_idx(self):
         if self.ref_date:

@@ -80,7 +80,7 @@ class Multiply(BaseAdjustment):
             resolved_self = self.param(time, computed_values)
         else:
             resolved_self = self.param
-        resolved_input = get_static_param_value(value, parameters, True)
+        resolved_input = get_static_param_value(value, parameters, passthrough=True)
         return resolved_self * resolved_input
 
 

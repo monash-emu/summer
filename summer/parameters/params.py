@@ -77,6 +77,9 @@ def get_model_param_value(
     Returns:
         Any: Parameter output
     """
+
+    raise Exception("Catch")
+
     if isinstance(param, float):
         return param
     elif isinstance(param, GraphObject):
@@ -110,127 +113,29 @@ def get_model_param_value(
         return param
 
 
-def get_static_param_value(obj: Any, parameters: dict, mul_outputs: bool = False) -> Any:
+def get_static_param_value(obj: Any, static_graph_values: dict, passthrough=True) -> Any:
     """Get the value of a parameter, or of a function that depends only on parameters,
        or return obj if any other type
 
     Args:
         obj : The Variable, Function, or Python object
         parameters: Parameters dictionary
+        passthrough: If True, will return unknown value types "as-is"; default is to raise TypeError
 
     Returns:
         The value of the object
     """
-    from .param_impl import ModelParameter
+    from .param_impl import GraphObjectParameter
 
     # Might have some nested special classes
     if isinstance(obj, dict):
-        return {k: get_static_param_value(v, parameters) for k, v in obj.items()}
-    elif isinstance(obj, ModelParameter):
-        return obj.get_value(0.0, {}, parameters)
-    elif isinstance(obj, float):
-        return obj
-    elif is_var(obj, "parameters"):
-        return parameters[obj.key]
-    elif isinstance(obj, Function):
-        return obj.call(sources={"parameters": parameters})
-    elif mul_outputs and (isinstance(obj, list) or isinstance(obj, tuple)):
-        value = 1.0
-        for subparam in obj:
-            value *= get_static_param_value(subparam, parameters)
-        return value
+        return {
+            k: get_static_param_value(v, static_graph_values, passthrough) for k, v in obj.items()
+        }
+    elif isinstance(obj, GraphObjectParameter):
+        return static_graph_values[obj._graph_key]
     else:
-        return obj
-
-
-def extract_params(obj):
-    from .param_impl import GraphFunction, GraphParameter, CompoundParameter, LazyGraphParameter
-
-    if isinstance(obj, GraphParameter):
-        return [Parameter(obj.name)]
-    elif isinstance(obj, LazyGraphParameter):
-        return [Parameter(k) for k in obj.param_keys]
-    elif isinstance(obj, CompoundParameter):
-        out_params = []
-        for sp in obj.subparams:
-            out_params += extract_params(sp)
-        return out_params
-    elif isinstance(obj, GraphFunction):
-        obj = obj.func
-    if isinstance(obj, Function):
-        out_params = []
-        for a in obj.args:
-            out_params += extract_params(a)
-        for a in obj.kwargs.values():
-            out_params += extract_params(a)
-        return out_params
-    return extract_variables(obj, source="parameters")
-
-
-def find_all_parameters(m: CompartmentalModel):
-    # Where could they hide?
-
-    out_params = {}
-
-    def append(target, key, value):
-        if key not in out_params:
-            target[key] = []
-        target[key].append(value)
-
-    def append_list(target, params, value):
-        for p in params:
-            append(target, p, value)
-
-    # Inside flows
-    for f in m._flows:
-        params = extract_params(f.param)
-        if params:
-            append_list(out_params, params, ("FlowParam", f))
-
-    # Initial population
-
-    ipop_params = extract_params(m._init_pop_dist)
-    append_list(out_params, ipop_params, ("InitialPopulation", m._init_pop_dist))
-
-    # Inside stratifications - we have retained some useful information...
-    for s in m._stratifications:
-        params = extract_params(s.population_split)
-        append_list(out_params, params, ("PopulationSplit", s, s.population_split))
-
-        # Flow adjustments live here quite happily
-        # Flow _parameters_ however are stratified to oblivion, hence the section above ^^^^^
-        # for fname, adjustments in s.flow_adjustments.items():
-        #    for adj, source_strata, dest_strata in adjustments:
-        #        for k, v in adj.items():
-        # if v is not None:
-        #     params = extract_params(v.param)
-        #     append_list(
-        #         out_params,
-        #         params,
-        #         ("FlowAdjustment", fname, source_strata, dest_strata),
-        #     )
-
-        for comp, adjustments in s.infectiousness_adjustments.items():
-            for strain, adjustment in adjustments.items():
-                if adjustment is not None:
-                    params = extract_params(adjustment.param)
-                    append_list(
-                        out_params,
-                        params,
-                        ("InfectiousnessAdjustment", s, comp, strain),
-                    )
-        # Mixing matrices can be inspected here
-        # They might sort of live in the model itself too...
-        append_list(out_params, extract_params(s.mixing_matrix), ("MixingMatrix", s))
-
-    # Computed values
-    for k, v in m._computed_values_graph_dict.items():
-        params = extract_params(v)
-        append_list(out_params, params, ("ComputedValue", k, v))
-
-    # Derived outputs
-    for k, req in m._derived_output_requests.items():
-        if req["request_type"] == "param_func":
-            append_list(out_params, extract_params(req["func"]), ("DerivedOutput", k))
-
-    return out_params
+        if passthrough:
+            return obj
+        else:
+            raise TypeError(obj)

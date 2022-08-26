@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING, Tuple
 
-from summer.runner.vectorized_runner import VectorizedRunner
+from summer.runner import ModelRunner
 
 from .model_impl import build_run_model
 
@@ -11,7 +11,7 @@ if TYPE_CHECKING:
 
 def get_runner(m: CompartmentalModel):
     m.finalize()
-    runner = VectorizedRunner(m)
+    runner = ModelRunner(m)
     runner.prepare_structural()
     m._backend = runner
     return runner

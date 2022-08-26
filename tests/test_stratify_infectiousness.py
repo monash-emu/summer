@@ -39,7 +39,7 @@ def test_strat_infectiousness__with_adjustments(backend):
     )
 
     # Do pre-iteration force of infection calcs
-    model._backend._prepare_time_step(0, calculate_initial_population(model))
+    model._backend._prepare_time_step(0, model.initial_population)
 
     # Get multipliers
     infectees = model.compartments[0:3]
@@ -92,7 +92,7 @@ def test_strat_infectiousness__with_multiple_adjustments(backend):
         np.array([0, 0, 0, 0, 0, 0, 1, 7, 1, 21, 1, 3.5, 0, 0, 0, 0, 0, 0]),
     )
     # Do pre-iteration force of infection calcs
-    model._backend._prepare_time_step(0, calculate_initial_population(model))
+    model._backend._prepare_time_step(0, model.initial_population)
 
     # Get multipliers
     infectees = model.compartments[0:6]

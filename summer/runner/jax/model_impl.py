@@ -7,46 +7,18 @@ from jax import numpy as jnp
 from summer.runner.jax import ode
 from summer.runner.jax import solvers
 
-from summer.runner import VectorizedRunner
+from summer.adjust import Overwrite
+
+from summer.runner import ModelRunner
 
 from summer.solver import SolverType
 
 from .stratify import get_calculate_initial_pop
 from .derived_outputs import build_derived_outputs_runner
 
-from summer.parameters import get_model_param_value
-
 
 def clean_compartments(compartment_values: jnp.ndarray):
     return jnp.where(compartment_values < 0.0, 0.0, compartment_values)
-
-
-def build_get_mixing_matrix(runner):
-    def get_mixing_matrix(time: float, parameters) -> jnp.ndarray:
-        """
-        Returns the final mixing matrix for a given time.
-        """
-        # We actually have some matrices, let's do things with them...
-        if len(runner.model._mixing_matrices):
-            mixing_matrix = None
-            for mm_func in runner.model._mixing_matrices:
-                # Assume each mixing matrix is either an np.ndarray or
-                # a function of time that returns one.
-                # mm = mm_func(time) if callable(mm_func) else mm_func
-                mm = get_model_param_value(mm_func, time, None, parameters)
-                # mm = mm_func.get_value(time, {}, parameters)
-                # Get Kronecker product of old and new mixing matrices.
-                # Only do this if we actually need to
-                if mixing_matrix is None:
-                    mixing_matrix = mm
-                else:
-                    mixing_matrix = jnp.kron(mixing_matrix, mm)
-        else:
-            mixing_matrix = runner.model._DEFAULT_MIXING_MATRIX
-
-        return mixing_matrix
-
-    return get_mixing_matrix
 
 
 def get_strain_infection_values(
@@ -67,7 +39,6 @@ def get_strain_infection_values(
 
 def build_get_infectious_multipliers(runner):
     category_matrix = runner._category_matrix
-    get_mixing_matrix = build_get_mixing_matrix(runner)
 
     # FIXME: We are hardcoding this for frequency only right now
     if not runner._infection_frequency_only:
@@ -85,7 +56,7 @@ def build_get_infectious_multipliers(runner):
 
         full_multipliers = jnp.ones(len(runner.infectious_flow_indices))
 
-        mm = cur_graph_outputs["mixing_matrix"]  # get_mixing_matrix(time, parameters)
+        mm = cur_graph_outputs["mixing_matrix"]
         cat_pops = category_matrix @ compartment_values
 
         for strain_idx, strain in enumerate(runner.model._disease_strains):
@@ -130,7 +101,7 @@ def build_get_infectious_multipliers(runner):
     return get_infectious_multipliers
 
 
-def build_get_flow_weights(runner: VectorizedRunner):
+def build_get_flow_weights(runner: ModelRunner):
 
     m = runner.model
 
@@ -291,33 +262,35 @@ def build_get_compartment_infectiousness_for_strain(model, strain: str):
     # This is run during prepare_dynamic
     # i.e. it is done once at the start of a model run, but
     # is parameterized (non-structural)
-    def get_compartment_infectiousness_for_strain(parameters):
+    def get_compartment_infectiousness_for_strain(static_graph_values):
         # Find the infectiousness multipliers for each compartment being implemented in the model.
         # Start from assumption that each compartment is not infectious.
         compartment_infectiousness = jnp.zeros(len(model.compartments))
         # Set all infectious compartments to be equally infectious.
         compartment_infectiousness = compartment_infectiousness.at[infectious_mask].set(1.0)
 
-        # Apply infectiousness adjustments.
-        for idx, comp in enumerate(model.compartments):
-            inf_value = compartment_infectiousness[idx]
-            for strat in model._stratifications:
-                for comp_name, adjustments in strat.infectiousness_adjustments.items():
-                    if comp_name == comp.name:
-                        for stratum, adjustment in adjustments.items():
-                            should_apply_adjustment = adjustment and comp.has_stratum(
-                                strat.name, stratum
-                            )
-                            if should_apply_adjustment:
-                                # Cannot use time-varying functions for infectiousness adjustments,
-                                # because this is calculated before the model starts running.
-                                inf_value = adjustment.get_new_value(
-                                    inf_value, None, None, parameters
-                                )
+        # Apply infectiousness adjustments
+        for strat in model._stratifications:
+            for comp_name, adjustments in strat.infectiousness_adjustments.items():
+                for stratum, adjustment in adjustments.items():
+                    if adjustment:
+                        is_overwrite = isinstance(adjustment, Overwrite)
+                        adj_value = static_graph_values[adjustment.param._graph_key]
+                        adj_comps = model.get_matching_compartments(
+                            comp_name, {strat.name: stratum}
+                        )
+                        for c in adj_comps:
+                            if is_overwrite:
+                                compartment_infectiousness = compartment_infectiousness.at[
+                                    c.idx
+                                ].set(adj_value)
+                            else:
+                                orig_value = compartment_infectiousness[c.idx]
+                                compartment_infectiousness = compartment_infectiousness.at[
+                                    c.idx
+                                ].set(adj_value * orig_value)
 
-            compartment_infectiousness = compartment_infectiousness.at[idx].set(inf_value)
-
-        if strain != model._DEFAULT_DISEASE_STRAIN:
+        if "strain" in model.stratifications:
             # FIXME: If there are multiple strains, but one of them is _DEFAULT_DISEASE_STRAIN
             # there will almost certainly be incorrect masks applied
             # Filter out all values that are not in the given strain.
@@ -339,10 +312,10 @@ def build_compartment_infectiousness_calc(model):
     for strain in model._disease_strains:
         strain_funcs[strain] = build_get_compartment_infectiousness_for_strain(model, strain)
 
-    def get_compartment_infectiousness(parameters):
+    def get_compartment_infectiousness(static_graph_vals):
         compartment_infectiousness = {}
         for strain in model._disease_strains:
-            compartment_infectiousness[strain] = strain_funcs[strain](parameters)
+            compartment_infectiousness[strain] = strain_funcs[strain](static_graph_vals)
         return compartment_infectiousness
 
     return get_compartment_infectiousness
@@ -422,9 +395,9 @@ def build_run_model(runner, base_params=None, dyn_params=None, solver=None):
     def run_model(parameters):
 
         static_graph_vals = static_graph_func(parameters=parameters)
-        initial_population = calc_initial_pop(parameters)
+        initial_population = calc_initial_pop(static_graph_vals)
 
-        compartment_infectiousness = get_compartment_infectiousness(parameters)
+        compartment_infectiousness = get_compartment_infectiousness(static_graph_vals)
         model_data = {"compartment_infectiousness": compartment_infectiousness}
 
         outputs = get_ode_solution(initial_population, times, static_graph_vals, model_data)

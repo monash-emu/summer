@@ -141,9 +141,9 @@ def test_solve_stochastic(monkeypatch):
     # Mock out flow rate calculation - tested elsewhere and tricky to predict.
     def mock_get_rates(*args, **kwargs):
         # Return the flow rates that will be used to solve the model
-        return np.array([float(f.param.value) for f in model._flows])
+        return np.array([float(f.param.value) for f in model._flows]), {}
 
-    model._set_backend(BackendType.REFERENCE)
+    model._set_backend(BackendType.PYTHON)
     model._backend.prepare_to_run()
     monkeypatch.setattr(model._backend, "get_flow_rates", mock_get_rates)
     model._solve_stochastic()

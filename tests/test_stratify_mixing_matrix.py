@@ -61,12 +61,6 @@ def test_no_mixing_matrix__with_previous_strat(backend):
     strat.set_mixing_matrix(first_strat_matrix)
     model.stratify_with(strat)
 
-    # We should get the default mixing matrix
-    actual_mixing = model._backend._get_mixing_matrix(0)
-    assert_array_equal(actual_mixing, first_strat_matrix)
-    # Static matrices shouldn't change over time
-    actual_mixing = model._backend._get_mixing_matrix(123)
-    assert_array_equal(actual_mixing, first_strat_matrix)
     # Agegroup mixing categories have been added.
     assert model._mixing_categories == [{"agegroup": "child"}, {"agegroup": "adult"}]
 
@@ -171,6 +165,7 @@ def test_multiple_static_mixing_matrices(backend):
         ]
     )
     # We should get the Kronecker product of the two matrices
+
     actual_mixing = model._backend._get_mixing_matrix(0)
     assert_array_equal(actual_mixing, expected_mixing_matrix)
     # Static matrices shouldn't change over time
@@ -223,7 +218,7 @@ def test_multiple_dynamic_mixing_matrices(backend):
     actual_mixing = model._backend._get_mixing_matrix(1)
     assert_array_equal(actual_mixing, expected_mixing_matrix)
     # Double check that we calculated the Kronecker product correctly
-    kron_mixing = np.kron(agegroup_mixing_matrix(1,None), location_mixing_matrix(1,None))
+    kron_mixing = np.kron(agegroup_mixing_matrix(1, None), location_mixing_matrix(1, None))
     assert_array_equal(expected_mixing_matrix, kron_mixing)
     # Dynamic matrices should change over time
     actual_mixing = model._backend._get_mixing_matrix(5)

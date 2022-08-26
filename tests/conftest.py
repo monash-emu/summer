@@ -25,6 +25,6 @@ def pytest_runtest_setup(item):
             pytest.skip("Long running test: run on GitHub only.")
 
 
-@pytest.fixture(params=[BackendType.REFERENCE, BackendType.VECTORIZED])
+@pytest.fixture(params=[BackendType.PYTHON])
 def backend(request):
     return request.param

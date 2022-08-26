@@ -86,6 +86,7 @@ def test_set_initial_population():
     )
     CIP = calculate_initial_population
 
+    model.set_initial_population({})
     assert_array_equal(CIP(model), np.array([0, 0, 0]))
     model.set_initial_population({"S": 100})
     assert_array_equal(CIP(model), np.array([100, 0, 0]))

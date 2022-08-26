@@ -6,21 +6,6 @@ RANDOM_SEED = 1337
 
 
 @pytest.mark.benchmark
-def test_benchmark_vectorized_backend(benchmark):
-    """
-    Performance benchmark: check how long our models take to run.
-    See: https://pytest-benchmark.readthedocs.io/en/stable/
-    Run these with pytest -vv -m benchmark --benchmark-json benchmark.json
-    """
-
-    def run_default_ode_solver_vectorized_test_model():
-        model = get_test_model()
-        model.run(backend="vectorized")
-
-    benchmark(run_default_ode_solver_vectorized_test_model)
-
-
-@pytest.mark.benchmark
 def test_benchmark_default_ode_solver(benchmark):
     """
     Performance benchmark: check how long our models take to run.

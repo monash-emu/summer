@@ -328,7 +328,7 @@ class Stratification:
         return new_comps
 
     def _stratify_compartment_values(
-        self, comps: List[Compartment], comp_values: np.ndarray, parameters: dict = None
+        self, comps: List[Compartment], comp_values: np.ndarray, static_graph_values: dict = None
     ) -> np.ndarray:
         """
         Stratify the model compartments into sub-compartments, based on the strata names provided.
@@ -339,7 +339,10 @@ class Stratification:
         assert len(comps) == len(comp_values)
         new_comp_values = []
 
-        population_split = get_static_param_value(self.population_split, parameters)
+        if static_graph_values:
+            population_split = get_static_param_value(self.population_split, static_graph_values)
+        else:
+            population_split = self.population_split
 
         for idx in range(len(comp_values)):
             should_stratify = comps[idx].has_name_in_list(self.compartments)

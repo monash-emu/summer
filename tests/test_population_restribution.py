@@ -34,6 +34,8 @@ def build_model():
     model.stratify_with(age_strat)
     model.stratify_with(loc_strat)
     model.stratify_with(vacc_strat)
+
+    model._set_backend("python")
     return model
 
 

@@ -21,7 +21,7 @@ def get_stratify_compartments_func(strat: Stratification, input_comps: List[str]
         input_comps (List[str]): The list of input compartments (pre-stratification)
     """
 
-    def stratify_compartment_values(comp_values: jnp.ndarray, parameters: dict = None):
+    def stratify_compartment_values(comp_values: jnp.ndarray, static_graph_values: dict = None):
         """
         Stratify the model compartments into sub-compartments, based on the strata names provided.
         Split the population according to the provided proportions.
@@ -30,7 +30,7 @@ def get_stratify_compartments_func(strat: Stratification, input_comps: List[str]
         """
         new_comp_values = []
 
-        population_split = get_static_param_value(strat.population_split, parameters)
+        population_split = get_static_param_value(strat.population_split, static_graph_values)
 
         for idx in range(len(comp_values)):
             should_stratify = input_comps[idx].has_name_in_list(strat.compartments)
@@ -66,7 +66,7 @@ def get_calculate_initial_pop(model: CompartmentalModel):
         strat_funcs[strat] = get_stratify_compartments_func(strat, comps)
         comps = strat._stratify_compartments(comps)
 
-    def calculate_initial_population(parameters: dict) -> jnp.ndarray:
+    def calculate_initial_population(static_graph_values: dict) -> jnp.ndarray:
         """
         Called to recalculate the initial population from either fixed dictionary, or a dict
         supplied as a parameter
@@ -79,13 +79,13 @@ def get_calculate_initial_pop(model: CompartmentalModel):
 
         if isinstance(distribution, dict):
             for idx, comp in enumerate(model._original_compartment_names):
-                pop = get_static_param_value(distribution[comp.name], parameters)
+                pop = get_static_param_value(distribution[comp.name], static_graph_values)
                 initial_population = initial_population.at[idx].set(pop)
 
             for action in model.tracker.all_actions:
                 if action.action_type == "stratify":
                     strat = action.kwargs["strat"]
-                    initial_population = strat_funcs[strat](initial_population, parameters)
+                    initial_population = strat_funcs[strat](initial_population, static_graph_values)
                 elif action.action_type == "adjust_pop_split":
                     # FIXME: Implement this
                     raise NotImplementedError

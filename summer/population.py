@@ -37,7 +37,7 @@ def filter_by_strata(comps, strata):
 def get_rebalanced_population(
     model,
     population: np.ndarray,
-    parameters: dict,
+    static_graph_values: dict,
     strat: str,
     dest_filter: dict,
     proportions: dict,
@@ -58,7 +58,7 @@ def get_rebalanced_population(
 
     model_strat = [s for s in model._stratifications if s.name == strat][0]
 
-    proportions = get_static_param_value(proportions, parameters)
+    proportions = get_static_param_value(proportions, static_graph_values)
 
     msg = "All strata must be specified in proportions"
     assert set(model_strat.strata) == set(proportions), msg
@@ -91,6 +91,8 @@ def calculate_initial_population(model, parameters=None) -> np.ndarray:
     Called to recalculate the initial population from either fixed dictionary, or a dict
     supplied as a parameter
     """
+    if parameters is None:
+        parameters = {}
     # FIXME:
     # Work in progress; correctly recalculates non-parameterized
     # populations, but does not include population rebalances etc
@@ -104,7 +106,7 @@ def calculate_initial_population(model, parameters=None) -> np.ndarray:
 
     if isinstance(distribution, dict):
         for idx, comp in enumerate(model._original_compartment_names):
-            pop = get_static_param_value(distribution[comp.name], parameters)
+            pop = get_static_param_value(distribution[comp.name], parameters, True)
             assert pop >= 0, f"Population for {comp.name} cannot be negative: {pop}"
             initial_population[idx] = pop
 

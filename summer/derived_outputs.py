@@ -35,6 +35,7 @@ class DerivedOutputRequest:
     COMPUTED_VALUE = "computed_value"
     PARAM_FUNCTION = "param_func"
 
+
 def calculate_derived_outputs(
     requests: List[dict],
     graph: networkx.DiGraph,
@@ -46,9 +47,9 @@ def calculate_derived_outputs(
     get_flow_rates: Callable[[np.ndarray, float], np.ndarray],
     model,
     whitelist: Optional[List[str]],
-    baseline = None,
-    idx_cache = None,
-    parameters: dict = None
+    baseline=None,
+    idx_cache=None,
+    parameters: dict = None,
 ) -> Dict[str, np.ndarray]:
     """
     Calculates all requested derived outputs from the calculated compartment sizes.
@@ -108,14 +109,16 @@ def calculate_derived_outputs(
     # Could cause silent problems, because presumably we have previously been specifying durations as multiples of the timestep.
     for time_idx, time in enumerate(times):
         # Flow rates are instantaneous; we need to provide an integrated value over timestep
-        flow_rates = get_flow_rates(outputs[time_idx], time)
-        flow_values[time_idx, :] = flow_rates * timestep
+        flow_rates_t, computed_values_t = get_flow_rates(outputs[time_idx], time)
+        flow_values[time_idx, :] = flow_rates_t * timestep
         # Collect these as lists then build DataFrames afterwards
-        computed_values.append(model._backend._calc_computed_values(outputs[time_idx], time))
-    
+        computed_values.append(computed_values_t)
+
     # Collate list values into DataFrames
-    computed_values = pd.DataFrame(columns=model.get_computed_value_keys(), data = computed_values, index=times)
-    
+    computed_values = pd.DataFrame(
+        columns=model.get_computed_value_keys(), data=computed_values, index=times
+    )
+
     # Convert tracked flow values into a matrix where the 1st dimension is flow type, 2nd is time
     flow_values = np.array(flow_values).T
 
@@ -131,10 +134,14 @@ def calculate_derived_outputs(
 
         if request_type == DerivedOutputRequest.FLOW:
             # User wants to track a set of flow rates over time.
-            output, idx_cache = _get_flow_output(request, name, times, flows, flow_values, idx_cache)
+            output, idx_cache = _get_flow_output(
+                request, name, times, flows, flow_values, idx_cache
+            )
         elif request_type == DerivedOutputRequest.COMPARTMENT:
             # User wants to track a set of compartment sizes over time.
-            output, idx_cache = _get_compartment_output(request, name, outputs, compartments, idx_cache)
+            output, idx_cache = _get_compartment_output(
+                request, name, outputs, compartments, idx_cache
+            )
         elif request_type == DerivedOutputRequest.AGGREGATE:
             # User wants to track the sum of a set of outputs over time.
             output = _get_aggregate_output(request, derived_outputs)
@@ -168,7 +175,7 @@ def _get_flow_output(request, name, times, flows, flow_values, idx_cache=None):
 
     if not idx_cache:
         idx_cache = {}
-        
+
     if not name in idx_cache:
         idx_cache[name] = []
         for flow_idx, flow in enumerate(flows):
@@ -203,13 +210,13 @@ def _get_flow_output(request, name, times, flows, flow_values, idx_cache=None):
 def _get_compartment_output(request, name, outputs, compartments, idx_cache=None):
     if not idx_cache:
         idx_cache = {}
-        
+
     if not name in idx_cache:
         req_compartments = request["compartments"]
         strata = request["strata"]
         comps = ((i, c) for i, c in enumerate(compartments) if c.has_name_in_list(req_compartments))
         idx_cache[name] = [i for i, c in comps if c.is_match(c.name, strata)]
-    
+
     idxs = idx_cache[name]
     return outputs[:, idxs].sum(axis=1), idx_cache
 
@@ -219,7 +226,7 @@ def _get_aggregate_output(request, derived_outputs):
     return sum([derived_outputs[s] for s in source_names])
 
 
-def _get_cumulative_output(request, name, times, derived_outputs,baseline_offset=None):
+def _get_cumulative_output(request, name, times, derived_outputs, baseline_offset=None):
     source_name = request["source"]
     start_time = request["start_time"]
     max_time = times.max()
@@ -248,16 +255,21 @@ def _get_func_output(request, derived_outputs):
     source_names = request["sources"]
     inputs = [derived_outputs[s] for s in source_names]
     return func(*inputs)
-    
+
+
 def _get_param_func_output(request, derived_outputs, computed_values, parameters):
     mfunc = request["func"]
-    sources = dict(derived_outputs=derived_outputs, parameters=parameters, computed_values=computed_values)
+    sources = dict(
+        derived_outputs=derived_outputs, parameters=parameters, computed_values=computed_values
+    )
     args, kwargs = build_args(mfunc.args, mfunc.kwargs, sources)
     return mfunc.func(*args, **kwargs)
+
 
 def _get_computed_value_output(request, computed_values):
     name = request["name"]
     return computed_values[name].to_numpy(dtype=float)
+
 
 def get_scenario_start_index(base_times, start_time):
     """

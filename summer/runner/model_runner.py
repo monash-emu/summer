@@ -1,25 +1,24 @@
-from abc import ABC, abstractmethod
 from typing import Tuple
 
 import numpy as np
-from computegraph.graph import ComputeGraph
+import numba
 
-from computegraph.utils import is_var
-
-import summer.flows as flows
+from summer import Compartment
 from summer.adjust import Overwrite
-from summer.compute import binary_matrix_to_sparse_pairs, sparse_pairs_accum
-from summer.compartment import Compartment
-from summer.population import calculate_initial_population
+import summer.flows as flows
+from summer.compute import (
+    accumulate_positive_flow_contributions,
+    accumulate_negative_flow_contributions,
+    sparse_pairs_accum,
+    find_sum,
+    binary_matrix_to_sparse_pairs,
+)
+from summer.utils import clean_compartment_values
 
-from summer.parameters import get_model_param_value, get_static_param_value, is_var, Function
-from summer.parameters.param_impl import ModelParameter
 
-
-class ModelRunner(ABC):
+class ModelRunner:
     """
-    Base runner.
-    Child classes may be used by the CompartmentalModel to calculate flow rates.
+    An optimized, but less accessible model runner.
     """
 
     def __init__(self, model):
@@ -32,91 +31,111 @@ class ModelRunner(ABC):
         # Set our initial parameters to an empty dict - this is really just to appease tests
         self.parameters = {}
 
-    @abstractmethod
-    def get_flow_rates(self, compartment_values: np.ndarray, time: float) -> np.ndarray:
-        """
-        Returns the contribution of each flow to compartment rate of change for a given state and
-        time.
-
-        Args:
-            compartment_values (np.ndarray): Current values of the model compartments
-            time (float): Time at which rates are evaluated (expected to be in range of model.times)
-
-        Returns:
-            np.ndarray: Array of flow rates (size determined by number of model flows)
-        """
-        pass
-
-    @abstractmethod
-    def get_compartment_rates(self, compartment_values: np.ndarray, time: float) -> np.ndarray:
-        """
-        Interface for the ODE solver: this function is passed to solve_ode func and defines the
-        dynamics of the model.
-
-
-        Args:
-            compartment_values (np.ndarray): Current values of the model compartments
-            time (float): Time (in model.times coordinates) at which current step is being solved
-
-        Returns:
-            np.ndarray: Rates of change for the compartment values for a given state and time.
-        """
-        pass
-
-    def _clean_compartment_values(self, compartment_values: np.ndarray):
-        """
-        Zero out -ve compartment sizes in flow rate calculations,
-        to prevent negative values from messing up the direction of flows.
-        We don't expect large -ve values, but there can be small ones due to numerical errors.
-        """
-        comp_vals = compartment_values.copy()
-        zero_mask = comp_vals < 0
-        comp_vals[zero_mask] = 0
-        return comp_vals
-
-    @abstractmethod
     def prepare_structural(self):
-        # Re-order flows so that they are executed in the correct order:
-        #   - exit flows
-        #   - entry flows (depends on exit flows for 'replace births' functionality)
-        #   - transition flows
-        #   - function flows (depend on all other prior flows, since they take flow rate as an
-        # input)
-        num_flows = len(self.model._flows)
-        _exit_flows = [f for f in self.model._flows if issubclass(f.__class__, flows.BaseExitFlow)]
-        _entry_flows = [
-            f for f in self.model._flows if issubclass(f.__class__, flows.BaseEntryFlow)
-        ]
-        _transition_flows = [
-            f for f in self.model._flows if issubclass(f.__class__, flows.BaseTransitionFlow)
-        ]
-        self.model._flows = _exit_flows + _entry_flows + _transition_flows
-        # Check we didn't miss any flows
-        assert len(self.model._flows) == num_flows, "Some flows were lost when preparing to run."
-
-        # Simplify adjustments; if there are any overwrites, we can discard the previous
-        # adjustments
-        # FIXME: Currently only works if the last adjustment is an Overwrite
-        # Probably expand this to an optimizations module
-        for f in self.model._flows:
-            if len(f.adjustments) and isinstance(f.adjustments[-1], Overwrite):
-                f.adjustments = [f.adjustments[-1]]
-
+        # FIXME: Redundant
         self._iter_non_function_flows = [(i, f) for i, f in enumerate(self.model._flows)]
 
-        for k, proc in self.model._computed_value_processors.items():
-            proc.prepare_to_run(self.model.compartments, self.model._flows)
+        self._build_compartment_category_map()
 
-        cvcg = ComputeGraph(
-            self.model._computed_values_graph_dict, "computed_values", is_traced=True
+        self.infectious_flow_indices = np.array(
+            [i for i, f in self._iter_non_function_flows if isinstance(f, flows.BaseInfectionFlow)],
+            dtype=int,
+        )
+        self.death_flow_indices = np.array(
+            [i for i, f in self._iter_non_function_flows if f.is_death_flow], dtype=int
         )
 
-        self.computed_values_runner = cvcg.get_callable()
+        # Include dummy values in population_idx to account for Entry flows
+        non_func_pops = np.array(
+            [f.source.idx if f.source else 0 for i, f in self._iter_non_function_flows], dtype=int
+        )
 
+        self.population_idx = non_func_pops
+
+        # Store indices of flows that are not population dependent
+        self._non_pop_flow_idx = np.array(
+            [
+                i
+                for i, f in self._iter_non_function_flows
+                if (type(f) in (flows.ReplacementBirthFlow, flows.ImportFlow, flows.AbsoluteFlow))
+            ],
+            dtype=int,
+        )
+        self._has_non_pop_flows = bool(len(self._non_pop_flow_idx))
+
+        # Crude birth flows use population sum rather than a compartment; store indices here
+        self._crude_birth_idx = np.array(
+            [i for i, f in self._iter_non_function_flows if type(f) == flows.CrudeBirthFlow],
+            dtype=int,
+        )
+        self._has_crude_birth = bool(len(self._crude_birth_idx))
+
+        self._has_replacement = False
+        # Replacement flows must be calculated after death flows, store indices here
+        for i, f in self._iter_non_function_flows:
+            if type(f) == flows.ReplacementBirthFlow:
+                self._has_replacement = True
+                self._replacement_flow_idx = i
+
+        self._precompute_flow_maps()
+        self._build_infectious_multipliers_lookup()
+
+    def prepare_dynamic(self, parameters: dict = None):
+        """Do all precomputation here"""
+
+        self.parameters = parameters
+
+        #
+        source_inputs = {"parameters": parameters}
+
+        # Can replace this with calibration parameters later
+        dyn_vars = self.model.graph.get_input_variables()
+
+        # Graph frozen for all non-calibration parameters
+        self.param_frozen_cg = self.model.graph.freeze(dyn_vars, source_inputs)
+
+        # Query model_variables (ie time-varying sources)
+        ts_vars = self.param_frozen_cg.query("model_variables")
+
+        # Subgraph that does not contain model_variables (ie anything time varying)
+        static_cg = self.param_frozen_cg.filter(exclude=ts_vars)
+        self._graph_values_static = static_cg.get_callable()(parameters=parameters)
+
+        # Subgraph whose only dynamic inputs are model_variables
+        self.timestep_cg = self.param_frozen_cg.freeze(ts_vars, source_inputs)
+
+        self.run_graph_ts = self.timestep_cg.get_callable()
+
+        # Must be run after self._graph_values_static is available
+        self.calculate_initial_population()
+
+        self._compartment_infectiousness = {
+            strain_name: self._get_compartment_infectiousness_for_strain(strain_name)
+            for strain_name in self.model._disease_strains
+        }
+
+        # Initialize arrays for infectious multipliers
+        # FIXME Put this in its own function, this is getting messy again
+        num_cats = self.num_categories
+        num_strains = len(self.model._disease_strains)
+        self._infection_density = {}
+        self._infection_frequency = {}
+        self._infection_density_flat = np.empty((num_strains, num_cats), dtype=float)
+        self._infection_frequency_flat = np.empty((num_strains, num_cats), dtype=float)
+
+    def prepare_to_run(self, parameters: dict = None):
+        # FIXME:
+        # This is now only used by tests, and should never called in any production code
+        if not hasattr(self.model, "_init_pop_dist"):
+            self.model.set_initial_population({}, force=True)
+        self.model.finalize()
+        self.prepare_structural()
+        self.prepare_dynamic(parameters)
+
+    def _build_compartment_category_map(self):
         # Create a matrix that tracks which categories each compartment is in.
         # A matrix with size (num_cats x num_comps).
-        # This is a very sparse static matrix, and there's almost certainly a much
-        # faster way of using it than naive matrix multiplication
+        # This is a very sparse static matrix, so we'll flatten it afterwards
         num_comps = len(self.model.compartments)
         self.num_categories = len(self.model._mixing_categories)
         self._category_lookup = {}  # Map compartments to categories.
@@ -126,68 +145,10 @@ class ModelRunner(ABC):
                 if all(comp.has_stratum(k, v) for k, v in category.items()):
                     self._category_matrix[i][j] = 1
                     self._category_lookup[j] = i
+
+        # This is the actual structure we use to compute lookups later on
+        # It's still not optimal, but it'll do...
         self._compartment_category_map = binary_matrix_to_sparse_pairs(self._category_matrix)
-
-    @abstractmethod
-    def prepare_dynamic(self, parameters: dict = None):
-
-        # Calculate initial population based on possible parameterization
-        self.parameters = parameters
-        self.model.initial_population = self.calculate_initial_population(self.parameters)
-
-        """
-        Pre-run calculations to help determine force of infection multiplier at runtime.
-
-        We start with a set of "mixing categories". These categories describe groups of
-        compartments.
-        For example, we might have the stratifications age {child, adult} and location {work, home}.
-        In this case, the mixing categories would be
-            {child x home, child x work, adult x home, adult x work}.
-        Mixing categories are only created when a mixing matrix is supplied during stratification.
-
-        There is a mapping from every compartment to a mixing category.
-        This is only true if mixing matrices are supplied only for complete stratifications.
-        There are `num_cats` categories and `num_comps` compartments.
-        The category matrix is a (num_cats x num_comps) matrix of 0s and 1s, with a 1 when the
-        compartment is in a given category.
-        We expect only one category per compartment, but there may be many compartments per
-        category.
-
-        We can multiply the category matrix by the vector of compartment sizes to get the total
-        number of people in each mixing category.
-
-        We also create a vector of values in [0, inf) which describes how infectious each
-        compartment is: compartment_infectiousness
-        We can use this vector plus the compartment sizes to get the 'effective' number of
-        infectious people per compartment.
-
-        We can use the 'effective infectious' compartment sizes, plus the mixing category matrix
-        to get the infected population per mixing category.
-
-        Now that we know:
-            - the total population per category
-            - the infected population per category
-            - the inter-category mixing coefficients (mixing matrix)
-
-        We can calculate infection density or infection frequency transition flows for each
-        category.
-        Finally, at runtime, we can lookup which category a given compartment is in and look up its
-        infectious multiplier (density or frequency).
-        """
-
-        # Find out the relative infectiousness of each compartment, for each strain.
-        # If no strains have been created, we assume a default strain name.
-        self._compartment_infectiousness = {
-            strain_name: self._get_compartment_infectiousness_for_strain(strain_name)
-            for strain_name in self.model._disease_strains
-        }
-
-    # FIXME:
-    # This is now only used by tests, and should never called in any production code
-    def prepare_to_run(self, parameters: dict = None):
-        self.model.finalize()
-        self.prepare_structural()
-        self.prepare_dynamic(parameters)
 
     def _get_compartment_infectiousness_for_strain(self, strain: str):
         """
@@ -208,43 +169,23 @@ class ModelRunner(ABC):
         # Set all infectious compartments to be equally infectious.
         compartment_infectiousness[infectious_mask] = 1
 
-        # for strat in self.model._stratifications:
-        #     for comp_name, adjustments in strat.infectiousness_adjustments.items():
-        #         for stratum, adjustment in adjustments.items():
-        # if adjustment:
-        #             adj_comps = self.model.get_matching_compartments(comp_name, {strat.name: stratum})
-        #             for c in adj_comps:
-        #                 inf_value = compartment_infectiousness[c.idx]
+        for strat in self.model._stratifications:
+            for comp_name, adjustments in strat.infectiousness_adjustments.items():
+                for stratum, adjustment in adjustments.items():
+                    if adjustment:
+                        is_overwrite = isinstance(adjustment, Overwrite)
+                        adj_value = self._graph_values_static[adjustment.param._graph_key]
+                        adj_comps = self.model.get_matching_compartments(
+                            comp_name, {strat.name: stratum}
+                        )
+                        for c in adj_comps:
+                            if is_overwrite:
+                                compartment_infectiousness[c.idx] = adj_value
+                            else:
+                                orig_value = compartment_infectiousness[c.idx]
+                                compartment_infectiousness[c.idx] = adj_value * orig_value
 
-        # Apply infectiousness adjustments.
-        for idx, comp in enumerate(self.model.compartments):
-            infect_value = compartment_infectiousness[idx]
-            for strat in self.model._stratifications:
-                # strat_fs = frozenset({strat.name})
-                for comp_name, adjustments in strat.infectiousness_adjustments.items():
-                    if comp_name == comp.name:
-                        for stratum, adjustment in adjustments.items():
-                            should_apply_adjustment = adjustment and comp.has_stratum(
-                                strat.name, stratum
-                            )
-                            if should_apply_adjustment:
-                                # FIXME: Should be able to look up _graph_key here
-                                # Cannot use time-varying functions for infectiousness adjustments,
-                                # because this is calculated before the model starts running.
-                                adj_value = self._static_graph_vals[adjustment.param._graph_key]
-                                if isinstance(adjustment, Overwrite):
-                                    infect_value = adj_value
-                                else:
-                                    infect_value = adj_value * infect_value
-                                # else:
-
-                                # inf_value = adjustment.get_new_value(
-                                #    inf_value, None, None, self.parameters
-                                # )
-
-            compartment_infectiousness[idx] = infect_value
-
-        if strain != self.model._DEFAULT_DISEASE_STRAIN:
+        if "strain" in self.model.stratifications:
             # FIXME: If there are multiple strains, but one of them is _DEFAULT_DISEASE_STRAIN
             # there will almost certainly be incorrect masks applied
             # Filter out all values that are not in the given strain.
@@ -257,70 +198,115 @@ class ModelRunner(ABC):
 
         return compartment_infectiousness
 
-    def _calculate_strain_infection_values(
-        self, compartment_values: np.ndarray, mixing_matrix: np.ndarray
-    ):
-        num_cats = self.num_categories
-        num_strains = len(self.model._disease_strains)
-        # Calculate total number of people per category (for FoI).
-        # A vector with size (num_cats).
-        self._category_populations = sparse_pairs_accum(
-            self._compartment_category_map, compartment_values, num_cats
+    def _precompute_flow_maps(self):
+        """Build fast-access arrays of flow indices"""
+        f_pos_map = []
+        f_neg_map = []
+        for i, f in self._iter_non_function_flows:
+            if f.source:
+                f_neg_map.append((i, f.source.idx))
+            if f.dest:
+                f_pos_map.append((i, f.dest.idx))
+
+        self._pos_flow_map = np.array(f_pos_map, dtype=np.int)
+        self._neg_flow_map = np.array(f_neg_map, dtype=np.int)
+
+    def _prepare_time_step(self, time: float, compartment_values: np.ndarray):
+        """
+        Pre-timestep setup. This should be run before `_get_rates`.
+        Here we set up any stateful updates that need to happen before we get the flow rates.
+        """
+
+        # Some flows (e.g birth replacement) expect this value to be defined
+        self._timestep_deaths = 0.0
+
+        model_variables = {
+            "time": time,
+            "compartment_values": compartment_values,
+            "computed_values": {},
+        }
+
+        self._graph_values_timestep = self.run_graph_ts(
+            parameters=self.parameters, model_variables=model_variables
         )
 
-        # Calculate infectious populations for each strain.
-        # Infection density/frequency is the infectious multiplier for each mixing category,
-        # calculated for each strain.
-        self._infection_density = {}
-        self._infection_frequency = {}
-        # Flat indices are used for fast vectorized lookups
-        # These are pure arrays rather than <dict, ndarray> types
-        # FIXME+++ We should eventually move everything to these, but the originals are maintained
-        # because they are much better tested, and we can demonstrate equivalence
-        self._infection_density_flat = np.empty((num_strains, num_cats), dtype=float)
-        self._infection_frequency_flat = np.empty((num_strains, num_cats), dtype=float)
+        # Find the effective infectious population for the force of infection (FoI) calculations.
+        self._mixing_matrix = mixing_matrix = self._graph_values_timestep["mixing_matrix"]
+        self._calculate_strain_infection_values(compartment_values, mixing_matrix)
 
-        for strain_idx, strain in enumerate(self.model._disease_strains):
-            strain_compartment_infectiousness = self._compartment_infectiousness[strain]
+    def _get_mixing_matrix(self, t):
+        # FIXME: Only used by tests, should never be called in real code
+        self.prepare_to_run()
+        self._prepare_time_step(t, self.model.initial_population)
+        return self._mixing_matrix
 
-            # Calculate the effective infectious people for each category, including adjustment
-            # factors.
-            # Returns a vector with size (num_cats x 1).
-            infected_values = compartment_values * strain_compartment_infectiousness
-            infectious_populations = sparse_pairs_accum(
-                self._compartment_category_map, infected_values, num_cats
-            )
-            self._infection_density[strain] = np.matmul(mixing_matrix, infectious_populations)
-            self._infection_density_flat[strain_idx] = self._infection_density[strain]
-            # Calculate the effective infectious person frequency for each category, including
-            # adjustment factors.
-            # A vector with size (num_cats x 1).
-            category_prevalence = infectious_populations / self._category_populations
-            self._infection_frequency[strain] = np.matmul(mixing_matrix, category_prevalence)
-            self._infection_frequency_flat[strain_idx] = self._infection_frequency[strain]
+    def get_flow_weights(self):
+        """Collate weights for all model flows at the current timestep"""
 
-    def _get_mixing_matrix(self, time: float) -> np.ndarray:
+        flow_weights = np.zeros(len(self.model._flows))
+
+        for i, f in enumerate(self.model._flows):
+            flow_weights[i] = self._graph_values_timestep[f._graph_key]
+
+        return flow_weights
+
+    def _get_infectious_multipliers(self) -> np.ndarray:
+        """Get multipliers for all infectious flows
+
+        Returns:
+            np.ndarray: Array of infectiousness multipliers
         """
-        Returns the final mixing matrix for a given time.
-        """
-        # We actually have some matrices, let's do things with them...
-        if len(self.model._mixing_matrices):
-            mixing_matrix = None
-            for mm_func in self.model._mixing_matrices:
-                # Assume each mixing matrix is either an np.ndarray or a function of time that
-                # returns one.
-                # mm = mm_func(time) if callable(mm_func) else mm_func
-                mm = get_model_param_value(mm_func, time, None, self.parameters)
-                # Get Kronecker product of old and new mixing matrices.
-                # Only do this if we actually need to
-                if mixing_matrix is None:
-                    mixing_matrix = mm
-                else:
-                    mixing_matrix = np.kron(mixing_matrix, mm)
-        else:
-            mixing_matrix = self.model._DEFAULT_MIXING_MATRIX
+        # We can use a fast lookup version if we have only one type of infectious multiplier
+        # (eg only frequency, not mixed freq and density)
+        if self._infection_frequency_only:
+            return self._infection_frequency_flat[
+                self._infect_strain_lookup_idx, self._infect_cat_lookup_idx
+            ]
+        elif self._infection_density_only:
+            return self._infection_density_flat[
+                self._infect_strain_lookup_idx, self._infect_cat_lookup_idx
+            ]
 
-        return mixing_matrix
+        multipliers = np.empty(len(self.infectious_flow_indices))
+        for i, idx in enumerate(self.infectious_flow_indices):
+            f = self.model._flows[idx]
+            multipliers[i] = f.find_infectious_multiplier(f.source, f.dest)
+        return multipliers
+
+    def _build_infectious_multipliers_lookup(self):
+        """Get multipliers for all infectious flows
+
+        These are used by _get_infectious_multipliers_flat (currently experimental)
+
+        Returns:
+            np.ndarray: Array of infectiousness multipliers
+        """
+        lookups = []
+
+        has_freq = False
+        has_dens = False
+
+        for i, idx in enumerate(self.infectious_flow_indices):
+            f = self.model._flows[idx]
+            if isinstance(f, flows.InfectionFrequencyFlow):
+                has_freq = True
+            elif isinstance(f, flows.InfectionDensityFlow):
+                has_dens = True
+            cat_idx, strain = self._get_infection_multiplier_indices(f.source, f.dest)
+            strain_idx = self.model._disease_strains.index(strain)
+            lookups.append([strain_idx, cat_idx])
+        full_table = np.array(lookups, dtype=int)
+        self._full_table = full_table.reshape(len(self.infectious_flow_indices), 2)
+        self._infect_strain_lookup_idx = self._full_table[:, 0].flatten()
+        self._infect_cat_lookup_idx = self._full_table[:, 1].flatten()
+
+        self._infection_frequency_only = False
+        self._infection_density_only = False
+
+        if has_freq and not has_dens:
+            self._infection_frequency_only = True
+        elif has_dens and not has_freq:
+            self._infection_density_only = True
 
     def _get_force_idx(self, source: Compartment):
         """
@@ -356,22 +342,184 @@ class ModelRunner(ABC):
         idx, strain = self._get_infection_multiplier_indices(source, dest)
         return self._infection_density[strain][idx]
 
-    def _calc_computed_values(self, compartment_vals: np.ndarray, time: float) -> dict:
-        computed_values = {}
-        for k, proc in self.model._computed_value_processors.items():
-            computed_values[k] = proc.process(compartment_vals, computed_values, time)
-
-        model_variables = {"compartment_values": compartment_vals, "time": time}
-
-        computed_values.update(
-            self.computed_values_runner(parameters=self.parameters, model_variables=model_variables)
+    def _calculate_strain_infection_values(
+        self, compartment_values: np.ndarray, mixing_matrix: np.ndarray
+    ):
+        num_cats = self.num_categories
+        # Calculate total number of people per category (for FoI).
+        # A vector with size (num_cats).
+        self._category_populations = sparse_pairs_accum(
+            self._compartment_category_map, compartment_values, num_cats
         )
 
-        return computed_values
+        for strain_idx, strain in enumerate(self.model._disease_strains):
+            strain_compartment_infectiousness = self._compartment_infectiousness[strain]
 
-    def calculate_initial_population(self, parameters) -> np.ndarray:
+            infection_density, infection_frequency = get_strain_infection_values(
+                compartment_values,
+                strain_compartment_infectiousness,
+                self._compartment_category_map,
+                num_cats,
+                mixing_matrix,
+                self._category_populations,
+            )
+
+            self._infection_density[strain] = infection_density
+            self._infection_density_flat[strain_idx] = infection_density
+
+            self._infection_frequency[strain] = infection_frequency
+            self._infection_frequency_flat[strain_idx] = infection_frequency
+
+    def _get_flow_rates(self, compartment_vals: np.ndarray, time: float) -> np.ndarray:
+        """Get current flow rates, equivalent to calling get_net_flow on all (non-function) flows
+
+        Args:
+            comp_vals (np.ndarray): Compartment values
+            time (float): Time in model.times coordinates
+
+        Returns:
+            np.ndarray: Array of all (non-function) flow rates
+        """
+
+        self._prepare_time_step(time, compartment_vals)
+
+        computed_values = self._graph_values_timestep["computed_values"]
+
+        flow_weights = self.get_flow_weights()
+
+        # These will be filled in afterwards
+        populations = compartment_vals[self.population_idx]
+        # Update for special cases (population-independent and CrudeBirth)
+        if self._has_non_pop_flows:
+            populations[self._non_pop_flow_idx] = 1.0
+        if self._has_crude_birth:
+            populations[self._crude_birth_idx] = find_sum(compartment_vals)
+
+        flow_rates = flow_weights * populations
+
+        # Calculate infection flows
+        infect_mul = self._get_infectious_multipliers()
+        flow_rates[self.infectious_flow_indices] *= infect_mul
+
+        # ReplacementBirthFlow depends on death flows already being calculated; update here
+        if self._has_replacement:
+            # Only calculate timestep_deaths if we use replacement, it's expensive...
+            self._timestep_deaths = flow_rates[self.death_flow_indices].sum()
+            flow_rates[self._replacement_flow_idx] = self._timestep_deaths
+
+        return flow_rates, computed_values
+
+    def _get_rates(self, comp_vals: np.ndarray, time: float) -> Tuple[np.ndarray, np.ndarray]:
+        """Calculates inter-compartmental flow rates for a given state and time, as well
+        as the updated compartment values once these rate deltas have been applied
+
+        Args:
+            comp_vals (np.ndarray): The current state of the model compartments
+                                    (ie. number of people)
+            time (float): Time in model.times coordinates
+
+        Returns:
+            Tuple[np.ndarray, np.ndarray]: (comp_rates, flow_rates) where
+                comp_rates is the rate of change of compartments, and
+                flow_rates is the contribution of each flow to compartment rate of change
+        """
+
+        comp_rates = np.zeros(len(comp_vals))
+        flow_rates, _ = self._get_flow_rates(comp_vals, time)
+
+        if self._pos_flow_map.size > 0:
+            accumulate_positive_flow_contributions(flow_rates, comp_rates, self._pos_flow_map)
+
+        if self._neg_flow_map.size > 0:
+            accumulate_negative_flow_contributions(flow_rates, comp_rates, self._neg_flow_map)
+
+        return comp_rates, flow_rates
+
+    def get_compartment_rates(self, compartment_values: np.ndarray, time: float):
+        """
+        Interface for the ODE solver: this function is passed to solve_ode func and defines the
+        dynamics of the model.
+        Returns the rate of change of the compartment values for a given state and time.
+        """
+        comp_vals = clean_compartment_values(compartment_values)
+        comp_rates, _ = self._get_rates(comp_vals, time)
+        return comp_rates
+
+    def get_flow_rates(self, compartment_values: np.ndarray, time: float):
+        """
+        Returns the contribution of each flow to compartment rate of change for a given state and
+        time.
+        """
+        comp_vals = clean_compartment_values(compartment_values)
+        return self._get_flow_rates(comp_vals, time)
+
+    def calculate_initial_population(self) -> np.ndarray:
         """
         Called to recalculate the initial population from either fixed dictionary, or a dict
         supplied as a parameter
         """
-        return calculate_initial_population(self.model, parameters)
+        # FIXME:
+        # Work in progress; correctly recalculates non-parameterized
+        # populations, but does not include population rebalances etc
+        model = self.model
+
+        distribution = model._init_pop_dist
+        initial_population = np.zeros_like(model._original_compartment_names, dtype=float)
+
+        # if is_var(distribution, "parameters"):
+        #    distribution = self.parameters[distribution.name]
+        # elif isinstance(distribution, Function) or isinstance(distribution, ModelParameter):
+        #    distribution = get_static_param_value(distribution, parameters)
+
+        if isinstance(distribution, dict):
+            for idx, comp in enumerate(model._original_compartment_names):
+                pop_key = distribution[comp.name]._graph_key
+                pop = self._graph_values_static[pop_key]
+                assert pop >= 0, f"Population for {comp.name} cannot be negative: {pop}"
+                initial_population[idx] = pop
+
+            comps = model._original_compartment_names
+
+            for action in model.tracker.all_actions:
+                if action.action_type == "stratify":
+                    strat = action.kwargs["strat"]
+                    # for strat in self.model._stratifications:
+                    # Stratify compartments, split according to split_proportions
+                    prev_compartment_names = comps  # copy.copy(self.compartments)
+                    comps = strat._stratify_compartments(comps)
+                    initial_population = strat._stratify_compartment_values(
+                        prev_compartment_names, initial_population, self._graph_values_static
+                    )
+                elif action.action_type == "adjust_pop_split":
+                    initial_population = get_rebalanced_population(
+                        model, initial_population, self._graph_values_static, **action.kwargs
+                    )
+        else:
+            raise TypeError(
+                "Initial population distribution must be a dict",
+                distribution,
+            )
+        model.initial_population = initial_population
+
+
+"""
+Additional functions - fast JIT specializations etc
+"""
+
+
+@numba.jit
+def get_strain_infection_values(
+    compartment_values,
+    strain_compartment_infectiousness,
+    compartment_category_map,
+    num_cats,
+    mixing_matrix,
+    category_populations,
+):
+    infected_values = compartment_values * strain_compartment_infectiousness
+    infectious_populations = sparse_pairs_accum(compartment_category_map, infected_values, num_cats)
+    infection_density = mixing_matrix @ infectious_populations
+    category_prevalence = infectious_populations / category_populations
+    infection_frequency = mixing_matrix @ category_prevalence
+
+    return infection_density, infection_frequency
