@@ -94,10 +94,7 @@ class Compartment:
 
         """
         new_strata = {**self.strata, stratification_name: stratum_name}
-        return Compartment(
-            name=self.name,
-            strata=new_strata,
-        )
+        return Compartment(name=self.name, strata=new_strata, tags=self.tags)
 
     def serialize(self) -> str:
         """Returns a string representation of the compartment"""

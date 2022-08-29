@@ -44,10 +44,9 @@ def test_strat_get_infection_multiplier__with_age_strat_and_no_mixing(backend):
     model._backend.prepare_to_run()
     assert_array_equal(
         model._backend._compartment_infectiousness["default"],
-        np.array([0.0, 0.0, 1.0, 1.0, 0.0, 0.0]),
+        np.array([1.0, 1.0]),
     )
-    assert_array_equal(model._backend._category_matrix, np.array([[1.0, 1.0, 1.0, 1.0, 1.0, 1.0]]))
-    assert model._backend._category_lookup == {0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0}
+    assert_array_equal(model._backend._category_lookup, np.zeros(6))
 
     # Do pre-iteration force of infection calcs
     model._backend._prepare_time_step(0, model.initial_population)
@@ -113,13 +112,12 @@ def test_strat_get_infection_multiplier__with_age_strat_and_simple_mixing(backen
     model._backend.prepare_to_run()
     assert_array_equal(
         model._backend._compartment_infectiousness["default"],
-        np.array([0.0, 0.0, 1.0, 1.0, 0.0, 0.0]),
+        np.array([1.0, 1.0]),
     )
     assert_array_equal(
-        model._backend._category_matrix,
-        np.array([[1.0, 0.0, 1.0, 0.0, 1.0, 0.0], [0.0, 1.0, 0.0, 1.0, 0.0, 1.0]]),
+        model._backend._category_lookup,
+        np.array([0, 1, 0, 1, 0, 1]),
     )
-    assert model._backend._category_lookup == {0: 0, 1: 1, 2: 0, 3: 1, 4: 0, 5: 1}
 
     # Do pre-iteration force of infection calcs
     model._backend._prepare_time_step(0, model.initial_population)
@@ -187,14 +185,12 @@ def test_strat_get_infection_multiplier__with_age_split_and_simple_mixing(backen
     model._backend.prepare_to_run()
     assert_array_equal(
         model._backend._compartment_infectiousness["default"],
-        np.array([0.0, 0.0, 1.0, 1.0, 0.0, 0.0]),
+        np.array([1.0, 1.0]),
     )
     assert_array_equal(
-        model._backend._category_matrix,
-        np.array([[1.0, 0.0, 1.0, 0.0, 1.0, 0.0], [0.0, 1.0, 0.0, 1.0, 0.0, 1.0]]),
+        model._backend._category_lookup,
+        np.array([0, 1, 0, 1, 0, 1]),
     )
-    assert model._backend._category_lookup == {0: 0, 1: 1, 2: 0, 3: 1, 4: 0, 5: 1}
-
     # Do pre-iteration force of infection calcs
     model._backend._prepare_time_step(0, model.initial_population)
     child_density = 5
@@ -260,13 +256,12 @@ def test_strat_get_infection_multiplier__with_age_strat_and_mixing(backend):
     model._backend.prepare_to_run()
     assert_array_equal(
         model._backend._compartment_infectiousness["default"],
-        np.array([0.0, 0.0, 1.0, 1.0, 0.0, 0.0]),
+        np.array([1.0, 1.0]),
     )
     assert_array_equal(
-        model._backend._category_matrix,
-        np.array([[1.0, 0.0, 1.0, 0.0, 1.0, 0.0], [0.0, 1.0, 0.0, 1.0, 0.0, 1.0]]),
+        model._backend._category_lookup,
+        np.array([0, 1, 0, 1, 0, 1]),
     )
-    assert model._backend._category_lookup == {0: 0, 1: 1, 2: 0, 3: 1, 4: 0, 5: 1}
 
     # Do pre-iteration force of infection calcs
     model._backend._prepare_time_step(0, model.initial_population)
@@ -334,14 +329,12 @@ def test_strat_get_infection_multiplier__with_double_strat_and_no_mixing(backend
     assert_array_equal(model.initial_population, expected_comp_vals)
 
     # Do pre-run force of infection calcs.
-    expected_compartment_infectiousness = np.array([0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0])
-    expected_category_matrix = np.array([[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]])
-    expected_lookup = {n: 0 for n in range(12)}
+    expected_compartment_infectiousness = np.array([1, 1, 1, 1])
+    expected_lookup = np.zeros(12)
     assert_array_equal(
         model._backend._compartment_infectiousness["default"], expected_compartment_infectiousness
     )
-    assert_array_equal(model._backend._category_matrix, expected_category_matrix)
-    assert model._backend._category_lookup == expected_lookup
+    assert_array_equal(model._backend._category_lookup, expected_lookup)
 
     # Do pre-iteration force of infection calcs
     model._backend._prepare_time_step(0, model.initial_population)
@@ -406,14 +399,10 @@ def test_strat_get_infection_multiplier__with_double_strat_and_first_strat_mixin
 
     # Do pre-run force of infection calcs.
 
-    exp_lookup = {0: 0, 1: 0, 2: 1, 3: 1, 4: 0, 5: 0, 6: 1, 7: 1, 8: 0, 9: 0, 10: 1, 11: 1}
-    exp_matrix = np.array(
-        [[1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0], [0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1]]
-    )
-    exp_mults = np.array([0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0])
+    exp_lookup = np.array([0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1])
+    exp_mults = np.array([1, 1, 1, 1])
     assert_array_equal(model._backend._compartment_infectiousness["default"], exp_mults)
-    assert_array_equal(model._backend._category_matrix, exp_matrix)
-    assert model._backend._category_lookup == exp_lookup
+    assert_array_equal(model._backend._category_lookup, exp_lookup)
 
     # Do pre-iteration force of infection calcs
     model._backend._prepare_time_step(0, model.initial_population)
@@ -491,17 +480,11 @@ def test_strat_get_infection_multiplier__with_double_strat_and_second_strat_mixi
 
     # Do pre-run force of infection calcs.
 
-    exp_lookup = {0: 0, 1: 1, 2: 0, 3: 1, 4: 0, 5: 1, 6: 0, 7: 1, 8: 0, 9: 1, 10: 0, 11: 1}
-    exp_matrix = np.array(
-        [
-            [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0],
-            [0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1],
-        ]
-    )
-    exp_mults = np.array([0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0])
+    exp_lookup = np.array([0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1])
+
+    exp_mults = np.array([1, 1, 1, 1])
     assert_array_equal(model._backend._compartment_infectiousness["default"], exp_mults)
-    assert_array_equal(model._backend._category_matrix, exp_matrix)
-    assert model._backend._category_lookup == exp_lookup
+    assert_array_equal(model._backend._category_lookup, exp_lookup)
 
     # Do pre-iteration force of infection calcs
     model._backend._prepare_time_step(0, model.initial_population)
@@ -595,32 +578,11 @@ def test_strat_get_infection_multiplier__with_double_strat_and_both_strats_mixin
 
     # Do pre-run force of infection calcs.
 
-    exp_lookup = {
-        0: 0,  # S age: child location: urban -> children at urban
-        1: 1,  # S age: child location: rural -> children at rural
-        2: 2,  # S age: adult location: urban -> adults at urban
-        3: 3,  # S age: adult location: rural -> adults at rural
-        4: 0,  # I age: child location: urban -> children at urban
-        5: 1,  # I age: child location: rural -> children at rural
-        6: 2,  # I age: adult location: urban -> adults at urban
-        7: 3,  # I age: adult location: rural -> adults at rural
-        8: 0,  # R age: child location: urban -> children at urban
-        9: 1,  # R age: child location: rural -> children at rural
-        10: 2,  # R age: adult location: urban -> adults at urban
-        11: 3,  # R age: adult location: rural -> adults at rural
-    }
-    exp_matrix = np.array(
-        [
-            [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0],  # children at urban
-            [0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0],  # children at rural
-            [0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0],  # adults at urban
-            [0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1],  # adults at rural
-        ]
-    )
-    exp_mults = np.array([0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0])
+    exp_lookup = np.array([0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3])
+
+    exp_mults = np.array([1, 1, 1, 1])
     assert_array_equal(model._backend._compartment_infectiousness["default"], exp_mults)
-    assert_array_equal(model._backend._category_matrix, exp_matrix)
-    assert model._backend._category_lookup == exp_lookup
+    assert_array_equal(model._backend._category_lookup, exp_lookup)
 
     # Do pre-iteration force of infection calcs
     model._backend._prepare_time_step(0, model.initial_population)

@@ -35,7 +35,7 @@ def test_strat_infectiousness__with_adjustments(backend):
     model._backend.prepare_to_run()
     assert_array_equal(
         model._backend._compartment_infectiousness["default"],
-        np.array([0, 0, 0, 1, 3, 0.5, 0, 0, 0]),
+        np.array([1, 3, 0.5]),
     )
 
     # Do pre-iteration force of infection calcs
@@ -89,7 +89,7 @@ def test_strat_infectiousness__with_multiple_adjustments(backend):
     model._backend.prepare_to_run()
     assert_array_equal(
         model._backend._compartment_infectiousness["default"],
-        np.array([0, 0, 0, 0, 0, 0, 1, 7, 1, 21, 1, 3.5, 0, 0, 0, 0, 0, 0]),
+        np.array([1, 7, 1, 21, 1, 3.5]),
     )
     # Do pre-iteration force of infection calcs
     model._backend._prepare_time_step(0, model.initial_population)

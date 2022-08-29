@@ -1,4 +1,4 @@
-"""Implementation of CompartmentalModel and ModelRunner internals in Jax
+"""Implementation of CompartmentalModel and ModelBackend internals in Jax
 
 This is a mess right now!
 """
@@ -9,7 +9,7 @@ from summer.runner.jax import solvers
 
 from summer.adjust import Overwrite
 
-from summer.runner import ModelRunner
+from summer.runner import ModelBackend
 
 from summer.solver import SolverType
 
@@ -22,14 +22,14 @@ def clean_compartments(compartment_values: jnp.ndarray):
 
 
 def get_strain_infection_values(
-    compartment_values,
+    strain_infectious_values,
     strain_compartment_infectiousness,
-    category_matrix,
+    strain_category_indexer,
     mixing_matrix,
     category_populations,
 ):
-    infected_values = compartment_values * strain_compartment_infectiousness
-    infectious_populations = category_matrix @ infected_values
+    infected_values = strain_infectious_values * strain_compartment_infectiousness
+    infectious_populations = jnp.sum(infected_values[strain_category_indexer], axis=1)
     infection_density = mixing_matrix @ infectious_populations
     category_prevalence = infectious_populations / category_populations
     infection_frequency = mixing_matrix @ category_prevalence
@@ -38,7 +38,7 @@ def get_strain_infection_values(
 
 
 def build_get_infectious_multipliers(runner):
-    category_matrix = runner._category_matrix
+    population_cat_indexer = jnp.array(runner._population_category_indexer)
 
     # FIXME: We are hardcoding this for frequency only right now
     if not runner._infection_frequency_only:
@@ -56,13 +56,22 @@ def build_get_infectious_multipliers(runner):
 
         full_multipliers = jnp.ones(len(runner.infectious_flow_indices))
 
-        mm = cur_graph_outputs["mixing_matrix"]
-        cat_pops = category_matrix @ compartment_values
+        mixing_matrix = cur_graph_outputs["mixing_matrix"]
+        category_populations = compartment_values[population_cat_indexer].sum(axis=1)
 
         for strain_idx, strain in enumerate(runner.model._disease_strains):
-            strain_infectiousness = compartment_infectiousness[strain]
+
+            strain_compartment_infectiousness = compartment_infectiousness[strain]
+            strain_infectious_idx = runner._strain_infectious_indexers[strain]
+            strain_category_indexer = runner._strain_category_indexers[strain]
+
+            strain_infectious_values = compartment_values[strain_infectious_idx]
             strain_values = get_strain_infection_values(
-                compartment_values, strain_infectiousness, category_matrix, mm, cat_pops
+                strain_infectious_values,
+                strain_compartment_infectiousness,
+                strain_category_indexer,
+                mixing_matrix,
+                category_populations,
             )
             infection_frequency[strain] = strain_values["infection_frequency"]
             infection_density[strain] = strain_values["infection_density"]
@@ -101,7 +110,7 @@ def build_get_infectious_multipliers(runner):
     return get_infectious_multipliers
 
 
-def build_get_flow_weights(runner: ModelRunner):
+def build_get_flow_weights(runner: ModelBackend):
 
     m = runner.model
 
@@ -248,26 +257,18 @@ def get_accumulation_maps(runner):
     return {"positive": recurse_unpeel(pos_map), "negative": recurse_unpeel(neg_map)}
 
 
-def build_get_compartment_infectiousness_for_strain(model, strain: str):
+def build_get_compartment_infectiousness(model):
     """
     Build a Jax function to return the compartment infectiousness (for all compartments),
     of the strain specified by strain
     """
-    # Figure out which compartments should be infectious
-
-    infectious_mask = jnp.array(
-        [c.has_name_in_list(model._infectious_compartments) for c in model.compartments]
-    )
 
     # This is run during prepare_dynamic
     # i.e. it is done once at the start of a model run, but
     # is parameterized (non-structural)
-    def get_compartment_infectiousness_for_strain(static_graph_values):
+    def get_compartment_infectiousness(static_graph_values):
         # Find the infectiousness multipliers for each compartment being implemented in the model.
-        # Start from assumption that each compartment is not infectious.
-        compartment_infectiousness = jnp.zeros(len(model.compartments))
-        # Set all infectious compartments to be equally infectious.
-        compartment_infectiousness = compartment_infectiousness.at[infectious_mask].set(1.0)
+        compartment_infectiousness = jnp.ones(len(model.compartments))
 
         # Apply infectiousness adjustments
         for strat in model._stratifications:
@@ -290,33 +291,22 @@ def build_get_compartment_infectiousness_for_strain(model, strain: str):
                                     c.idx
                                 ].set(adj_value * orig_value)
 
-        if "strain" in model.stratifications:
-            # FIXME: If there are multiple strains, but one of them is _DEFAULT_DISEASE_STRAIN
-            # there will almost certainly be incorrect masks applied
-            # Filter out all values that are not in the given strain.
-            strain_mask = jnp.zeros(len(model.compartments))
-            for idx, compartment in enumerate(model.compartments):
-                if compartment.has_stratum("strain", strain):
-                    strain_mask = strain_mask.at[idx].set(1.0)
+        strain_comp_inf = {}
 
-            compartment_infectiousness = compartment_infectiousness * strain_mask
-
-        return compartment_infectiousness
-
-    return get_compartment_infectiousness_for_strain
-
-
-def build_compartment_infectiousness_calc(model):
-    """Build a functioning return the compartment infectiousness for _all_ strains in the model"""
-    strain_funcs = {}
-    for strain in model._disease_strains:
-        strain_funcs[strain] = build_get_compartment_infectiousness_for_strain(model, strain)
-
-    def get_compartment_infectiousness(static_graph_vals):
-        compartment_infectiousness = {}
         for strain in model._disease_strains:
-            compartment_infectiousness[strain] = strain_funcs[strain](static_graph_vals)
-        return compartment_infectiousness
+            if "strain" in model.stratifications:
+                strain_filter = {"strain": strain}
+            else:
+                strain_filter = {}
+
+            # _Must_ be ordered here
+            strain_infect_comps = model.query_compartments(
+                strain_filter, tags="infectious", as_idx=True
+            )
+
+            strain_comp_inf[strain] = compartment_infectiousness[strain_infect_comps]
+
+        return strain_comp_inf
 
     return get_compartment_infectiousness
 
@@ -325,6 +315,10 @@ def build_run_model(runner, base_params=None, dyn_params=None, solver=None):
 
     if dyn_params is None:
         dyn_params = runner.model.graph.get_input_variables()
+    else:
+        dyn_params = [
+            f"parameters.{p}" if not p.startswith("parameters.") else p for p in dyn_params
+        ]
 
     # Graph frozen for all non-calibration parameters
     if base_params is None:
@@ -335,7 +329,6 @@ def build_run_model(runner, base_params=None, dyn_params=None, solver=None):
     ts_vars = runner.model.graph.query("model_variables")
 
     dyn_params = set(dyn_params).union(set(ts_vars))
-    print(dyn_params)
 
     param_frozen_cg = runner.model.graph.freeze(dyn_params, source_inputs)
 
@@ -388,7 +381,7 @@ def build_run_model(runner, base_params=None, dyn_params=None, solver=None):
     times = jnp.array(runner.model.times)
 
     calc_initial_pop = get_calculate_initial_pop(runner.model)
-    get_compartment_infectiousness = build_compartment_infectiousness_calc(runner.model)
+    get_compartment_infectiousness = build_get_compartment_infectiousness(runner.model)
 
     calc_derived_outputs = build_derived_outputs_runner(runner.model)
 

@@ -4,27 +4,56 @@ The main entry point for this is the ModelProbe class
 """
 
 import re
-from typing import Iterable, Set
+from typing import Iterable, Set, List
 
 import networkx as nx
+import numpy as np
 
 from summer import CompartmentalModel
 from summer.compartment import Compartment
 from summer.flows import BaseFlow
 
 
-def query_compartments(m: CompartmentalModel, query: dict):
+def query_compartments(m: CompartmentalModel, query: dict = None, tags: List = None, as_idx=False):
+    query = query or {}
+    tags = tags or []
+    if isinstance(tags, str):
+        tags = [tags]
     if "name" in query:
         query = query.copy()
         name = query.pop("name")
-        return m.get_matching_compartments(name, query)
+        matching = m.get_matching_compartments(name, query)
+        if as_idx:
+            return np.array(
+                [c.idx for c in matching if all([t in c.tags for t in tags])], dtype=int
+            )
+        else:
+            return [c for c in matching if all([t in c.tags for t in tags])]
     else:
         _strata = frozenset(query.items())
-        return [c for c in m.compartments if c._has_strata(_strata)]
+        if as_idx:
+            return np.array(
+                [
+                    c.idx
+                    for c in m.compartments
+                    if c._has_strata(_strata) and all([t in c.tags for t in tags])
+                ],
+                dtype=int,
+            )
+        else:
+            return [
+                c
+                for c in m.compartments
+                if c._has_strata(_strata) and all([t in c.tags for t in tags])
+            ]
 
 
 def query_flows(
-    m: CompartmentalModel, flow_name: str = None, source: dict = None, dest: dict = None
+    m: CompartmentalModel,
+    flow_name: str = None,
+    source: dict = None,
+    dest: dict = None,
+    tags: List = None,
 ):
     if flow_name is not None:
         if isinstance(flow_name, str):
@@ -52,6 +81,11 @@ def query_flows(
         else:
             dest = frozenset(dest.items())
             flows = [f for f in flows if f.dest and f.dest._has_strata(source)]
+
+    if tags:
+        if isinstance(tags, str):
+            tags = [tags]
+        flows = [f for f in flows if all([t in f.tags for t in tags])]
 
     return flows
 
@@ -90,12 +124,13 @@ class ModelProbe:
     def flows_to_compartments(self, flows: Iterable[BaseFlow]) -> Set[Compartment]:
         return flows_to_compartments(self.model, flows)
 
-    def query_compartments(self, query: dict = None):
-        query = query or {}
-        return query_compartments(self.model, query)
+    def query_compartments(self, query: dict = None, tags: List = None, as_idx=False):
+        return query_compartments(self.model, query, tags, as_idx)
 
-    def query_flows(self, flow_name: str = None, source: dict = None, dest: dict = None):
-        return query_flows(self.model, flow_name, source, dest)
+    def query_flows(
+        self, flow_name: str = None, source: dict = None, dest: dict = None, tags: List = None
+    ):
+        return query_flows(self.model, flow_name, source, dest, tags)
 
     def get_model_subset(self, comp_query: dict = None, flow_query: dict = None):
 

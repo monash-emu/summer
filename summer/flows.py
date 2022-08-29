@@ -3,7 +3,7 @@ This module contains the classes which are used to calculate inter-compartmental
 As a user of the framework you should not have to use these classes directly.
 """
 from abc import ABC, abstractmethod
-from typing import Callable, Dict, List
+from typing import Callable, Dict, List, Set
 
 import numpy as np
 
@@ -33,6 +33,7 @@ class BaseFlow(ABC):
     param = None
     adjustments = None
     is_death_flow = False
+    tags = None
 
     def _is_equal(self, flow):
         """For testing"""
@@ -137,12 +138,15 @@ class BaseEntryFlow(BaseFlow):
         dest: Compartment,
         param: FlowParam,
         adjustments: List[BaseAdjustment] = None,
+        tags: Set[str] = None,
     ):
         assert type(dest) is Compartment
         self.name = name
         self.adjustments = [a for a in (adjustments or []) if a and a.param is not None]
         self.dest = dest
         self.param = param
+        tags = tags or set()
+        self.tags = tags
 
     def stratify(self, strat: Stratification) -> List[BaseFlow]:
         """
@@ -187,6 +191,7 @@ class BaseEntryFlow(BaseFlow):
                 dest=new_dest,
                 param=self.param,
                 adjustments=new_adjustments,
+                tags=self.tags,
             )
             new_flows.append(new_flow)
 
@@ -209,12 +214,15 @@ class BaseExitFlow(BaseFlow):
         source: Compartment,
         param: FlowParam,
         adjustments: List[BaseAdjustment] = None,
+        tags: Set[str] = None,
     ):
         assert type(source) is Compartment
         self.name = name
         self.adjustments = [a for a in (adjustments or []) if a and a.param is not None]
         self.source = source
         self.param = param
+        tags = tags or set()
+        self.tags = tags
 
     def stratify(self, strat: Stratification) -> List[BaseFlow]:
         """
@@ -244,6 +252,7 @@ class BaseExitFlow(BaseFlow):
                 source=new_source,
                 param=self.param,
                 adjustments=new_adjustments,
+                tags=self.tags,
             )
             new_flows.append(new_flow)
 
@@ -267,6 +276,7 @@ class BaseTransitionFlow(BaseFlow):
         dest: Compartment,
         param: FlowParam,
         adjustments: List[BaseAdjustment] = None,
+        tags: Set[str] = None,
     ):
         assert type(source) is Compartment
         assert type(dest) is Compartment
@@ -275,6 +285,8 @@ class BaseTransitionFlow(BaseFlow):
         self.source = source
         self.dest = dest
         self.param = param
+        tags = tags or set()
+        self.tags = tags
 
     def stratify(self, strat: Stratification) -> List[BaseFlow]:
         """
@@ -343,6 +355,7 @@ class BaseTransitionFlow(BaseFlow):
                 dest=new_dest,
                 param=self.param,
                 adjustments=new_adjustments,
+                tags=self.tags,
             )
             new_flows.append(new_flow)
 
@@ -495,6 +508,7 @@ class AbsoluteFlow(BaseTransitionFlow):
         parameter_value = self.get_weight_value(time, computed_values, parameters)
         return parameter_value
 
+
 class BaseInfectionFlow(BaseTransitionFlow):
     def __init__(
         self,
@@ -504,6 +518,7 @@ class BaseInfectionFlow(BaseTransitionFlow):
         param: FlowParam,
         find_infectious_multiplier: Callable[[Compartment, Compartment], float],
         adjustments: List[BaseAdjustment] = None,
+        tags: Set[str] = None,
     ):
         assert type(source) is Compartment
         assert type(dest) is Compartment
@@ -513,6 +528,9 @@ class BaseInfectionFlow(BaseTransitionFlow):
         self.dest = dest
         self.param = param
         self.find_infectious_multiplier = find_infectious_multiplier
+        tags = tags or set()
+        tags.add("infection")
+        self.tags = tags
 
     def get_net_flow(
         self,

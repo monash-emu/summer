@@ -141,11 +141,17 @@ def test_strain__with_infectious_multipliers(backend):
 
     # Do pre-run force of infection calcs.
     model._backend.prepare_to_run()
-    assert_array_equal(model._backend._compartment_infectiousness["a"], np.array([0, 0.5, 0, 0, 0]))
-    assert_array_equal(model._backend._compartment_infectiousness["b"], np.array([0, 0, 3, 0, 0]))
-    assert_array_equal(model._backend._compartment_infectiousness["c"], np.array([0, 0, 0, 2, 0]))
-    assert model._backend._category_lookup == {0: 0, 1: 0, 2: 0, 3: 0, 4: 0}
-    assert_array_equal(model._backend._category_matrix, np.array([[1, 1, 1, 1, 1]]))
+    assert_array_equal(model._backend._compartment_infectiousness["a"], np.array([0.5]))
+    assert_array_equal(model._backend._compartment_infectiousness["b"], np.array([3]))
+    assert_array_equal(
+        model._backend._compartment_infectiousness["c"],
+        np.array(
+            [
+                2,
+            ]
+        ),
+    )
+    assert_array_equal(model._backend._category_lookup, np.zeros(5))
 
     # Do pre-iteration force of infection calcs
     model._backend._prepare_time_step(0, model.initial_population)
@@ -216,11 +222,10 @@ def test_strain__with_flow_adjustments(backend):
 
     # Do pre-run force of infection calcs.
     model._backend.prepare_to_run()
-    assert_array_equal(model._backend._compartment_infectiousness["a"], np.array([0, 1, 0, 0, 0]))
-    assert_array_equal(model._backend._compartment_infectiousness["b"], np.array([0, 0, 1, 0, 0]))
-    assert_array_equal(model._backend._compartment_infectiousness["c"], np.array([0, 0, 0, 1, 0]))
-    assert model._backend._category_lookup == {0: 0, 1: 0, 2: 0, 3: 0, 4: 0}
-    assert_array_equal(model._backend._category_matrix, np.array([[1, 1, 1, 1, 1]]))
+    assert_array_equal(model._backend._compartment_infectiousness["a"], np.array([1]))
+    assert_array_equal(model._backend._compartment_infectiousness["b"], np.array([1]))
+    assert_array_equal(model._backend._compartment_infectiousness["c"], np.array([1]))
+    assert_array_equal(model._backend._category_lookup, np.zeros(5))
 
     # Do pre-iteration force of infection calcs
     model._backend._prepare_time_step(0, model.initial_population)
@@ -304,35 +309,15 @@ def test_strain__with_infectious_multipliers_and_heterogeneous_mixing(backend):
     model._backend.prepare_to_run()
     assert_array_equal(
         model._backend._compartment_infectiousness["a"],
-        np.array([0, 0, 0.5, 0, 0, 0.5, 0, 0, 0, 0]),
+        np.array([0.5, 0.5]),
     )
-    assert_array_equal(
-        model._backend._compartment_infectiousness["b"], np.array([0, 0, 0, 3, 0, 0, 3, 0, 0, 0])
-    )
-    assert_array_equal(
-        model._backend._compartment_infectiousness["c"], np.array([0, 0, 0, 0, 2, 0, 0, 2, 0, 0])
-    )
+    assert_array_equal(model._backend._compartment_infectiousness["b"], np.array([3, 3]))
+    assert_array_equal(model._backend._compartment_infectiousness["c"], np.array([2, 2]))
     # 0 for child, 1 for adult
-    assert model._backend._category_lookup == {
-        0: 0,
-        1: 1,
-        2: 0,
-        3: 0,
-        4: 0,
-        5: 1,
-        6: 1,
-        7: 1,
-        8: 0,
-        9: 1,
-    }
+
     assert_array_equal(
-        model._backend._category_matrix,
-        np.array(
-            [
-                [1, 0, 1, 1, 1, 0, 0, 0, 1, 0],
-                [0, 1, 0, 0, 0, 1, 1, 1, 0, 1],
-            ]
-        ),
+        model._backend._category_lookup,
+        np.array([0, 1, 0, 0, 0, 1, 1, 1, 0, 1]),
     )
 
     # Do pre-iteration force of infection calcs

@@ -14,6 +14,7 @@ IS_GITHUB_CI = os.environ.get("GITHUB_ACTION", False)
 
 
 def pytest_configure(config):
+    config.addinivalue_line("markers", "github_only: Mark test to run only in GitHub Actions")
     config.addinivalue_line(
         "markers", "benchmark: A test which benchmarks the performance of some code"
     )
@@ -21,6 +22,10 @@ def pytest_configure(config):
 
 def pytest_runtest_setup(item):
     for _ in item.iter_markers(name="benchmark"):
+        if not IS_GITHUB_CI:
+            pytest.skip("Long running test: run on GitHub only.")
+
+    for marker in item.iter_markers(name="github_only"):
         if not IS_GITHUB_CI:
             pytest.skip("Long running test: run on GitHub only.")
 

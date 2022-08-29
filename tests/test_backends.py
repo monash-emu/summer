@@ -1,3 +1,5 @@
+import pytest
+
 import numpy as np
 
 from computegraph.jaxify import has_jax
@@ -6,6 +8,7 @@ from summer.solver import SolverType
 from .model_setup import get_test_model
 
 
+@pytest.mark.github_only
 def test_compare_default_jax_outputs():
     """Simple direct-comparison acceptance test to check the Jax backend produces
     outputs equivalent to the reference implementation

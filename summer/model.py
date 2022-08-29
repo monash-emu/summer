@@ -22,7 +22,7 @@ from summer.derived_outputs import DerivedOutputRequest, calculate_derived_outpu
 from summer.parameters import params
 
 from summer.parameters.param_impl import finalize_parameters
-from summer.runner import ModelRunner
+from summer.runner import ModelBackend
 from summer.solver import SolverType, solve_ode
 from summer.stratification import Stratification
 from summer.utils import get_scenario_start_index, ref_times_to_dti, clean_compartment_values
@@ -98,9 +98,14 @@ class CompartmentalModel:
         # Set the ref_date; the datetime object equivalent to times[0]
         self.ref_date = ref_date
 
+        if isinstance(infectious_compartments, str):
+            infectious_compartments = [infectious_compartments]
         error_msg = "Infectious compartments must be a subset of compartments"
         assert all(n in compartments for n in infectious_compartments), error_msg
         self.compartments = [Compartment(n, idx=i) for i, n in enumerate(compartments)]
+        for c in self.compartments:
+            if c in infectious_compartments:
+                c.tags.append("infectious")
 
         # Compartment name lookup; needs to be present before adding any flows
         self._update_compartment_name_map()
@@ -869,6 +874,32 @@ class CompartmentalModel:
     Running the model
     """
 
+    def get_runner(self, parameters: dict, dyn_params: List = None):
+        self._update_compartment_indices()
+        self.finalize()
+
+        from computegraph.jaxify import get_using_jax
+
+        if get_using_jax():
+            self._set_backend("jax")
+            # self._backend.prepare_to_run(parameters)
+            self._backend.prepare_structural()
+
+            from summer.runner.jax.model_impl import build_run_model
+
+            jax_run_func, jax_runner_dict = build_run_model(
+                self._backend, base_params=parameters, dyn_params=dyn_params
+            )
+            from jax import jit
+
+            return ModelResults(self, jit(jax_run_func))
+        else:
+            self._set_backend("python")
+            self._backend.prepare_structural()
+            self._backend.prepare_static_params(parameters, dyn_params)
+
+        
+
     def run(
         self,
         solver: str = SolverType.SOLVE_IVP,
@@ -905,7 +936,6 @@ class CompartmentalModel:
         self._set_backend(backend, backend_args)
         # self._backend.prepare_to_run(parameters)
         self._backend.prepare_structural()
-        self._backend.prepare_dynamic(parameters)
 
         if backend == BackendType.JAX:
             from summer.runner.jax.model_impl import build_run_model
@@ -915,6 +945,10 @@ class CompartmentalModel:
             self.outputs = np.array(res["outputs"])
             self.derived_outputs = {k: np.array(v) for k, v in res["derived_outputs"].items()}
             return self
+
+        # Non-Jax run - need to call prepare_* manually
+        self._backend.prepare_static_params(parameters)
+        self._backend.prepare_dynamic({})
 
         if solver == SolverType.STOCHASTIC:
             # Run the model in 'stochastic mode'.
@@ -934,9 +968,9 @@ class CompartmentalModel:
     def _set_backend(self, backend: str, backend_args: dict = None):
         backend_args = backend_args or {}
         if backend == BackendType.PYTHON:
-            self._backend = ModelRunner(self, **backend_args)
+            self._backend = ModelBackend(self, **backend_args)
         elif backend == BackendType.JAX:
-            self._backend = ModelRunner(self, **backend_args)
+            self._backend = ModelBackend(self, **backend_args)
         else:
             msg = f"Invalid backend: {backend}"
             raise ValueError(msg)
@@ -1405,3 +1439,39 @@ class CompartmentalModel:
             raise Exception("Cannot trace input parameters before model is finalized")
         all_in_var = self.graph.get_input_variables()
         return set([v.key for v in all_in_var if v.source == "parameters"])
+
+    def query_compartments(self, query: dict = None, tags: List = None, as_idx=False):
+        from summer.inspect import query_compartments
+
+        return query_compartments(self, query, tags, as_idx)
+
+    def query_flows(
+        self,
+        flow_name: str = None,
+        source: dict = None,
+        dest: dict = None,
+        tags: List = None,
+    ):
+        from summer.inspect import query_flows
+
+        return query_flows(self, flow_name, source, dest, tags)
+
+class ModelResults:
+    def __init__(self, model, run_func):
+        self.model = model
+        self._run_func = run_func
+        
+    def get_outputs_df(self):
+        return self.model.get_outputs_df()
+    
+    def get_derived_outputs_df(self):
+        return self.model.get_derived_outputs_df()
+
+    def run(self, parameters: dict):
+        results = self._run_func(parameters=parameters)
+        self.outputs = np.array(results["outputs"])
+        self.derived_outputs = {k: np.array(v) for k, v in results["derived_outputs"].items()}
+        self.model.outputs = self.outputs
+        self.model.derived_outputs = self.derived_outputs
+        return results
+        

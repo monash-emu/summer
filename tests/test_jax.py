@@ -1,13 +1,40 @@
+from computegraph import jaxify
+
+jaxify.set_using_jax(True)
+
 import numpy as np
 
 from summer import CompartmentalModel, Stratification, StrainStratification
+from summer.runner import ModelBackend
 from summer.solver import SolverType
-from summer.runner.jax import build_model_with_jax
 from summer.parameters import Parameter
 from summer.adjust import Overwrite
 
+from summer.runner.jax.model_impl import build_run_model
+
 
 from tests.test_params.models import PARAMS, build_model_params, build_model_mixing_func
+
+
+def build_model_with_jax(build_func: callable):
+    """This exists primarily as a test shim and should not be considered the main entry point
+
+    Args:
+        build_func (callable): A build model function taking a use_jax boolean argument
+
+    Returns:
+        Tuple of non-Jax ComparmentalModel, and a (jittable) Jax callable
+    """
+    m = build_func(use_jax=True)
+    m.finalize()
+    runner = ModelBackend(m)
+    runner.prepare_structural()
+    m._backend = runner
+
+    run_model, runner_dict = build_run_model(runner)
+    m_nojax = build_func(use_jax=False)
+
+    return m_nojax, run_model
 
 
 def test_model_params():

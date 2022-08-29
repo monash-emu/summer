@@ -1,29 +1,31 @@
 from typing import Tuple
 
 import numpy as np
-import numba
 
 from summer import Compartment
 from summer.adjust import Overwrite
 import summer.flows as flows
+
+from summer.population import get_rebalanced_population
 from summer.compute import (
     accumulate_positive_flow_contributions,
     accumulate_negative_flow_contributions,
-    sparse_pairs_accum,
     find_sum,
-    binary_matrix_to_sparse_pairs,
+    get_strain_infection_values,
 )
 from summer.utils import clean_compartment_values
 
 
-class ModelRunner:
+class ModelBackend:
     """
     An optimized, but less accessible model runner.
     """
 
-    def __init__(self, model):
+    def __init__(self, model, jit=False):
         # Compartmental model
         self.model = model
+
+        self._jit = jit
 
         # Tracks total deaths per timestep for death-replacement birth flows
         self._timestep_deaths = None
@@ -80,16 +82,20 @@ class ModelRunner:
         self._precompute_flow_maps()
         self._build_infectious_multipliers_lookup()
 
-    def prepare_dynamic(self, parameters: dict = None):
+    def prepare_static_params(self, parameters: dict, dyn_params: list = None):
         """Do all precomputation here"""
 
+        parameters = parameters or {}
         self.parameters = parameters
 
         #
         source_inputs = {"parameters": parameters}
 
         # Can replace this with calibration parameters later
-        dyn_vars = self.model.graph.get_input_variables()
+        if dyn_params is None:
+            dyn_vars = self.model.graph.get_input_variables()
+        else:
+            dyn_vars = dyn_params
 
         # Graph frozen for all non-calibration parameters
         self.param_frozen_cg = self.model.graph.freeze(dyn_vars, source_inputs)
@@ -98,8 +104,23 @@ class ModelRunner:
         ts_vars = self.param_frozen_cg.query("model_variables")
 
         # Subgraph that does not contain model_variables (ie anything time varying)
-        static_cg = self.param_frozen_cg.filter(exclude=ts_vars)
-        self._graph_values_static = static_cg.get_callable()(parameters=parameters)
+        self.static_cg = self.param_frozen_cg.filter(exclude=ts_vars)
+        self.run_graph_static = self.static_cg.get_callable()
+
+    def prepare_dynamic(self, param_updates: dict = None):
+        """Do all precomputation here"""
+
+        param_updates = param_updates or {}
+
+        self.parameters.update(param_updates)
+
+        #
+        source_inputs = {"parameters": self.parameters}
+
+        # Query model_variables (ie time-varying sources)
+        ts_vars = self.param_frozen_cg.query("model_variables")
+
+        self._graph_values_static = self.run_graph_static(parameters=self.parameters)
 
         # Subgraph whose only dynamic inputs are model_variables
         self.timestep_cg = self.param_frozen_cg.freeze(ts_vars, source_inputs)
@@ -109,10 +130,7 @@ class ModelRunner:
         # Must be run after self._graph_values_static is available
         self.calculate_initial_population()
 
-        self._compartment_infectiousness = {
-            strain_name: self._get_compartment_infectiousness_for_strain(strain_name)
-            for strain_name in self.model._disease_strains
-        }
+        self._compartment_infectiousness = self._get_compartment_infectiousness()
 
         # Initialize arrays for infectious multipliers
         # FIXME Put this in its own function, this is getting messy again
@@ -130,44 +148,71 @@ class ModelRunner:
             self.model.set_initial_population({}, force=True)
         self.model.finalize()
         self.prepare_structural()
-        self.prepare_dynamic(parameters)
+        self.prepare_static_params(parameters)
+        self.prepare_dynamic({})
 
     def _build_compartment_category_map(self):
         # Create a matrix that tracks which categories each compartment is in.
-        # A matrix with size (num_cats x num_comps).
-        # This is a very sparse static matrix, so we'll flatten it afterwards
-        num_comps = len(self.model.compartments)
-        self.num_categories = len(self.model._mixing_categories)
-        self._category_lookup = {}  # Map compartments to categories.
-        self._category_matrix = np.zeros((self.num_categories, num_comps))
+        self.num_categories = ncats = len(self.model._mixing_categories)
+
+        # Array that maps compartments to their mixing category
+        self._category_lookup = np.empty(len(self.model.compartments), dtype=int)
+
+        all_cat_idx = []
         for i, category in enumerate(self.model._mixing_categories):
+            cat_idx = []
             for j, comp in enumerate(self.model.compartments):
                 if all(comp.has_stratum(k, v) for k, v in category.items()):
-                    self._category_matrix[i][j] = 1
+                    cat_idx.append(j)
+                    # self._category_matrix[i][j] = 1
                     self._category_lookup[j] = i
+            all_cat_idx.append(np.array(cat_idx, dtype=int))
 
-        # This is the actual structure we use to compute lookups later on
-        # It's still not optimal, but it'll do...
-        self._compartment_category_map = binary_matrix_to_sparse_pairs(self._category_matrix)
+        # Indexer for whole population (compartment_values), that will return a
+        # num_cats * (num_comps_per_cat) array that can be summed for category populations
+        self._population_category_indexer = pop_cat_idx = np.stack(all_cat_idx)
 
-    def _get_compartment_infectiousness_for_strain(self, strain: str):
+        # Array (per-strain) of compartment indices for that strain's infectious compartments
+        self._strain_infectious_indexers = {}
+        # Array (per-strain) of len (strain infectious comps) that maps each
+        # strain infectious compartment to its mixing category
+        self._strain_category_indexers = {}
+        #
+        for strain in self.model._disease_strains:
+            strain_filter = {"strain": strain} if "strain" in self.model.stratifications else {}
+            strain_infectious_comps = self.model.query_compartments(
+                strain_filter, tags="infectious", as_idx=True
+            )
+            self._strain_infectious_indexers[strain] = strain_infectious_comps
+
+            # Function that tests each element of an ndarray to see if is contained within the
+            # current strain infectious compartments
+            vcat = np.vectorize(lambda c: c in strain_infectious_comps)
+            strain_cat_idx = pop_cat_idx[vcat(pop_cat_idx)]
+            # Localize the compartment indices to be within strain infectious comps,
+            # rather than the global compartment lookup
+            # We do this by creating an inverse global map (but only fill in the compartment
+            # indices we care about)
+            # It's just a bit easier to read that messing around with dictionaries etc
+            tlookup = np.empty(len(self.model.compartments), dtype=int)
+            tlookup[strain_infectious_comps] = range(len(strain_infectious_comps))
+            strain_cat_idx = tlookup[strain_cat_idx]
+
+            # Ensure this is a 2d array
+            # This necessary where there is only one compartment for each category
+            strain_cat_idx = strain_cat_idx.reshape((ncats, int(strain_cat_idx.size / ncats)))
+            self._strain_category_indexers[strain] = strain_cat_idx
+
+    def _get_compartment_infectiousness(self):
         """
-        Returns a vector of floats, each representing the relative infectiousness of each
-        compartment.
-        If a strain name is provided, find the infectiousness factor *only for that strain*.
+        Returns an array of relative infectiousness weights for the supplied strain
+        The returned array is of size num_infectious_comps_for_strain, and is ordered
+        (ie can be multiplied directly against these infectious compartments)
         """
-        # Figure out which compartments should be infectious
-        infectious_mask = np.array(
-            [
-                c.has_name_in_list(self.model._infectious_compartments)
-                for c in self.model.compartments
-            ]
-        )
         # Find the infectiousness multipliers for each compartment being implemented in the model.
         # Start from assumption that each compartment is not infectious.
-        compartment_infectiousness = np.zeros(self.model.initial_population.shape)
+        compartment_infectiousness = np.ones(self.model.initial_population.shape)
         # Set all infectious compartments to be equally infectious.
-        compartment_infectiousness[infectious_mask] = 1
 
         for strat in self.model._stratifications:
             for comp_name, adjustments in strat.infectiousness_adjustments.items():
@@ -185,18 +230,22 @@ class ModelRunner:
                                 orig_value = compartment_infectiousness[c.idx]
                                 compartment_infectiousness[c.idx] = adj_value * orig_value
 
-        if "strain" in self.model.stratifications:
-            # FIXME: If there are multiple strains, but one of them is _DEFAULT_DISEASE_STRAIN
-            # there will almost certainly be incorrect masks applied
-            # Filter out all values that are not in the given strain.
-            strain_mask = np.zeros(self.model.initial_population.shape)
-            for idx, compartment in enumerate(self.model.compartments):
-                if compartment.has_stratum("strain", strain):
-                    strain_mask[idx] = 1
+        strain_comp_inf = {}
 
-            compartment_infectiousness *= strain_mask
+        for strain in self.model._disease_strains:
+            if "strain" in self.model.stratifications:
+                strain_filter = {"strain": strain}
+            else:
+                strain_filter = {}
 
-        return compartment_infectiousness
+            # _Must_ be ordered here
+            strain_infect_comps = self.model.query_compartments(
+                strain_filter, tags="infectious", as_idx=True
+            )
+
+            strain_comp_inf[strain] = compartment_infectiousness[strain_infect_comps]
+
+        return strain_comp_inf
 
     def _precompute_flow_maps(self):
         """Build fast-access arrays of flow indices"""
@@ -345,21 +394,24 @@ class ModelRunner:
     def _calculate_strain_infection_values(
         self, compartment_values: np.ndarray, mixing_matrix: np.ndarray
     ):
-        num_cats = self.num_categories
         # Calculate total number of people per category (for FoI).
         # A vector with size (num_cats).
-        self._category_populations = sparse_pairs_accum(
-            self._compartment_category_map, compartment_values, num_cats
+        self._category_populations = compartment_values[self._population_category_indexer].sum(
+            axis=1
         )
 
         for strain_idx, strain in enumerate(self.model._disease_strains):
+
             strain_compartment_infectiousness = self._compartment_infectiousness[strain]
+            strain_infectious_idx = self._strain_infectious_indexers[strain]
+            strain_category_indexer = self._strain_category_indexers[strain]
+
+            strain_infectious_values = compartment_values[strain_infectious_idx]
 
             infection_density, infection_frequency = get_strain_infection_values(
-                compartment_values,
+                strain_infectious_values,
                 strain_compartment_infectiousness,
-                self._compartment_category_map,
-                num_cats,
+                strain_category_indexer,
                 mixing_matrix,
                 self._category_populations,
             )
@@ -428,10 +480,14 @@ class ModelRunner:
         flow_rates, _ = self._get_flow_rates(comp_vals, time)
 
         if self._pos_flow_map.size > 0:
-            accumulate_positive_flow_contributions(flow_rates, comp_rates, self._pos_flow_map)
+            comp_rates = accumulate_positive_flow_contributions(
+                flow_rates, comp_rates, self._pos_flow_map
+            )
 
         if self._neg_flow_map.size > 0:
-            accumulate_negative_flow_contributions(flow_rates, comp_rates, self._neg_flow_map)
+            comp_rates = accumulate_negative_flow_contributions(
+                flow_rates, comp_rates, self._neg_flow_map
+            )
 
         return comp_rates, flow_rates
 
@@ -500,26 +556,3 @@ class ModelRunner:
                 distribution,
             )
         model.initial_population = initial_population
-
-
-"""
-Additional functions - fast JIT specializations etc
-"""
-
-
-@numba.jit
-def get_strain_infection_values(
-    compartment_values,
-    strain_compartment_infectiousness,
-    compartment_category_map,
-    num_cats,
-    mixing_matrix,
-    category_populations,
-):
-    infected_values = compartment_values * strain_compartment_infectiousness
-    infectious_populations = sparse_pairs_accum(compartment_category_map, infected_values, num_cats)
-    infection_density = mixing_matrix @ infectious_populations
-    category_prevalence = infectious_populations / category_populations
-    infection_frequency = mixing_matrix @ category_prevalence
-
-    return infection_density, infection_frequency
