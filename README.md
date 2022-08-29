@@ -136,6 +136,8 @@ Releases are numbered using [Semantic Versioning](https://semver.org/)
   - Full jax support with ModelBuilder wrapper
 - 4.1.0a
   - Abstract and lazy parameters
+- 4.2.0a
+  - Refactor parameters, combine runners
 
 ## Release process
 
