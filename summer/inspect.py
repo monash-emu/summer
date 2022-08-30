@@ -56,9 +56,10 @@ def query_flows(
     tags: List = None,
 ):
     if flow_name is not None:
-        if isinstance(flow_name, str):
-            re_pat = re.compile(flow_name)
-            flows = [f for f in m._flows if re_pat.match(f.name)]
+        if isinstance(flow_name, re.Pattern):
+            flows = [f for f in m._flows if flow_name.match(f.name)]
+        elif isinstance(flow_name, str):
+            flows = [f for f in m._flows if flow_name == f.name]
         else:
             flows = flow_name
     else:

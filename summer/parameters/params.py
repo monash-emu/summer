@@ -15,14 +15,6 @@ class Parameter(Variable):
         return f"Parameter {self.key}"
 
 
-class ComputedValue(Variable):
-    def __init__(self, name: str):
-        super().__init__(name, "computed_values")
-
-    def __repr__(self):
-        return f"ComputedValue {self.key}"
-
-
 class DerivedOutput(Variable):
     def __init__(self, name: str):
         super().__init__(name, "derived_outputs")
@@ -40,7 +32,7 @@ class ModelVariable(Variable):
 
 
 CompartmentValues = ModelVariable("compartment_values")
-ComputedValuesDict = ModelVariable("computed_values")
+ComputedValuesDict = Variable("computed_values", "graph_locals")
 Time = ModelVariable("time")
 
 

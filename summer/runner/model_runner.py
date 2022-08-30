@@ -294,8 +294,8 @@ class ModelBackend:
 
         flow_weights = np.zeros(len(self.model._flows))
 
-        for i, f in enumerate(self.model._flows):
-            flow_weights[i] = self._graph_values_timestep[f._graph_key]
+        for k, v in self.model._flow_key_map.items():
+            flow_weights[v] = self._graph_values_timestep[k]
 
         return flow_weights
 

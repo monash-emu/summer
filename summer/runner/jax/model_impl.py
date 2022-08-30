@@ -118,9 +118,9 @@ def build_get_flow_weights(runner: ModelBackend):
 
         flow_weights = jnp.zeros(len(m._flows))
 
-        for i, f in enumerate(m._flows):
-            val = cur_graph_outputs[f._graph_key]
-            flow_weights = flow_weights.at[i].set(val)
+        for k, v in m._flow_key_map.items():
+            val = cur_graph_outputs[k]
+            flow_weights = flow_weights.at[v].set(val)
 
         return flow_weights
 
@@ -149,7 +149,7 @@ def build_calc_computed_values(runner):
 
 def build_get_flow_rates(runner, ts_graph_func):
 
-    calc_computed_values = build_calc_computed_values(runner)
+    # calc_computed_values = build_calc_computed_values(runner)
     get_flow_weights = build_get_flow_weights(runner)
     get_infectious_multipliers = build_get_infectious_multipliers(runner)
 
@@ -337,12 +337,14 @@ def build_run_model(runner, base_params=None, dyn_params=None, solver=None):
 
     timestep_cg, static_cg = param_frozen_cg.freeze(ts_vars)
 
-    timestep_graph_func = timestep_cg.get_callable()
-    static_graph_func = static_cg.get_callable()
+    from jax import jit
+
+    timestep_graph_func = jit(timestep_cg.get_callable())
+    static_graph_func = jit(static_cg.get_callable())
 
     rates_funcs = build_get_rates(runner, timestep_graph_func)
-    get_rates = rates_funcs["get_rates"]
-    get_flow_rates = rates_funcs["get_flow_rates"]
+    get_rates = jit(rates_funcs["get_rates"])
+    get_flow_rates = jit(rates_funcs["get_flow_rates"])
 
     from jax import vmap
 

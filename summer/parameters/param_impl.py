@@ -7,7 +7,7 @@ if TYPE_CHECKING:
 from typing import Tuple, List, Iterable, Any
 from numbers import Real
 
-from computegraph.types import GraphObject, Data, Function
+from computegraph.types import GraphObject, Data, Function, Variable
 from computegraph.utils import defer, invert_dict, assign
 from computegraph import ComputeGraph
 from computegraph.jaxify import get_modules
@@ -16,7 +16,6 @@ fnp = get_modules()["numpy"]
 
 from summer.parameters.params import (
     build_args,
-    ComputedValue,
     ComputedValuesDict,
     Time,
 )
@@ -33,7 +32,7 @@ class ModelParameter:
         return False
 
 
-class ComputedValueParameter(ModelParameter):
+class _ComputedValueParameter(ModelParameter):
     def __init__(self, name):
         self.name = name
 
@@ -50,7 +49,7 @@ class ComputedValueParameter(ModelParameter):
         return True
 
 
-class GraphFunction(ModelParameter):
+class _GraphFunction(ModelParameter):
     def __init__(self, func):
         self.func = func
 
@@ -125,9 +124,6 @@ def get_modelparameter_from_param(param, allow_any=False) -> Tuple[ModelParamete
         return GraphObjectParameter(Data(param))
     elif callable(param):
         return GraphObjectParameter(defer(param)(Time, ComputedValuesDict))
-    elif isinstance(param, ComputedValue):
-        raise Exception("Really?")
-        return ComputedValueParameter(param.key), []
     else:
         if allow_any:
             return GraphObjectParameter(Data(param))
@@ -204,11 +200,22 @@ def finalize_parameters(model):
 
     realised_flows = map_flow_keys(model)
 
+    all_flow_keys = {}
+
     for i, f in enumerate(model._flows):
         fpkey = register_obj_key(realised_flows[i], f"{f.name}_rate")
         f._graph_key = fpkey
+        if fpkey not in all_flow_keys:
+            all_flow_keys[fpkey] = []
+        key_store = all_flow_keys[fpkey]
+        key_store.append(i)
+
+    model._flow_key_map = {k: fnp.array(v, dtype=int) for k, v in all_flow_keys.items()}
 
     # Initial population
+    if not hasattr(model, "_init_pop_dist"):
+        raise Exception("Model initial population must be set before finalizing")
+
     model._init_pop_dist = get_reparameterized_dict(model._init_pop_dist)
     register_obj_key(model._init_pop_dist, "init_pop_dist")
 
@@ -270,7 +277,7 @@ def finalize_parameters(model):
 
     model_graph = invert_dict(obj_table)
 
-    model.graph = ComputeGraph(model_graph)
+    model.graph = ComputeGraph(model_graph, validate_keys=False)
 
     # Computed values
     # cv_graph = {}

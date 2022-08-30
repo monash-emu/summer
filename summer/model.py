@@ -874,7 +874,7 @@ class CompartmentalModel:
     Running the model
     """
 
-    def get_runner(self, parameters: dict, dyn_params: List = None):
+    def get_runner(self, parameters: dict, dyn_params: List = None, **backend_args):
         self._update_compartment_indices()
         self.finalize()
 
@@ -888,7 +888,7 @@ class CompartmentalModel:
             from summer.runner.jax.model_impl import build_run_model
 
             jax_run_func, jax_runner_dict = build_run_model(
-                self._backend, base_params=parameters, dyn_params=dyn_params
+                self._backend, base_params=parameters, dyn_params=dyn_params, **backend_args
             )
             from jax import jit
 
@@ -897,6 +897,7 @@ class CompartmentalModel:
             self._set_backend("python")
             self._backend.prepare_structural()
             self._backend.prepare_static_params(parameters, dyn_params)
+            return self
 
         
 
@@ -1451,6 +1452,7 @@ class CompartmentalModel:
         source: dict = None,
         dest: dict = None,
         tags: List = None,
+
     ):
         from summer.inspect import query_flows
 
