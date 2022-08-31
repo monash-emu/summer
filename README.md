@@ -19,19 +19,43 @@ Some helpful links to learn more:
 
 - [Rationale](http://summerepi.com/rationale.html) for why we are building Summer
 - **[Documentation](http://summerepi.com/)** with [code examples](http://summerepi.com/examples)
-- [Available on PyPi](https://pypi.org/project/summerepi/) as `summerepi`.
+- [Available on PyPi](https://pypi.org/project/summerepi2/) as `summerepi2`.
 - [Performance benchmarks](https://monash-emu.github.io/summer/)
 
 ## Installation and Quickstart
 
-This project requires at least Python 3.7 (and is actively targeted at 3.9)
-Install the `summerepi` package from PyPI
+This project requires at least Python 3.7
+
+Set up and activate an appropriate virtual environment, then install the `summerepi2` package from PyPI
 
 ```bash
-pip install summerepi
+pip install summerepi2
 ```
 
-Then you can use the library to build and run models. See [here](http://summerepi.com/examples) for some code examples.
+Important note for Windows users:
+summerepi2 relies on the Jax framework for fast retargetable computing.  This is automatically
+installed under Linux, OSX, and WSL environments.  If you are using Windows, you can either install
+via WSL, or run the following command after installing
+
+```bash
+pip install jax[cpu]==0.3.14 -f https://whls.blob.core.windows.net/unstable/index.html
+```
+
+Then you can now use the library to build and run models. See [here](http://summerepi.com/examples) for some code examples.
+
+## Optional (recommended) extras
+
+Summer has advanced interactive plotting tools built in - but they are greatly improved with the
+addition of the pygraphviz library.
+
+If you are using conda, the simplest method of installation is as follows:
+
+```bash
+conda install --channel conda-forge pygraphviz
+```
+
+For other install methods, see
+https://pygraphviz.github.io/documentation/stable/install.html
 
 ## Development
 

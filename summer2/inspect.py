@@ -9,9 +9,9 @@ from typing import Iterable, Set, List
 import networkx as nx
 import numpy as np
 
-from summer import CompartmentalModel
-from summer.compartment import Compartment
-from summer.flows import BaseFlow
+from summer2 import CompartmentalModel
+from summer2.compartment import Compartment
+from summer2.flows import BaseFlow
 
 
 def query_compartments(m: CompartmentalModel, query: dict = None, tags: List = None, as_idx=False):

@@ -1,4 +1,4 @@
-from summer.compartment import Compartment
+from summer2.compartment import Compartment
 
 
 def test_setup__with_no_strat():

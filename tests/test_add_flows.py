@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 from numpy.testing import assert_array_equal
 
-from summer.model import CompartmentalModel
+from summer2.model import CompartmentalModel
 
 
 def create_simple_model():

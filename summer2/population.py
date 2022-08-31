@@ -5,7 +5,7 @@ from typing import NamedTuple
 
 import numpy as np
 
-from summer.parameters import get_static_param_value
+from summer2.parameters import get_static_param_value
 
 
 class CompartmentGroup(NamedTuple):

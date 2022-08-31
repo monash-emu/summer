@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 from numpy.testing import assert_array_equal
 
-from summer import CompartmentalModel, Stratification
+from summer2 import CompartmentalModel, Stratification
 
 
 def test_add_mixing_matrix_fails():

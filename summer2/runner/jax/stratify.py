@@ -5,15 +5,17 @@ from typing import List, TYPE_CHECKING
 
 from jax import numpy as jnp
 
-from summer.parameters import get_static_param_value, is_var, Function
-from summer.parameters.param_impl import ModelParameter
-from summer.stratification import Stratification
+from summer2.parameters import get_static_param_value, is_var, Function
+from summer2.parameters.param_impl import ModelParameter
+from summer2.stratification import Stratification
 
 if TYPE_CHECKING:
-    from summer import CompartmentalModel
+    from summer2 import CompartmentalModel
 
 
-def get_stratify_compartments_func(strat: Stratification, input_comps: List[str]):
+def get_stratify_compartments_func(
+    model: CompartmentalModel, strat: Stratification, input_comps: List[str]
+):
     """Build the equivalent of self._stratify_compartment_values for a given Stratification
 
     Args:
@@ -21,7 +23,7 @@ def get_stratify_compartments_func(strat: Stratification, input_comps: List[str]
         input_comps (List[str]): The list of input compartments (pre-stratification)
     """
 
-    def stratify_compartment_values(comp_values: jnp.ndarray, static_graph_values: dict = None):
+    def _stratify_compartment_values(comp_values: jnp.ndarray, static_graph_values: dict = None):
         """
         Stratify the model compartments into sub-compartments, based on the strata names provided.
         Split the population according to the provided proportions.
@@ -43,6 +45,28 @@ def get_stratify_compartments_func(strat: Stratification, input_comps: List[str]
 
         return jnp.array(new_comp_values)
 
+    def stratify_compartment_values(comp_values: jnp.ndarray, static_graph_values: dict = None):
+        """
+        Stratify the model compartments into sub-compartments, based on the strata names provided.
+        Split the population according to the provided proportions.
+        Only compartments specified in the stratification's definition will be stratified.
+        Returns the new compartment values.
+        """
+        population_split = get_static_param_value(strat.population_split, static_graph_values)
+
+        new_comp_values = jnp.empty(strat._new_size)
+        new_comp_values = new_comp_values.at[strat._passthrough_target_indices].set(
+            comp_values[strat._passthrough_base_indices]
+        )
+
+        base_values = comp_values[strat._strat_base_indices]
+        for stratum in strat.strata:
+            new_value = base_values * population_split[stratum]
+            new_comp_values = new_comp_values.at[strat._stratum_target_indices[stratum]].set(
+                new_value
+            )
+        return new_comp_values
+
     return stratify_compartment_values
 
 
@@ -63,7 +87,7 @@ def get_calculate_initial_pop(model: CompartmentalModel):
     strat_funcs = {}
     comps = model._original_compartment_names
     for strat in model._stratifications:
-        strat_funcs[strat] = get_stratify_compartments_func(strat, comps)
+        strat_funcs[strat] = get_stratify_compartments_func(model, strat, comps)
         comps = strat._stratify_compartments(comps)
 
     def calculate_initial_population(static_graph_values: dict) -> jnp.ndarray:

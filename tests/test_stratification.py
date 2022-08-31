@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 from numpy.testing import assert_array_equal
 
-from summer import (
+from summer2 import (
     AgeStratification,
     Compartment,
     Multiply,
@@ -13,7 +13,7 @@ from summer import (
     StrainStratification,
     Stratification,
 )
-from summer.flows import BaseEntryFlow, BaseExitFlow, BaseTransitionFlow
+from summer2.flows import BaseEntryFlow, BaseExitFlow, BaseTransitionFlow
 
 
 class TransitionFlow(BaseTransitionFlow):

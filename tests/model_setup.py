@@ -1,6 +1,6 @@
 import numpy as np
 
-from summer import CompartmentalModel, Multiply, Overwrite, Stratification
+from summer2 import CompartmentalModel, Multiply, Overwrite, Stratification
 
 
 def get_test_model(timestep=1, times=[0, 150]):

@@ -17,11 +17,11 @@ import numpy as np
 
 import pandas as pd
 
-from summer.compartment import Compartment
-from summer.flows import BaseFlow
-from summer.utils import get_scenario_start_index
+from summer2.compartment import Compartment
+from summer2.flows import BaseFlow
+from summer2.utils import get_scenario_start_index
 
-from summer.parameters import build_args
+from summer2.parameters import build_args
 
 logger = logging.getLogger()
 

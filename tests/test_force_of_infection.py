@@ -5,8 +5,8 @@ See https://parasiteecology.wordpress.com/2013/10/17/density-dependent-vs-freque
 import numpy as np
 from numpy.testing import assert_allclose, assert_array_equal
 
-from summer.model import Compartment as C
-from summer.model import CompartmentalModel, Stratification
+from summer2.model import Compartment as C
+from summer2.model import CompartmentalModel, Stratification
 
 
 def test_basic_get_infection_multiplier(backend):

@@ -18,8 +18,8 @@ Force of infection:
 import numpy as np
 from numpy.testing import assert_allclose, assert_array_equal
 
-from summer import Compartment as C
-from summer import CompartmentalModel, StrainStratification, Stratification, adjust
+from summer2 import Compartment as C
+from summer2 import CompartmentalModel, StrainStratification, Stratification, adjust
 
 
 def test_model__with_two_symmetric_stratifications(backend):

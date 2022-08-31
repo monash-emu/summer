@@ -7,12 +7,12 @@ from typing import Callable, Dict, List, Set
 
 import numpy as np
 
-from summer.adjust import BaseAdjustment, FlowParam, Multiply
-from summer.compartment import Compartment
-from summer.parameters import is_func
-from summer.parameters.param_impl import ModelParameter
-from summer.stratification import Stratification
-from summer.compute import find_sum
+from summer2.adjust import BaseAdjustment, FlowParam, Multiply
+from summer2.compartment import Compartment
+from summer2.parameters import is_func
+from summer2.parameters.param_impl import ModelParameter
+from summer2.stratification import Stratification
+from summer2.compute import find_sum
 
 
 class WeightType:

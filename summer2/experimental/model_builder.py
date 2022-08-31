@@ -2,7 +2,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from summer import CompartmentalModel
+    from summer2 import CompartmentalModel
 
 from inspect import getfullargspec
 from typing import Union, Any
@@ -13,7 +13,7 @@ from numbers import Real
 # from pydantic import BaseModel
 # from pydantic.main import ModelMetaclass
 
-from summer.parameters import Parameter, Function, Data
+from summer2.parameters import Parameter, Function, Data
 from computegraph import ComputeGraph
 from computegraph.utils import expand_nested_dict, is_var
 
@@ -200,8 +200,8 @@ def find_obj_from_key(key: str, pydparams: ParamStruct) -> Any:
 
 def get_full_runner(builder, use_jax=False, solver=None):
     if use_jax:
-        from summer.runner.jax.util import get_runner
-        from summer.runner.jax.model_impl import build_run_model
+        from summer2.runner.jax.util import get_runner
+        from summer2.runner.jax.model_impl import build_run_model
 
         jrunner = get_runner(builder.model)
         jax_run_func, jax_runner_dict = build_run_model(jrunner, solver=solver)

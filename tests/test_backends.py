@@ -3,7 +3,7 @@ import pytest
 import numpy as np
 
 from computegraph.jaxify import has_jax
-from summer.solver import SolverType
+from summer2.solver import SolverType
 
 from .model_setup import get_test_model
 

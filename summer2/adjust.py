@@ -4,8 +4,8 @@ This module contains classes which define adjustments to model parameters.
 from abc import ABC, abstractmethod
 from typing import Callable, Union
 
-from summer.parameters import get_static_param_value
-from summer.parameters.param_impl import ModelParameter
+from summer2.parameters import get_static_param_value
+from summer2.parameters.param_impl import ModelParameter
 
 FlowParam = Union[float, Callable[[float], float]]
 

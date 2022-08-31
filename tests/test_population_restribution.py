@@ -2,10 +2,10 @@ import numpy as np
 
 import pytest
 
-from summer import CompartmentalModel
-from summer.stratification import Stratification
+from summer2 import CompartmentalModel
+from summer2.stratification import Stratification
 
-from summer.population import calculate_initial_population
+from summer2.population import calculate_initial_population
 
 
 def build_model():

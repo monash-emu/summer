@@ -1,6 +1,6 @@
 [tool.poetry]
-name = "summerepi"
-version = "4.2.0a"
+name = "summerepi2"
+version = "1.0.1a3"
 readme = "README.md"
 license = "BSD-2-Clause"
 homepage = "http://summerepi.com/"
@@ -15,20 +15,19 @@ keywords = [
 description = "Summer is a compartmental disease modelling framework, written in Python. It provides a high-level API to build and run models."
 authors = ["James Trauer <james.trauer@monash.edu>", "Matthew Segal <mattdsegal@gmail.com>"]
 packages = [
-    {include = "summer"}
+    {include = "summer2"}
 ]
 
 [tool.poetry.dependencies]
 python = ">=3.7.1,<3.11"
 numpy = ">=1.20.3"
 networkx = ">=2.6.2"
-scipy = ">=1.7.1"
-numba = ">=0.54.0"
 pandas = ">=1.3.2"
-computegraph = ">=0.3.0b"
+plotly = ">=5.5.0"
+computegraph = ">=0.3.1b2"
 jax =  [
     {extras = ["cpu"], version = "^0.3.14", platform = "linux"},
-    {extras = ["cpu"], version = "^0.3.14", platform = "darwin"}
+    {extras = ["cpu"], version = "^0.3.14", platform = "darwin"},
 ]
 
 [tool.poetry.dev-dependencies]

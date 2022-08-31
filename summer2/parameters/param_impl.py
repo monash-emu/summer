@@ -2,7 +2,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from summer import CompartmentalModel
+    from summer2 import CompartmentalModel
 
 from typing import Tuple, List, Iterable, Any
 from numbers import Real
@@ -14,7 +14,9 @@ from computegraph.jaxify import get_modules
 
 fnp = get_modules()["numpy"]
 
-from summer.parameters.params import (
+import numpy as np
+
+from summer2.parameters.params import (
     build_args,
     ComputedValuesDict,
     Time,
@@ -137,7 +139,7 @@ def get_reparameterized_dict(d):
 
 def map_flow_keys(m: CompartmentalModel) -> dict:
 
-    from summer.adjust import Overwrite
+    from summer2.adjust import Overwrite
 
     realised_flows = {}
 

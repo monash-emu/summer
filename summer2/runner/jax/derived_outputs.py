@@ -18,7 +18,7 @@ from computegraph import ComputeGraph
 from computegraph.utils import get_relabelled_func
 from computegraph.types import local
 
-from summer.parameters import Function, ModelVariable
+from summer2.parameters import Function, ModelVariable
 
 logger = logging.getLogger()
 

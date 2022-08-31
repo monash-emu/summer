@@ -10,10 +10,10 @@ import numpy as np
 from computegraph.utils import is_var
 from computegraph.types import GraphObject
 
-from summer.adjust import Multiply, Overwrite, enforce_multiply
-from summer.compartment import Compartment
-from summer.parameters import is_func, get_static_param_value
-from summer.parameters.param_impl import get_modelparameter_from_param
+from summer2.adjust import Multiply, Overwrite, enforce_multiply
+from summer2.compartment import Compartment
+from summer2.parameters import is_func, get_static_param_value
+from summer2.parameters.param_impl import get_modelparameter_from_param
 
 Adjustment = Union[Multiply, Overwrite]
 MixingMatrix = Union[np.ndarray, Callable[[float], np.ndarray]]
@@ -310,20 +310,37 @@ class Stratification:
         Only compartments specified in the stratification's definition will be stratified.
         Returns the new compartments.
         """
+        strat_base_indices = []
+        passthrough_base_indices = []
+        passthrough_target_indices = []
+        stratum_target_indices = {s: [] for s in self.strata}
+
         new_comps = []
         idx = 0
-        for old_comp in comps:
+        for base_idx, old_comp in enumerate(comps):
             should_stratify = old_comp.has_name_in_list(self.compartments)
             if should_stratify:
+                strat_base_indices.append(base_idx)
                 for stratum in self.strata:
                     new_comp = old_comp.stratify(self.name, stratum)
                     new_comp.idx = idx
                     new_comps.append(new_comp)
+                    stratum_target_indices[stratum].append(idx)
                     idx += 1
             else:
+                passthrough_base_indices.append(base_idx)
+                passthrough_target_indices.append(idx)
                 old_comp.idx = idx
                 new_comps.append(old_comp)
                 idx += 1
+
+        self._strat_base_indices = np.array(strat_base_indices, dtype=int)
+        self._passthrough_base_indices = np.array(passthrough_base_indices, dtype=int)
+        self._passthrough_target_indices = np.array(passthrough_target_indices, dtype=int)
+        self._stratum_target_indices = {
+            k: np.array(v, dtype=int) for k, v in stratum_target_indices.items()
+        }
+        self._new_size = idx
 
         return new_comps
 

@@ -1,19 +1,20 @@
 from typing import Tuple
 
 import numpy as np
+from jax import numpy as jnp
 
-from summer import Compartment
-from summer.adjust import Overwrite
-import summer.flows as flows
+from summer2 import Compartment
+from summer2.adjust import Overwrite
+import summer2.flows as flows
 
-from summer.population import get_rebalanced_population
-from summer.compute import (
+from summer2.population import get_rebalanced_population
+from summer2.compute import (
     accumulate_positive_flow_contributions,
     accumulate_negative_flow_contributions,
     find_sum,
     get_strain_infection_values,
 )
-from summer.utils import clean_compartment_values
+from summer2.utils import clean_compartment_values
 
 
 class ModelBackend:
@@ -21,11 +22,9 @@ class ModelBackend:
     An optimized, but less accessible model runner.
     """
 
-    def __init__(self, model, jit=False):
+    def __init__(self, model):
         # Compartmental model
         self.model = model
-
-        self._jit = jit
 
         # Tracks total deaths per timestep for death-replacement birth flows
         self._timestep_deaths = None
@@ -183,7 +182,7 @@ class ModelBackend:
             strain_infectious_comps = self.model.query_compartments(
                 strain_filter, tags="infectious", as_idx=True
             )
-            self._strain_infectious_indexers[strain] = strain_infectious_comps
+            self._strain_infectious_indexers[strain] = jnp.array(strain_infectious_comps)
 
             # Function that tests each element of an ndarray to see if is contained within the
             # current strain infectious compartments
@@ -201,7 +200,7 @@ class ModelBackend:
             # Ensure this is a 2d array
             # This necessary where there is only one compartment for each category
             strain_cat_idx = strain_cat_idx.reshape((ncats, int(strain_cat_idx.size / ncats)))
-            self._strain_category_indexers[strain] = strain_cat_idx
+            self._strain_category_indexers[strain] = jnp.array(strain_cat_idx)
 
     def _get_compartment_infectiousness(self):
         """
@@ -292,10 +291,10 @@ class ModelBackend:
     def get_flow_weights(self):
         """Collate weights for all model flows at the current timestep"""
 
-        flow_weights = np.zeros(len(self.model._flows))
+        flow_weights = jnp.zeros(len(self.model._flows))
 
         for k, v in self.model._flow_key_map.items():
-            flow_weights[v] = self._graph_values_timestep[k]
+            flow_weights = flow_weights.at[v].set(self._graph_values_timestep[k])
 
         return flow_weights
 
@@ -451,7 +450,7 @@ class ModelBackend:
 
         # Calculate infection flows
         infect_mul = self._get_infectious_multipliers()
-        flow_rates[self.infectious_flow_indices] *= infect_mul
+        flow_rates = flow_rates.at[self.infectious_flow_indices].mul(infect_mul)
 
         # ReplacementBirthFlow depends on death flows already being calculated; update here
         if self._has_replacement:

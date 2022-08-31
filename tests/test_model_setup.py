@@ -2,9 +2,9 @@ import numpy as np
 import pytest
 from numpy.testing import assert_array_equal
 
-from summer import Compartment, CompartmentalModel
+from summer2 import Compartment, CompartmentalModel
 
-from summer.population import calculate_initial_population
+from summer2.population import calculate_initial_population
 
 
 def test_create_model():

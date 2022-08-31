@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 from numpy.testing import assert_allclose, assert_array_equal
 
-from summer.solver import (
+from summer2.solver import (
     SolverType,
     solve_ode,
     solve_with_euler,
@@ -75,13 +75,13 @@ def test_solve_ode_quadratic_func(solver, args, solver_type):
     expected_outputs = np.array(
         [
             # t = 0
-            [0 ** 2, 0 ** 2 + 0 + 1, 2 * 0 ** 2 + 2],
+            [0**2, 0**2 + 0 + 1, 2 * 0**2 + 2],
             # t = 1
-            [1 ** 2, 1 ** 2 + 1 + 1, 2 * 1 ** 2 + 2],
+            [1**2, 1**2 + 1 + 1, 2 * 1**2 + 2],
             # t = 2
-            [2 ** 2, 2 ** 2 + 2 + 1, 2 * 2 ** 2 + 2],
+            [2**2, 2**2 + 2 + 1, 2 * 2**2 + 2],
             # t = 3
-            [3 ** 2, 3 ** 2 + 3 + 1, 2 * 3 ** 2 + 2],
+            [3**2, 3**2 + 3 + 1, 2 * 3**2 + 2],
         ]
     )
     output_arr_1 = solver(ode_func, values, times, solver_args=args)

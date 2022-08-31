@@ -4,13 +4,13 @@ jaxify.set_using_jax(True)
 
 import numpy as np
 
-from summer import CompartmentalModel, Stratification, StrainStratification
-from summer.runner import ModelBackend
-from summer.solver import SolverType
-from summer.parameters import Parameter
-from summer.adjust import Overwrite
+from summer2 import CompartmentalModel, Stratification, StrainStratification
+from summer2.runner import ModelBackend
+from summer2.solver import SolverType
+from summer2.parameters import Parameter
+from summer2.adjust import Overwrite
 
-from summer.runner.jax.model_impl import build_run_model
+from summer2.runner.jax.model_impl import build_run_model
 
 
 from tests.test_params.models import PARAMS, build_model_params, build_model_mixing_func

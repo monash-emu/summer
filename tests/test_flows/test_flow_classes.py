@@ -1,8 +1,8 @@
 import numpy as np
 import pytest
 
-from summer import Compartment, adjust
-from summer.flows import (
+from summer2 import Compartment, adjust
+from summer2.flows import (
     CrudeBirthFlow,
     DeathFlow,
     ImportFlow,

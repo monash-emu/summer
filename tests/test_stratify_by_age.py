@@ -1,6 +1,6 @@
 import pytest
 
-from summer import AgeStratification, CompartmentalModel, Stratification
+from summer2 import AgeStratification, CompartmentalModel, Stratification
 
 
 def test_full_age_strat():

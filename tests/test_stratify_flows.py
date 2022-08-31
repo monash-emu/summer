@@ -5,11 +5,11 @@ connected to the right compartments, with the right adjustments applied.
 """
 import pytest
 
-from summer import AgeStratification
-from summer import Compartment as C
-from summer import CompartmentalModel, StrainStratification, Stratification
-from summer.adjust import Multiply, Overwrite
-from summer.flows import (
+from summer2 import AgeStratification
+from summer2 import Compartment as C
+from summer2 import CompartmentalModel, StrainStratification, Stratification
+from summer2.adjust import Multiply, Overwrite
+from summer2.flows import (
     CrudeBirthFlow,
     DeathFlow,
     ImportFlow,
@@ -72,6 +72,7 @@ def test_stratify_entry_flows__with_no_explicit_adjustments():
     ]
     assert len(expected_flows) == len(model._flows)
     assert all([a._is_equal(e) for e, a in zip(expected_flows, model._flows)])
+
 
 def test_stratify_entry_flows__with_split_imports():
     """
@@ -247,7 +248,12 @@ def test_add_entry_flows_post_stratification__with_filter():
 
     assert len(model._flows) == 0
     model.add_importation_flow(
-        "imports", 10, "S", dest_strata={"location": "urban"}, split_imports=False, expected_flow_count=1
+        "imports",
+        10,
+        "S",
+        dest_strata={"location": "urban"},
+        split_imports=False,
+        expected_flow_count=1,
     )
     assert len(model._flows) == 1
     expected_flows = [

@@ -4,7 +4,7 @@ from computegraph.types import Variable, Function, GraphObject, Data, build_args
 from computegraph.utils import extract_variables, is_var
 
 if TYPE_CHECKING:
-    from summer import CompartmentalModel
+    from summer2 import CompartmentalModel
 
 
 class Parameter(Variable):

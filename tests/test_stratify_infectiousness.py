@@ -5,9 +5,9 @@ See See https://parasiteecology.wordpress.com/2013/10/17/density-dependent-vs-fr
 import numpy as np
 from numpy.testing import assert_allclose, assert_array_equal
 
-from summer import Compartment as C
-from summer import CompartmentalModel, StrainStratification, Stratification, adjust
-from summer.population import calculate_initial_population
+from summer2 import Compartment as C
+from summer2 import CompartmentalModel, StrainStratification, Stratification, adjust
+from summer2.population import calculate_initial_population
 
 
 def test_strat_infectiousness__with_adjustments(backend):

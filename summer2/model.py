@@ -7,6 +7,7 @@ from datetime import datetime
 from collections import OrderedDict
 from typing import Callable, Dict, List, Optional, Tuple
 from warnings import warn
+import itertools
 
 import networkx
 import numpy as np
@@ -14,20 +15,19 @@ import pandas as pd
 
 from computegraph import ComputeGraph
 
-import summer.flows as flows
-from summer import stochastic
-from summer.adjust import BaseAdjustment, FlowParam, Multiply
-from summer.compartment import Compartment
-from summer.derived_outputs import DerivedOutputRequest, calculate_derived_outputs
-from summer.parameters import params
+import summer2.flows as flows
+from summer2.adjust import BaseAdjustment, FlowParam, Multiply
+from summer2.compartment import Compartment
+from summer2.derived_outputs import DerivedOutputRequest, calculate_derived_outputs
+from summer2.parameters import params
 
-from summer.parameters.param_impl import finalize_parameters
-from summer.runner import ModelBackend
-from summer.solver import SolverType, solve_ode
-from summer.stratification import Stratification
-from summer.utils import get_scenario_start_index, ref_times_to_dti, clean_compartment_values
-from summer.population import get_unique_strat_groups, filter_by_strata
-from summer.tracker import ModelBuildTracker, ActionType
+from summer2.parameters.param_impl import finalize_parameters
+from summer2.runner import ModelBackend
+from summer2.solver import SolverType, solve_ode
+from summer2.stratification import Stratification
+from summer2.utils import get_scenario_start_index, ref_times_to_dti, clean_compartment_values
+from summer2.population import get_unique_strat_groups, filter_by_strata
+from summer2.tracker import ModelBuildTracker, ActionType
 
 logger = logging.getLogger()
 
@@ -73,7 +73,7 @@ class CompartmentalModel:
 
     _DEFAULT_DISEASE_STRAIN = "default"
     _DEFAULT_MIXING_MATRIX = np.array([[1.0]])
-    _DEFAULT_BACKEND = BackendType.PYTHON
+    _DEFAULT_BACKEND = BackendType.JAX
 
     def __init__(
         self,
@@ -161,6 +161,7 @@ class CompartmentalModel:
         else:
             self._defer_actions = False
         self._finalized = False
+        self._runner = None
 
     def _update_compartment_indices(self):
         """
@@ -659,7 +660,13 @@ class CompartmentalModel:
         self._compartment_name_map = name_map
 
     def get_matching_compartments(self, name: str, strata: dict):
-        name_query = self._compartment_name_map[name]
+        if isinstance(name, str):
+            name_query = self._compartment_name_map[name]
+        else:
+            # FIXME: Should do better type checking here
+            # For now we assume we have some kind of iterable (ie a 'list' of names)
+            match_lists = [self._compartment_name_map[n] for n in name]
+            name_query = list(itertools.chain.from_iterable(match_lists))
 
         if not len(strata):
             return name_query
@@ -874,39 +881,31 @@ class CompartmentalModel:
     Running the model
     """
 
-    def get_runner(self, parameters: dict, dyn_params: List = None, **backend_args):
+    def get_runner(self, parameters: dict, dyn_params: List = None, jit=True, **backend_args):
         self._update_compartment_indices()
         self.finalize()
 
-        from computegraph.jaxify import get_using_jax
+        self._set_backend("jax")
+        # self._backend.prepare_to_run(parameters)
+        self._backend.prepare_structural()
 
-        if get_using_jax():
-            self._set_backend("jax")
-            # self._backend.prepare_to_run(parameters)
-            self._backend.prepare_structural()
+        from summer2.runner.jax.model_impl import build_run_model
 
-            from summer.runner.jax.model_impl import build_run_model
+        jax_run_func, jax_runner_dict = build_run_model(
+            self._backend, base_params=parameters, dyn_params=dyn_params, **backend_args
+        )
+        if jit:
+            from jax import jit as jjit
 
-            jax_run_func, jax_runner_dict = build_run_model(
-                self._backend, base_params=parameters, dyn_params=dyn_params, **backend_args
-            )
-            from jax import jit
+            jax_run_func = jjit(jax_run_func)
 
-            return ModelResults(self, jit(jax_run_func))
-        else:
-            self._set_backend("python")
-            self._backend.prepare_structural()
-            self._backend.prepare_static_params(parameters, dyn_params)
-            return self
-
-        
+        return ModelResults(self, jax_run_func)
 
     def run(
         self,
-        solver: str = SolverType.SOLVE_IVP,
-        backend: str = _DEFAULT_BACKEND,
-        backend_args: dict = None,
         parameters: dict = None,
+        solver: str = SolverType.SOLVE_IVP,
+        backend_args: dict = None,
         **kwargs,
     ):
         """
@@ -931,40 +930,18 @@ class CompartmentalModel:
         # Ensure we call this before model runs, since it is now disabled inside individual
         # flow constructors
         self._update_compartment_indices()
-
         self.finalize()
 
-        self._set_backend(backend, backend_args)
-        # self._backend.prepare_to_run(parameters)
-        self._backend.prepare_structural()
+        parameters = parameters or {}
 
-        if backend == BackendType.JAX:
-            from summer.runner.jax.model_impl import build_run_model
+        parameters = {k: v for k, v in parameters.items() if k in self.get_input_parameters()}
 
-            jax_run_func, jax_runner_dict = build_run_model(self._backend, solver=solver)
-            res = jax_run_func(parameters=parameters)
-            self.outputs = np.array(res["outputs"])
-            self.derived_outputs = {k: np.array(v) for k, v in res["derived_outputs"].items()}
-            return self
+        if self._runner is None:
+            self._set_backend("jax", backend_args)
+            self._backend.prepare_structural()
+            self._runner = self.get_runner(parameters, solver=solver)
 
-        # Non-Jax run - need to call prepare_* manually
-        self._backend.prepare_static_params(parameters)
-        self._backend.prepare_dynamic({})
-
-        if solver == SolverType.STOCHASTIC:
-            # Run the model in 'stochastic mode'.
-            seed = kwargs.get("seed")
-            self._solve_stochastic(seed)
-        else:
-            # Run the model as a deterministic ODE
-            self._solve_ode(solver, kwargs)
-
-        # Constrain outputs; interpolation from solvers can produce negative (invalid) values
-        self.outputs[self.outputs < 0.0] = 0.0
-
-        # Calculate any requested derived outputs, based on the calculated compartment sizes.
-        self.derived_outputs, self._derived_outputs_idx_cache = self._calculate_derived_outputs()
-        return self
+        self._runner.run(parameters=parameters)
 
     def _set_backend(self, backend: str, backend_args: dict = None):
         backend_args = backend_args or {}
@@ -975,20 +952,6 @@ class CompartmentalModel:
         else:
             msg = f"Invalid backend: {backend}"
             raise ValueError(msg)
-
-    def run_stochastic(
-        self,
-        seed: Optional[int] = None,
-        backend: str = _DEFAULT_BACKEND,
-        backend_args: dict = None,
-    ):
-        """
-        Runs the model over the provided time span, calculating the outputs and the derived outputs.
-        Uses an stochastic interpretation of flow rates.
-        """
-        self.run(
-            solver=SolverType.STOCHASTIC, seed=seed, backend=backend, backend_args=backend_args
-        )
 
     def _solve_ode(self, solver, solver_args: dict):
         """
@@ -1005,90 +968,6 @@ class CompartmentalModel:
             self.times,
             solver_args,
         )
-
-    def _solve_stochastic(self, seed: Optional[int] = None):
-        """
-        Runs the model over the provided time span, calculating the outputs.
-        This method is stochastic: each run may produce different results.
-        A random seed (eg. 12345, 1337) can be provided to ensure the same results are produced.
-
-        With this approach we represent a discrete number of people, unlike in the ODE solver, there
-        is way to have of 'half a person' or a compartment size of 101.23. Both compartment sizes
-        and flows are discrete.
-
-        We use an stochastic interpretation of flow rates.
-        The flow rates from _get_rates() are used to calculate the probability of an person
-            - entering the model (births, imports)
-            - leaving the model (deaths)
-            - moving between compartments (transitions, infections)
-
-        There are two sampling methods used:
-            - Transition and exit flows are sampled from an exponential distribution using a
-              multinomial
-            - Entry flows are sampled froma  Poisson distribution
-
-        The main difference is that there is no 'source' compartment for entry flows.
-
-        See here for more detail on the underlying theory and how this approach can be used:
-
-            http://summerepi.com/examples/5-stochastic-solver.html#How-it-works
-
-        There are three main steps to this method:
-            - 1. calculate the flow rates
-            - 2. split the flow rates into entry or transition flows
-            - 3. calculate and sample the probabilities given the flow rates
-
-        """
-        self.outputs = np.zeros((len(self.times), len(self.initial_population)), dtype=np.int)
-        self.outputs[0] = self.initial_population
-
-        # Create an array that maps flows to the source and destination compartments.
-        # This is done because numba like ndarrays, and numba is fast.
-        flow_map = stochastic.build_flow_map(self._flows)
-
-        # Evaluate the model: calculate compartment sizes for each timestep.
-        for time_idx, time in enumerate(self.times):
-            if time_idx == 0:
-                # Skip time zero, use initial conditions.
-                continue
-
-            # Calculate the flow rates at this timestep.
-            # These describe the rate (people/timeunit) at which people follow the flow.
-            # Later we will convert these to probabilities.
-            comp_vals = clean_compartment_values(self.outputs[time_idx - 1])
-            flow_rates, _ = self._backend.get_flow_rates(comp_vals, time)
-
-            # We split the calculatd flow rates into entry or {transition, exit} flows,
-            # because we handle them separately with different methods.
-
-            # Transition (and exit) flow are stored in a 2D FxC ndarray where f is the flow idx
-            # and c is the compartment idx, giving us a matrix of flows rates out of each
-            # compartment.
-            transition_flow_rates = np.zeros((len(self._flows), len(comp_vals)))
-
-            # Entry flows are stored in 1D C sized ndarray with one element per compartment.
-            # Giving us a vector of *net* flow rates into each compartment from outside the system.
-            entry_flow_rates = np.zeros_like(comp_vals)
-
-            # Split the flow rates into entry or {transition, exit} flows.
-            for flow_idx, flow in enumerate(self._flows):
-                if flow.source:
-                    # It's an exit or transition flow, which we sample with a multinomial.
-                    transition_flow_rates[flow_idx][flow.source.idx] = flow_rates[flow_idx]
-                else:
-                    # It's an entry flow, which we sample with a Poisson distribution.
-                    entry_flow_rates[flow.dest.idx] += flow_rates[flow_idx]
-
-            # Convert flow rates to probabilities, and take a sample using these probabilities,
-            # so we end up with the changes to the compartment sizes due to flows over this
-            # timestep.
-            entry_changes = stochastic.sample_entry_flows(seed, entry_flow_rates, self.timestep)
-            transition_changes = stochastic.sample_transistion_flows(
-                seed, transition_flow_rates, flow_map, comp_vals, self.timestep
-            )
-
-            # Calculate final compartment sizes at this timestep.
-            self.outputs[time_idx] = comp_vals + transition_changes + entry_changes
 
     def _get_infection_frequency_multiplier(self, *args, **kwargs) -> float:
         return self._backend._get_infection_frequency_multiplier(*args, **kwargs)
@@ -1442,7 +1321,7 @@ class CompartmentalModel:
         return set([v.key for v in all_in_var if v.source == "parameters"])
 
     def query_compartments(self, query: dict = None, tags: List = None, as_idx=False):
-        from summer.inspect import query_compartments
+        from summer2.inspect import query_compartments
 
         return query_compartments(self, query, tags, as_idx)
 
@@ -1452,20 +1331,20 @@ class CompartmentalModel:
         source: dict = None,
         dest: dict = None,
         tags: List = None,
-
     ):
-        from summer.inspect import query_flows
+        from summer2.inspect import query_flows
 
         return query_flows(self, flow_name, source, dest, tags)
+
 
 class ModelResults:
     def __init__(self, model, run_func):
         self.model = model
         self._run_func = run_func
-        
+
     def get_outputs_df(self):
         return self.model.get_outputs_df()
-    
+
     def get_derived_outputs_df(self):
         return self.model.get_derived_outputs_df()
 
@@ -1476,4 +1355,3 @@ class ModelResults:
         self.model.outputs = self.outputs
         self.model.derived_outputs = self.derived_outputs
         return results
-        

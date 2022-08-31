@@ -1,8 +1,8 @@
 import numpy as np
 
-from summer import CompartmentalModel, Stratification
+from summer2 import CompartmentalModel, Stratification
 
-from summer.parameters.params import (
+from summer2.parameters.params import (
     Parameter,
     Time,
     Function,

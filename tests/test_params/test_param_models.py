@@ -1,8 +1,8 @@
 import numpy as np
 from computegraph.utils import defer
 
-from summer import CompartmentalModel
-from summer.parameters.params import CompartmentValues, Function, Parameter
+from summer2 import CompartmentalModel
+from summer2.parameters.params import CompartmentValues, Function, Parameter
 
 from tests.test_params.models import (
     PARAMS,

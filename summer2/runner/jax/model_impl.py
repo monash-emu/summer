@@ -3,15 +3,17 @@
 This is a mess right now!
 """
 
-from jax import numpy as jnp
-from summer.runner.jax import ode
-from summer.runner.jax import solvers
+from functools import partial
 
-from summer.adjust import Overwrite
+from jax import jit, numpy as jnp
+from summer2.runner.jax import ode
+from summer2.runner.jax import solvers
 
-from summer.runner import ModelBackend
+from summer2.adjust import Overwrite
 
-from summer.solver import SolverType
+from summer2.runner import ModelBackend
+
+from summer2.solver import SolverType
 
 from .stratify import get_calculate_initial_pop
 from .derived_outputs import build_derived_outputs_runner
@@ -114,11 +116,14 @@ def build_get_flow_weights(runner: ModelBackend):
 
     m = runner.model
 
-    def get_flow_weights(cur_graph_outputs):
+    tvkeys = list(m.graph.filter(sources="model_variables.time").dag)
+    tv_flow_map = {k: m._flow_key_map[k] for k in set(m._flow_key_map).intersection(set(tvkeys))}
 
-        flow_weights = jnp.zeros(len(m._flows))
+    def get_flow_weights(cur_graph_outputs, static_flow_weights):
 
-        for k, v in m._flow_key_map.items():
+        flow_weights = jnp.copy(static_flow_weights)
+
+        for k, v in tv_flow_map.items():
             val = cur_graph_outputs[k]
             flow_weights = flow_weights.at[v].set(val)
 
@@ -127,14 +132,7 @@ def build_get_flow_weights(runner: ModelBackend):
     return get_flow_weights
 
 
-def flatten_fbm(flow_block_map):
-    out_map = []
-    for (param, adjustments), flow_idx in flow_block_map.items():
-        out_map.append((param, adjustments, flow_idx))
-    return out_map
-
-
-def build_calc_computed_values(runner):
+def _build_calc_computed_values(runner):
     def calc_computed_values(compartment_vals, time, parameters):
         model_variables = {"compartment_values": compartment_vals, "time": time}
 
@@ -175,7 +173,7 @@ def build_get_flow_rates(runner, ts_graph_func):
         # computed_values = calc_computed_values(compartment_values, time, parameters)
 
         # JITTED
-        flow_weights = get_flow_weights(cur_graph_outputs)
+        flow_weights = get_flow_weights(cur_graph_outputs, model_data["static_flow_weights"])
 
         populations = compartment_values[population_idx]
 
@@ -192,9 +190,10 @@ def build_get_flow_rates(runner, ts_graph_func):
         infect_mul = get_infectious_multipliers(
             time, compartment_values, cur_graph_outputs, model_data["compartment_infectiousness"]
         )
-        flow_rates = flow_rates.at[infectious_flow_indices].set(
-            flow_rates[infectious_flow_indices] * infect_mul
-        )
+        # flow_rates = flow_rates.at[infectious_flow_indices].set(
+        #    flow_rates[infectious_flow_indices] * infect_mul
+        # )
+        flow_rates = flow_rates.at[infectious_flow_indices].mul(infect_mul)
 
         return flow_rates, cur_graph_outputs["computed_values"]
 
@@ -267,6 +266,7 @@ def build_get_compartment_infectiousness(model):
     # i.e. it is done once at the start of a model run, but
     # is parameterized (non-structural)
     def get_compartment_infectiousness(static_graph_values):
+
         # Find the infectiousness multipliers for each compartment being implemented in the model.
         compartment_infectiousness = jnp.ones(len(model.compartments))
 
@@ -337,14 +337,12 @@ def build_run_model(runner, base_params=None, dyn_params=None, solver=None):
 
     timestep_cg, static_cg = param_frozen_cg.freeze(ts_vars)
 
-    from jax import jit
-
     timestep_graph_func = jit(timestep_cg.get_callable())
-    static_graph_func = jit(static_cg.get_callable())
+    static_graph_func = static_cg.get_callable()
 
     rates_funcs = build_get_rates(runner, timestep_graph_func)
-    get_rates = jit(rates_funcs["get_rates"])
-    get_flow_rates = jit(rates_funcs["get_flow_rates"])
+    get_rates = rates_funcs["get_rates"]
+    get_flow_rates = rates_funcs["get_flow_rates"]
 
     from jax import vmap
 
@@ -360,7 +358,13 @@ def build_run_model(runner, base_params=None, dyn_params=None, solver=None):
 
         def get_ode_solution(initial_population, times, static_graph_vals, model_data):
             return ode.odeint(
-                get_comp_rates, initial_population, times, static_graph_vals, model_data
+                get_comp_rates,
+                initial_population,
+                times,
+                static_graph_vals,
+                model_data,
+                rtol=1.4e-3,
+                atol=1.4e-3,
             )
 
     elif solver == SolverType.RUNGE_KUTTA:
@@ -387,13 +391,25 @@ def build_run_model(runner, base_params=None, dyn_params=None, solver=None):
 
     calc_derived_outputs = build_derived_outputs_runner(runner.model)
 
+    m = runner.model
+    tv_keys = list(m.graph.filter(sources="model_variables.time").dag)
+    static_flow_map = {k: m._flow_key_map[k] for k in set(m._flow_key_map).difference(set(tv_keys))}
+
     def run_model(parameters):
 
         static_graph_vals = static_graph_func(parameters=parameters)
         initial_population = calc_initial_pop(static_graph_vals)
 
+        static_flow_weights = jnp.zeros(len(runner.model._flows))
+        for k, v in static_flow_map.items():
+            val = static_graph_vals[k]
+            static_flow_weights = static_flow_weights.at[v].set(val)
+
         compartment_infectiousness = get_compartment_infectiousness(static_graph_vals)
-        model_data = {"compartment_infectiousness": compartment_infectiousness}
+        model_data = {
+            "compartment_infectiousness": compartment_infectiousness,
+            "static_flow_weights": static_flow_weights,
+        }
 
         outputs = get_ode_solution(initial_population, times, static_graph_vals, model_data)
 
@@ -404,8 +420,12 @@ def build_run_model(runner, base_params=None, dyn_params=None, solver=None):
         derived_outputs = calc_derived_outputs(
             parameters=parameters, model_variables=model_variables
         )
+
         # return {"outputs": outputs, "model_data": model_data}
-        return {"outputs": outputs, "derived_outputs": derived_outputs, "model_data": model_data}
+        return {
+            "outputs": outputs,
+            "derived_outputs": derived_outputs,
+        }  # "model_data": model_data}
 
     runner_dict = {
         "get_rates": get_rates,

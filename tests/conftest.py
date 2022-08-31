@@ -8,7 +8,7 @@ import os
 os.environ["OMP_NUM_THREADS"] = "1"
 
 import pytest
-from summer.model import BackendType
+from summer2.model import BackendType
 
 IS_GITHUB_CI = os.environ.get("GITHUB_ACTION", False)
 

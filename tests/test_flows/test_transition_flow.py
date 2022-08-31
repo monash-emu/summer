@@ -1,5 +1,5 @@
-from summer import Compartment, Stratification, adjust
-from summer.flows import BaseTransitionFlow
+from summer2 import Compartment, Stratification, adjust
+from summer2.flows import BaseTransitionFlow
 
 
 class TransitionFlow(BaseTransitionFlow):
