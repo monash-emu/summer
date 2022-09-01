@@ -750,6 +750,9 @@ class CompartmentalModel:
             assert not any([s.is_strain() for s in self._stratifications]), msg
             self._disease_strains = strat.strata
 
+        for c in strat.compartments:
+            if c not in self._original_compartment_names:
+                raise Exception("Trying to stratify non-existent compartment", c)
         # Stratify compartments, split according to split_proportions
         prev_compartment_names = copy.copy(self.compartments)
         self.compartments = strat._stratify_compartments(self.compartments)
@@ -1359,6 +1362,8 @@ class ModelResults:
     def __init__(self, model, run_func):
         self.model = model
         self._run_func = run_func
+        self._input_params = model.get_input_parameters()
+        self._derived_outputs_idx_cache = None
 
     def get_outputs_df(self):
         return self.model.get_outputs_df()
@@ -1366,8 +1371,12 @@ class ModelResults:
     def get_derived_outputs_df(self):
         return self.model.get_derived_outputs_df()
 
-    def run(self, parameters: dict):
+    def run(self, parameters: dict, filter=True):
+        if filter:
+            parameters = {k: v for k, v in parameters.items() if k in self._input_params}
+
         results = self._run_func(parameters=parameters)
+        
         self.outputs = np.array(results["outputs"])
         self.derived_outputs = {k: np.array(v) for k, v in results["derived_outputs"].items()}
         self.model.outputs = self.outputs

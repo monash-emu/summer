@@ -315,10 +315,6 @@ class Stratification:
         passthrough_target_indices = []
         stratum_target_indices = {s: [] for s in self.strata}
 
-        for c in self.compartments:
-            if c not in comps:
-                raise Exception("Trying to stratify non-existent compartment", c)
-
         new_comps = []
         idx = 0
         for base_idx, old_comp in enumerate(comps):
