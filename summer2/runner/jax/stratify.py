@@ -9,6 +9,8 @@ from summer2.parameters import get_static_param_value, is_var, Function
 from summer2.parameters.param_impl import ModelParameter
 from summer2.stratification import Stratification
 
+from summer2.population import get_rebalanced_population
+
 if TYPE_CHECKING:
     from summer2 import CompartmentalModel
 
@@ -112,10 +114,9 @@ def get_calculate_initial_pop(model: CompartmentalModel):
                     initial_population = strat_funcs[strat](initial_population, static_graph_values)
                 elif action.action_type == "adjust_pop_split":
                     # FIXME: Implement this
-                    raise NotImplementedError
-                    # initial_population = get_rebalanced_population(
-                    #    model, initial_population, parameters, **action.kwargs
-                    # )
+                    initial_population = get_rebalanced_population(
+                        model, initial_population, static_graph_values, **action.kwargs
+                    )
             return initial_population
         else:
             raise TypeError(

@@ -76,12 +76,12 @@ def get_rebalanced_population(
 
     for g in usg:
         mcomps = model._get_matching_compartments(g.name, g.strata)
-        idx = [c.idx for c in mcomps]
+        idx = np.array([c.idx for c in mcomps])
         total = population[idx].sum()
         for c in mcomps:
             k = c.strata[strat]
             target_prop = proportions[k]
-            out_population[c.idx] = total * target_prop
+            out_population = out_population.at[c.idx].set(total * target_prop)
 
     return out_population
 

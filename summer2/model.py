@@ -862,20 +862,21 @@ class CompartmentalModel:
         msg = "Proportions must sum to 1.0"
         np.testing.assert_allclose(sum(proportions.values()), 1.0, err_msg=msg)
 
-        strat_comps = [c for c in self.compartments if strat in c.strata]
-        # Filter by only the subset we're setting in split_map
-        strat_comps = filter_by_strata(strat_comps, dest_filter)
 
-        usg = get_unique_strat_groups(strat_comps, strat)
+        # strat_comps = [c for c in self.compartments if strat in c.strata]
+        # # Filter by only the subset we're setting in split_map
+        # strat_comps = filter_by_strata(strat_comps, dest_filter)
 
-        for g in usg:
-            mcomps = self._get_matching_compartments(g.name, g.strata)
-            idx = [c.idx for c in mcomps]
-            total = self.initial_population[idx].sum()
-            for c in mcomps:
-                k = c.strata[strat]
-                target_prop = proportions[k]
-                self.initial_population[c.idx] = total * target_prop
+        # usg = get_unique_strat_groups(strat_comps, strat)
+
+        # for g in usg:
+        #     mcomps = self._get_matching_compartments(g.name, g.strata)
+        #     idx = [c.idx for c in mcomps]
+        #     total = self.initial_population[idx].sum()
+        #     for c in mcomps:
+        #         k = c.strata[strat]
+        #         target_prop = proportions[k]
+        #         self.initial_population[c.idx] = total * target_prop
 
         self.tracker.append_action(
             ActionType.ADJUST_POP_SPLIT,

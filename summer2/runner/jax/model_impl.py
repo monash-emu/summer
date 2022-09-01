@@ -13,7 +13,7 @@ from summer2.adjust import Overwrite
 
 from summer2.runner import ModelBackend
 
-from summer2.solver import SolverType
+from summer2.solver import SolverType, SolverArgs
 
 from .stratify import get_calculate_initial_pop
 from .derived_outputs import build_derived_outputs_runner
@@ -329,7 +329,7 @@ def build_get_compartment_infectiousness(model):
     return get_compartment_infectiousness
 
 
-def build_run_model(runner, base_params=None, dyn_params=None, solver=None):
+def build_run_model(runner, base_params=None, dyn_params=None, solver=None, solver_args=None):
 
     if dyn_params is None:
         dyn_params = runner.model.graph.get_input_variables()
@@ -373,6 +373,12 @@ def build_run_model(runner, base_params=None, dyn_params=None, solver=None):
         solver = SolverType.ODE_INT
 
     if solver == SolverType.ODE_INT:
+        if solver_args is None:
+            # Some sensible defaults; faster than
+            # the odeint defaults,
+            # but accurate enough for our tests
+            solver_args = SolverArgs.DEFAULT
+
 
         def get_ode_solution(initial_population, times, static_graph_vals, model_data):
             return ode.odeint(
@@ -381,8 +387,7 @@ def build_run_model(runner, base_params=None, dyn_params=None, solver=None):
                 times,
                 static_graph_vals,
                 model_data,
-                rtol=1.4e-3,
-                atol=1.4e-3,
+                **solver_args
             )
 
     elif solver == SolverType.RUNGE_KUTTA:
@@ -471,6 +476,7 @@ def build_run_model(runner, base_params=None, dyn_params=None, solver=None):
         return {
             "flow_rates": flow_rates,
             "comp_rates": comp_rates,
+            "initial_population": initial_population
         }  # "model_data": model_data}
 
     runner_dict = {

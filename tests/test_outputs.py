@@ -107,21 +107,18 @@ def test_model__with_birth_and_death_rate__expect_pop_static_overall(backend):
 
 def test_model__with_birth_and_death_rate_replace_deaths__expect_pop_static_overall(backend):
     model = CompartmentalModel(
-        times=[0, 5], compartments=["S", "I", "R"], infectious_compartments=["I"]
+        times=[0, 2], compartments=["S", "I", "R"], infectious_compartments=["I"]
     )
     model.set_initial_population(distribution={"S": 100, "I": 100})
     model.add_replacement_birth_flow("births", "S")
     # Add some dying at ~2 people / 100 / year.
     model.add_universal_death_flows("deaths", 0.02)
-    model.run(backend=backend)
+    model.run(solver="euler")
     expected_outputs = np.array(
         [
-            [100.0, 100.0, 0],  # Initial conditions
-            [102.0, 98.0, 0],
-            [104.0, 96.0, 0],
-            [105.8, 94.2, 0],  # Tweaked.
-            [107.7, 92.3, 0],  # Tweaked.
-            [109.5, 90.5, 0],  # Tweaked.
+            [100, 100, 0],  # Initial conditions
+            [102, 98, 0],
+            [103.96, 96.04, 0],
         ]
     )
     assert_allclose(model.outputs, expected_outputs, atol=0.1, verbose=True)
@@ -136,7 +133,7 @@ def test_model__with_higher_birth_than_and_death_rate__expect_pop_increase(backe
     model.add_crude_birth_flow("births", 0.1, "S")
     # Add some dying at ~2 people / 100 / year.
     model.add_universal_death_flows("deaths", 0.02)
-    model.run(backend=backend)
+    model.run()
     expected_outputs = np.array(
         [
             [100.0, 100.0, 0],  # Initial conditions
@@ -239,7 +236,7 @@ def test_model__with_infection_frequency__expect_all_infected(backend):
     )
     model.set_initial_population(distribution={"S": 99, "I": 1})
     model.add_infection_frequency_flow("infection", 3, "S", "I")
-    model.run(backend=backend)
+    model.run()
     # Expect that everyone gets infected eventually.
     expected_outputs = np.array(
         [
@@ -264,7 +261,7 @@ def test_model__with_infection_density__expect_all_infected(backend):
     )
     model.set_initial_population(distribution={"S": 99, "I": 1})
     model.add_infection_density_flow("infection", 0.03, "S", "I")
-    model.run(backend=backend)
+    model.run()
     # Expect that everyone gets infected eventually.
     expected_outputs = np.array(
         [
@@ -301,7 +298,7 @@ def test_model__with_complex_dynamics__expect_correct_outputs(backend):
     model.add_death_flow("infect_death", 0.4, "I")
     model.add_transition_flow("recovery", 0.2, "I", "R")
     model.add_transition_flow("case_detection", 1, "I", "R")
-    model.run(backend=backend)
+    model.run()
     # Expect that the results are consistent, nothing crazy happens.
     # These results were not independently calculated, so this is more of an "acceptance test".
     expected_outputs = np.array(

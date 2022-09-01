@@ -11,10 +11,9 @@ from summer2.population import calculate_initial_population
 def build_model():
     """Returns a model for the stratification examples"""
     model = CompartmentalModel(
-        times=[0, 20],
+        times=[0, 1],
         compartments=["S", "I", "R"],
         infectious_compartments=["I"],
-        timestep=0.1,
     )
 
     # Add people to the model
@@ -35,34 +34,38 @@ def build_model():
     model.stratify_with(loc_strat)
     model.stratify_with(vacc_strat)
 
-    model._set_backend("python")
     return model
 
 
 def test_split_single_filter():
     model = build_model()
 
-    s_young_orig = calculate_initial_population(model)[
-        [c.idx for c in model.get_matching_compartments("S", {"age": "young"})]
+    orig_init_pop = model._get_step_test()["initial_population"]
+    s_young_orig = orig_init_pop[
+        model.query_compartments({"name": "S", "age": "young"},as_idx=True)
     ].copy()
 
+    
+
+    model = build_model()
     model.adjust_population_split(
         "vacc", {"age": "old"}, {"one_dose": 0.7, "two_dose": 0.2, "unvacc": 0.1}
     )
 
-    init_pop = calculate_initial_population(model)
+    init_pop = model._get_step_test()["initial_population"]
+
     # Check the total population hasn't changed
     np.testing.assert_almost_equal(init_pop.sum(), 1000.0)
 
     # Check we haven't changed any compartments we're not meant to
 
-    s_young_post = init_pop[[c.idx for c in model.get_matching_compartments("S", {"age": "young"})]]
+    s_young_post = init_pop[model.query_compartments({"name": "S", "age": "young"},as_idx=True)]
     np.testing.assert_array_almost_equal(s_young_orig, s_young_post)
 
     # Check we got the expected rebalance values
     s_old_urban_expected = 990.0 * 0.4 * 0.8 * np.array((0.7, 0.2, 0.1))
     s_old_urban_target = init_pop[
-        [c.idx for c in model.get_matching_compartments("S", {"age": "old", "loc": "urban"})]
+        model.query_compartments({"name": "S", "age": "old", "loc": "urban"},as_idx=True)
     ]
 
     np.testing.assert_array_almost_equal(s_old_urban_expected, s_old_urban_target)
@@ -71,34 +74,35 @@ def test_split_single_filter():
 def test_split_multi_filter():
     model = build_model()
 
-    init_pop_orig = calculate_initial_population(model)
+    init_pop_orig = model._get_step_test()["initial_population"]
 
     s_young_orig = init_pop_orig[
-        [c.idx for c in model.get_matching_compartments("S", {"age": "young"})]
+        model.query_compartments({"name": "S", "age": "young"},as_idx=True)
     ].copy()
     s_rural_orig = init_pop_orig[
-        [c.idx for c in model.get_matching_compartments("S", {"loc": "rural"})]
+        model.query_compartments({"name": "S", "loc": "rural"},as_idx=True)
     ].copy()
 
+    model = build_model()
     model.adjust_population_split(
         "vacc", {"age": "old", "loc": "urban"}, {"one_dose": 0.7, "two_dose": 0.2, "unvacc": 0.1}
     )
 
-    init_pop = calculate_initial_population(model)
+    init_pop = model._get_step_test()["initial_population"]
     # Check the total population hasn't changed
     np.testing.assert_almost_equal(init_pop.sum(), 1000.0)
 
     # Check we haven't changed any compartments we're not meant to
 
-    s_young_post = init_pop[[c.idx for c in model.get_matching_compartments("S", {"age": "young"})]]
-    s_rural_post = init_pop[[c.idx for c in model.get_matching_compartments("S", {"loc": "rural"})]]
+    s_young_post = init_pop[model.query_compartments({"name": "S", "age": "young"},as_idx=True)]
+    s_rural_post = init_pop[model.query_compartments({"name": "S", "loc": "rural"},as_idx=True)]
     np.testing.assert_array_almost_equal(s_young_orig, s_young_post)
     np.testing.assert_array_almost_equal(s_rural_orig, s_rural_post)
 
     # Check we got the expected rebalance values
     s_old_urban_expected = 990.0 * 0.4 * 0.8 * np.array((0.7, 0.2, 0.1))
     s_old_urban_target = init_pop[
-        [c.idx for c in model.get_matching_compartments("S", {"age": "old", "loc": "urban"})]
+        model.query_compartments({"name": "S", "age": "old", "loc": "urban"},as_idx=True)
     ]
 
     np.testing.assert_array_almost_equal(s_old_urban_expected, s_old_urban_target)
