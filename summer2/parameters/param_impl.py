@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from summer2 import CompartmentalModel
 
+from functools import partial
 from typing import Tuple, List, Iterable, Any
 from numbers import Real
 
@@ -157,6 +158,27 @@ def map_flow_keys(m: CompartmentalModel) -> dict:
 
     return realised_flows
 
+def register_object_key(obj_table, obj, base_name, unique=False):
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            register_object_key(obj_table, v, f"{base_name}_{k}")
+    elif isinstance(obj, GraphObjectParameter):
+        if obj.obj not in obj_table:
+            if unique:
+                name = base_name
+                if name in obj_table.values():
+                    raise KeyError("Object with name {name} already exists")
+            else:
+                if base_name in obj_table.values():
+                    name = f"{base_name}_{len(obj_table)}"
+                else:
+                    name = base_name
+            obj_table[obj.obj] = name
+        obj_key = obj_table[obj.obj]
+        obj._graph_key = obj_key
+        return obj_key
+    else:
+        raise TypeError(obj, base_name)
 
 def finalize_parameters(model):
     """Called as part of model.finalize
@@ -170,27 +192,7 @@ def finalize_parameters(model):
 
     obj_table = {}
 
-    def register_obj_key(obj, base_name, unique=False):
-        if isinstance(obj, dict):
-            for k, v in obj.items():
-                register_obj_key(v, f"{base_name}_{k}")
-        elif isinstance(obj, GraphObjectParameter):
-            if obj.obj not in obj_table:
-                if unique:
-                    name = base_name
-                    if name in obj_table.values():
-                        raise KeyError("Object with name {name} already exists")
-                else:
-                    if base_name in obj_table.values():
-                        name = f"{base_name}_{len(obj_table)}"
-                    else:
-                        name = base_name
-                obj_table[obj.obj] = name
-            obj_key = obj_table[obj.obj]
-            obj._graph_key = obj_key
-            return obj_key
-        else:
-            raise TypeError(obj, base_name)
+    register_obj_key = partial(register_object_key, obj_table)
 
     # Flow parameters and adjustments
     for f in model._flows:
@@ -276,6 +278,19 @@ def finalize_parameters(model):
     cv_func = Function(capture_kwargs, kwargs=model._computed_values_graph_dict)
     cv_func.node_name = "gather_cv"
     register_obj_key(GraphObjectParameter(cv_func), "computed_values", True)
+
+    do_table = {}
+    register_do_obj_key = partial(register_object_key, do_table)
+
+    # Derived outputs
+    for k, v in model._derived_output_requests.items():
+        req_type = v["request_type"]
+        if req_type == "param_func":
+            name = f"derived_outputs.{k}"
+            register_do_obj_key(GraphObjectParameter(v["func"]), name, True)
+
+    do_graph = invert_dict(do_table)
+    model._do_tracker_graph = ComputeGraph(do_graph, validate_keys=False)
 
     model_graph = invert_dict(obj_table)
 

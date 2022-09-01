@@ -8,14 +8,7 @@ from summer2.adjust import Overwrite
 import summer2.flows as flows
 
 from summer2.population import get_rebalanced_population
-from summer2.compute import (
-    accumulate_positive_flow_contributions,
-    accumulate_negative_flow_contributions,
-    find_sum,
-    get_strain_infection_values,
-)
 from summer2.utils import clean_compartment_values
-
 
 class ModelBackend:
     """
@@ -351,10 +344,17 @@ class ModelBackend:
         self._infection_frequency_only = False
         self._infection_density_only = False
 
-        if has_freq and not has_dens:
-            self._infection_frequency_only = True
-        elif has_dens and not has_freq:
+        self._infection_process_type = None
+
+        if has_freq:
+            if has_dens:
+                self._infection_process_type = "both"
+            else:
+                self._infection_process_type = "freq"
+                self._infection_frequency_only = True
+        elif has_dens:
             self._infection_density_only = True
+            self._infection_process_type = "dens"
 
     def _get_force_idx(self, source: Compartment):
         """
@@ -395,6 +395,8 @@ class ModelBackend:
     ):
         # Calculate total number of people per category (for FoI).
         # A vector with size (num_cats).
+        from summer2.runner.jax.model_impl import get_strain_infection_values
+
         self._category_populations = compartment_values[self._population_category_indexer].sum(
             axis=1
         )
@@ -406,6 +408,8 @@ class ModelBackend:
             strain_category_indexer = self._strain_category_indexers[strain]
 
             strain_infectious_values = compartment_values[strain_infectious_idx]
+
+            
 
             infection_density, infection_frequency = get_strain_infection_values(
                 strain_infectious_values,

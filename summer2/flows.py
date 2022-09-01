@@ -9,10 +9,8 @@ import numpy as np
 
 from summer2.adjust import BaseAdjustment, FlowParam, Multiply
 from summer2.compartment import Compartment
-from summer2.parameters import is_func
 from summer2.parameters.param_impl import ModelParameter
 from summer2.stratification import Stratification
-from summer2.compute import find_sum
 
 
 class WeightType:
@@ -388,7 +386,7 @@ class CrudeBirthFlow(BaseEntryFlow):
         parameters: dict = None,
     ) -> float:
         parameter_value = self.get_weight_value(time, computed_values, parameters)
-        total_population = find_sum(compartment_values)
+        total_population = np.sum(compartment_values)
         return parameter_value * total_population
 
 

@@ -14,77 +14,47 @@ def test_no_derived_outputs(backend):
     assert model.outputs.shape == (6, 3)
     assert model.derived_outputs == {}
 
-
-def test_compartment_size_derived_outputs(backend):
-
+def get_base_model():
     model = CompartmentalModel(
         times=[0, 5], compartments=["S", "I", "R"], infectious_compartments=["I"]
     )
     model.set_initial_population(distribution={"S": 990, "I": 10})
-    model.run(backend=backend)
-    model.outputs = np.array(
-        [
-            [990, 10, 0],
-            [980, 15, 5],
-            [970, 20, 10],
-            [960, 25, 15],
-            [950, 30, 20],
-            [940, 35, 25],
-        ]
-    )
+    model.add_transition_flow("infection", 10, "S", "I", absolute=True)
+    model.add_transition_flow("recovery", 5, "I", "R", absolute=True)
+    return model
+
+
+def test_compartment_size_derived_outputs(backend):
+
+    model = get_base_model()
     model.request_output_for_compartments("recovered", ["R"])
     model.request_output_for_compartments("not_infected", ["S", "R"])
     model.request_output_for_compartments("total_population", ["S", "I", "R"])
-    dos, _ = model._calculate_derived_outputs()
+    model.run(solver="euler")
+    dos = model.derived_outputs
     assert_array_equal(dos["recovered"], np.array([0, 5, 10, 15, 20, 25]))
     assert_array_equal(dos["not_infected"], np.array([990, 985, 980, 975, 970, 965]))
     assert_array_equal(dos["total_population"], np.array([1000, 1000, 1000, 1000, 1000, 1000]))
 
 
 def test_aggregate_derived_outputs(backend):
-    model = CompartmentalModel(
-        times=[0, 5], compartments=["S", "I", "R"], infectious_compartments=["I"]
-    )
-    model.set_initial_population(distribution={"S": 990, "I": 10})
-    model.run(backend=backend)
-    model.outputs = np.array(
-        [
-            [990, 10, 0],
-            [980, 15, 5],
-            [970, 20, 10],
-            [960, 25, 15],
-            [950, 30, 20],
-            [940, 35, 25],
-        ]
-    )
+    model = get_base_model()
     model.request_output_for_compartments("recovered", ["R"])
     model.request_output_for_compartments("not_infected", ["S", "R"])
     model.request_output_for_compartments("total_population", ["S", "I", "R"])
     model.request_aggregate_output(name="my_aggregate", sources=["recovered", "total_population"])
-    dos, _ = model._calculate_derived_outputs()
+    model.run(solver="euler")
+    dos = model.derived_outputs
     assert_array_equal(dos["my_aggregate"], np.array([1000, 1005, 1010, 1015, 1020, 1025]))
 
 
 def test_cumulative_derived_outputs(backend):
-    model = CompartmentalModel(
-        times=[0, 5], compartments=["S", "I", "R"], infectious_compartments=["I"]
-    )
-    model.set_initial_population(distribution={"S": 990, "I": 10})
-    model.run(backend=backend)
-    model.outputs = np.array(
-        [
-            [990, 10, 0],
-            [980, 15, 5],
-            [970, 20, 10],
-            [960, 25, 15],
-            [950, 30, 20],
-            [940, 35, 25],
-        ]
-    )
+    model = get_base_model()
     model.request_output_for_compartments("recovered", ["R"])
     model.request_cumulative_output(name="recoved_cumulative", source="recovered")
     model.request_cumulative_output(name="recoved_cumulative_2", source="recovered", start_time=2)
-    dos, _ = model._calculate_derived_outputs()
+    model.run(solver="euler")
+    dos = model.derived_outputs
     assert_array_equal(dos["recoved_cumulative"], np.array([0, 5, 15, 30, 50, 75]))
     assert_array_equal(dos["recoved_cumulative_2"], np.array([0, 0, 10, 25, 45, 70]))
 
@@ -117,7 +87,7 @@ def test_flow_derived_outputs(backend):
     model.request_output_for_flow(name="recovery_raw", flow_name="recovery", raw_results=True)
     model.request_output_for_flow(name="recovery_delta", flow_name="recovery", raw_results=False)
 
-    model.run(backend=backend)
+    model.run()
     dos = model.derived_outputs
 
     # Raw outputs are the instantaneous flow rate at a given time.
@@ -139,21 +109,7 @@ def test_flow_derived_outputs(backend):
 
 
 def test_functional_derived_outputs(backend):
-    model = CompartmentalModel(
-        times=[0, 5], compartments=["S", "I", "R"], infectious_compartments=["I"]
-    )
-    model.set_initial_population(distribution={"S": 990, "I": 10})
-    model.run(backend=backend)
-    model.outputs = np.array(
-        [
-            [990, 10, 0],
-            [980, 15, 5],
-            [970, 20, 10],
-            [960, 25, 15],
-            [950, 30, 20],
-            [940, 35, 25],
-        ]
-    )
+    model = get_base_model()
 
     def get_non_infected(rec, pop):
         return rec / pop
@@ -162,15 +118,13 @@ def test_functional_derived_outputs(backend):
     model.request_output_for_compartments("population", ["S", "I", "R"])
     model.request_function_output("recovered_prop", get_non_infected, ["recovered", "population"])
 
-    dos, _ = model._calculate_derived_outputs()
+    model.run(solver="euler")
+    dos = model.derived_outputs
     assert_array_equal(dos["recovered_prop"], np.array([0, 0.005, 0.01, 0.015, 0.020, 0.025]))
 
 
 def test_derived_outputs_with_no_save_results(backend):
-    model = CompartmentalModel(
-        times=[0, 5], compartments=["S", "I", "R"], infectious_compartments=["I"]
-    )
-    model.set_initial_population(distribution={"S": 990, "I": 10})
+    model = get_base_model()
     model.add_importation_flow("imports", num_imported=2, dest="S", split_imports=False)
 
     # Expect np.array([0, 2, 2, 2, 2, 2]))
@@ -190,19 +144,10 @@ def test_derived_outputs_with_no_save_results(backend):
         name="final_aggregate", sources=["some_aggregate", "recovered_cumulative"]
     )
 
-    model.run(backend=backend)
     # Override outputs so the test is easier to write
-    model.outputs = np.array(
-        [
-            [990, 10, 0],
-            [980, 15, 5],
-            [970, 20, 10],
-            [960, 25, 15],
-            [950, 30, 20],
-            [940, 35, 25],
-        ]
-    )
-    dos, _ = model._calculate_derived_outputs()
+    model.run(solver="euler",jit=False)
+    dos = model.derived_outputs
+
     assert_array_equal(dos["final_aggregate"][1:], np.array([12, 27, 47, 72, 102]))
     assert "importation" not in dos
     assert "recovered" not in dos
@@ -211,21 +156,7 @@ def test_derived_outputs_with_no_save_results(backend):
 
 
 def test_derived_outputs_whitelist(backend):
-    model = CompartmentalModel(
-        times=[0, 5], compartments=["S", "I", "R"], infectious_compartments=["I"]
-    )
-    model.set_initial_population(distribution={"S": 990, "I": 10})
-    model.run(backend=backend)
-    model.outputs = np.array(
-        [
-            [990, 10, 0],
-            [980, 15, 5],
-            [970, 20, 10],
-            [960, 25, 15],
-            [950, 30, 20],
-            [940, 35, 25],
-        ]
-    )
+    model = get_base_model()
 
     model.request_output_for_compartments("recovered", ["R"])
     model.request_output_for_compartments("not_infected", ["S", "R"])
@@ -235,13 +166,12 @@ def test_derived_outputs_whitelist(backend):
 
     model.set_derived_outputs_whitelist(["recovered", "accum_infected"])
 
-    dos, _ = model._calculate_derived_outputs()
+    model.run(solver="euler",jit=False)
+    dos = model.derived_outputs
     assert "recovered" in dos  # Included coz in whitelist (or dependency of)
-    assert "infected" in dos  # Included coz in whitelist (or dependency of)
     assert "accum_infected" in dos  # Included coz in whitelist (or dependency of)
     assert "not_infected" not in dos  # Excluded coz not in whitelist
     assert "total_population" not in dos  # Excluded coz not in whitelist
 
     assert_array_equal(dos["recovered"], np.array([0, 5, 10, 15, 20, 25]))
-    assert_array_equal(dos["infected"], np.array([10, 15, 20, 25, 30, 35]))
     assert_array_equal(dos["accum_infected"], np.array([10, 25, 45, 70, 100, 135]))

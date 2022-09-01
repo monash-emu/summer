@@ -31,7 +31,7 @@ def get_strain_infection_values(
     category_populations,
 ):
     infected_values = strain_infectious_values * strain_compartment_infectiousness
-    infectious_populations = jnp.sum(infected_values[strain_category_indexer], axis=1)
+    infectious_populations = jnp.sum(infected_values[strain_category_indexer], axis=-1)
     infection_density = mixing_matrix @ infectious_populations
     category_prevalence = infectious_populations / category_populations
     infection_frequency = mixing_matrix @ category_prevalence
@@ -43,9 +43,11 @@ def build_get_infectious_multipliers(runner):
     population_cat_indexer = jnp.array(runner._population_category_indexer)
 
     # FIXME: We are hardcoding this for frequency only right now
-    if not runner._infection_frequency_only:
+    infect_proc_type = runner._infection_process_type
+
+    if infect_proc_type == "both":
         raise NotImplementedError(
-            "Model must have at least one infection frequency flow, and no infection density"
+            "No support for mixed infection frequency/density"
         )
 
     # FIXME: This could desparately use a tidy-up - all the indexing is a nightmare
@@ -77,8 +79,11 @@ def build_get_infectious_multipliers(runner):
             )
             infection_frequency[strain] = strain_values["infection_frequency"]
             infection_density[strain] = strain_values["infection_density"]
-
-            strain_ifect = strain_values["infection_frequency"]
+            
+            if infect_proc_type == "freq":
+                strain_ifect = strain_values["infection_frequency"]
+            elif infect_proc_type == "dens":
+                strain_ifect = strain_values["infection_density"]
 
             # FIXME: So we produce strain infection values _per category_
             # (ie not all model compartments, not all infectious compartments)
@@ -116,8 +121,13 @@ def build_get_flow_weights(runner: ModelBackend):
 
     m = runner.model
 
-    tvkeys = list(m.graph.filter(sources="model_variables.time").dag)
-    tv_flow_map = {k: m._flow_key_map[k] for k in set(m._flow_key_map).intersection(set(tvkeys))}
+    if "model_variables.time" in m.graph.dag:
+        tvkeys = list(m.graph.filter(sources="model_variables.time").dag)
+        tv_flow_map = {
+            k: m._flow_key_map[k] for k in set(m._flow_key_map).intersection(set(tvkeys))
+        }
+    else:
+        tv_flow_map = {}
 
     def get_flow_weights(cur_graph_outputs, static_flow_weights):
 
@@ -149,7 +159,10 @@ def build_get_flow_rates(runner, ts_graph_func):
 
     # calc_computed_values = build_calc_computed_values(runner)
     get_flow_weights = build_get_flow_weights(runner)
-    get_infectious_multipliers = build_get_infectious_multipliers(runner)
+    
+    infect_proc_type = runner._infection_process_type
+    if infect_proc_type:
+        get_infectious_multipliers = build_get_infectious_multipliers(runner)
 
     # flow_weights_base = jnp.array(runner.flow_weights)
 
@@ -187,13 +200,18 @@ def build_get_flow_rates(runner, ts_graph_func):
 
         # Calculate infection flows
         # JITTED
-        infect_mul = get_infectious_multipliers(
-            time, compartment_values, cur_graph_outputs, model_data["compartment_infectiousness"]
-        )
-        # flow_rates = flow_rates.at[infectious_flow_indices].set(
-        #    flow_rates[infectious_flow_indices] * infect_mul
-        # )
-        flow_rates = flow_rates.at[infectious_flow_indices].mul(infect_mul)
+        if infect_proc_type:
+            infect_mul = get_infectious_multipliers(
+                time, compartment_values, cur_graph_outputs, model_data["compartment_infectiousness"]
+            )
+            flow_rates = flow_rates.at[infectious_flow_indices].mul(infect_mul)
+
+                # ReplacementBirthFlow depends on death flows already being calculated; update here
+        if runner._has_replacement:
+            # Only calculate timestep_deaths if we use replacement, it's expensive...
+            _timestep_deaths = flow_rates[runner.death_flow_indices].sum()
+            flow_rates = flow_rates.at[runner._replacement_flow_idx].set(_timestep_deaths)
+
 
         return flow_rates, cur_graph_outputs["computed_values"]
 
@@ -392,7 +410,11 @@ def build_run_model(runner, base_params=None, dyn_params=None, solver=None):
     calc_derived_outputs = build_derived_outputs_runner(runner.model)
 
     m = runner.model
-    tv_keys = list(m.graph.filter(sources="model_variables.time").dag)
+    if "model_variables.time" in m.graph.dag:
+        tv_keys = list(m.graph.filter(sources="model_variables.time").dag)
+    else:
+        tv_keys = []
+
     static_flow_map = {k: m._flow_key_map[k] for k in set(m._flow_key_map).difference(set(tv_keys))}
 
     def run_model(parameters):
@@ -427,6 +449,30 @@ def build_run_model(runner, base_params=None, dyn_params=None, solver=None):
             "derived_outputs": derived_outputs,
         }  # "model_data": model_data}
 
+    def one_step(parameters: dict=None):
+
+        static_graph_vals = static_graph_func(parameters=parameters)
+        initial_population = calc_initial_pop(static_graph_vals)
+
+        static_flow_weights = jnp.zeros(len(runner.model._flows))
+        for k, v in static_flow_map.items():
+            val = static_graph_vals[k]
+            static_flow_weights = static_flow_weights.at[v].set(val)
+
+        compartment_infectiousness = get_compartment_infectiousness(static_graph_vals)
+        model_data = {
+            "compartment_infectiousness": compartment_infectiousness,
+            "static_flow_weights": static_flow_weights,
+        }
+
+        flow_rates, comp_rates = get_rates(initial_population, runner.model.times[0], static_graph_vals, model_data)
+
+        # return {"outputs": outputs, "model_data": model_data}
+        return {
+            "flow_rates": flow_rates,
+            "comp_rates": comp_rates,
+        }  # "model_data": model_data}
+
     runner_dict = {
         "get_rates": get_rates,
         "get_flow_rates": get_flow_rates,
@@ -439,6 +485,7 @@ def build_run_model(runner, base_params=None, dyn_params=None, solver=None):
         "timestep_cg": timestep_cg,
         "static_cg": static_cg,
         "static_graph_func": static_graph_func,
+        "one_step": one_step
     }
 
     return run_model, runner_dict

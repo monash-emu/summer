@@ -30,6 +30,6 @@ def pytest_runtest_setup(item):
             pytest.skip("Long running test: run on GitHub only.")
 
 
-@pytest.fixture(params=[BackendType.PYTHON])
+@pytest.fixture(params=[BackendType.JAX])
 def backend(request):
     return request.param

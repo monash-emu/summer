@@ -82,7 +82,6 @@ class CompartmentalModel:
         infectious_compartments: List[str],
         timestep: float = 1.0,
         ref_date: datetime = None,
-        takes_params: bool = False,
     ):
         start_t, end_t = times
         assert end_t > start_t, "End time must be greater than start time"
@@ -156,10 +155,8 @@ class CompartmentalModel:
         # Track the actions we take building this model
         self.tracker = ModelBuildTracker()
 
-        if takes_params:
-            self._defer_actions = True
-        else:
-            self._defer_actions = False
+        self._defer_actions = True
+
         self._finalized = False
         self._runner = None
 
@@ -313,7 +310,7 @@ class CompartmentalModel:
         self._add_entry_flow(
             flows.ReplacementBirthFlow,
             name,
-            self._get_timestep_deaths,
+            1.0,
             dest,
             dest_strata,
             expected_flow_count,
@@ -433,11 +430,6 @@ class CompartmentalModel:
             List[str]: The names of the flows added.
 
         """
-        warn(
-            "Feature is scheduled for deprecation",
-            DeprecationWarning,
-            stacklevel=2,
-        )
 
         # Only allow a single universal death flow with a given name to be added to the model.
         is_already_used = any([f.name.startswith(base_name) for f in self._flows])
@@ -556,6 +548,8 @@ class CompartmentalModel:
             find_infectious_multiplier=self._get_infection_density_multiplier,
         )
 
+
+
     def add_transition_flow(
         self,
         name: str,
@@ -565,6 +559,7 @@ class CompartmentalModel:
         source_strata: Optional[Dict[str, str]] = None,
         dest_strata: Optional[Dict[str, str]] = None,
         expected_flow_count: Optional[int] = None,
+        absolute=False,
     ):
         """
         Adds a flow transferring people from a source to a destination based on the population of
@@ -581,16 +576,28 @@ class CompartmentalModel:
                                             created.
 
         """
-        self._add_transition_flow(
-            flows.TransitionFlow,
-            name,
-            fractional_rate,
-            source,
-            dest,
-            source_strata,
-            dest_strata,
-            expected_flow_count,
-        )
+        if absolute:
+            self._add_transition_flow(
+                flows.AbsoluteFlow,
+                name,
+                fractional_rate,
+                source,
+                dest,
+                source_strata,
+                dest_strata,
+                expected_flow_count
+            )
+        else:
+            self._add_transition_flow(
+                flows.TransitionFlow,
+                name,
+                fractional_rate,
+                source,
+                dest,
+                source_strata,
+                dest_strata,
+                expected_flow_count,
+            )
 
     def _add_transition_flow(
         self,
@@ -746,14 +753,14 @@ class CompartmentalModel:
         # Stratify compartments, split according to split_proportions
         prev_compartment_names = copy.copy(self.compartments)
         self.compartments = strat._stratify_compartments(self.compartments)
-        if not self._defer_actions or self._finalized:
-            try:
-                self.initial_population = strat._stratify_compartment_values(
-                    prev_compartment_names, self.initial_population
-                )
-            except Exception as e:
-                logger.critical("Parameterized models must set takes_params in constructor")
-                raise e
+        # if not self._defer_actions or self._finalized:
+        #    try:
+        #        self.initial_population = strat._stratify_compartment_values(
+        #            prev_compartment_names, self.initial_population
+        #        )
+        #    except Exception as e:
+        #        logger.critical("Parameterized models must set takes_params in constructor")
+        #        raise e
 
         # Update the cache of compartment names; these need to correct whenever we add a new flow
         self._update_compartment_name_map()
@@ -880,6 +887,21 @@ class CompartmentalModel:
     """
     Running the model
     """
+    def _get_step_test(self, parameters: dict=None):
+        self._update_compartment_indices()
+        self.finalize()
+
+        self._set_backend("jax")
+        # self._backend.prepare_to_run(parameters)
+        self._backend.prepare_structural()
+
+        from summer2.runner.jax.model_impl import build_run_model
+
+        jax_run_func, jax_runner_dict = build_run_model(
+            self._backend, base_params=parameters
+        )
+
+        return jax_runner_dict["one_step"](parameters)
 
     def get_runner(self, parameters: dict, dyn_params: List = None, jit=True, **backend_args):
         self._update_compartment_indices()
@@ -939,19 +961,13 @@ class CompartmentalModel:
         if self._runner is None:
             self._set_backend("jax", backend_args)
             self._backend.prepare_structural()
-            self._runner = self.get_runner(parameters, solver=solver)
+            self._runner = self.get_runner(parameters, solver=solver, **kwargs)
 
         self._runner.run(parameters=parameters)
 
     def _set_backend(self, backend: str, backend_args: dict = None):
         backend_args = backend_args or {}
-        if backend == BackendType.PYTHON:
-            self._backend = ModelBackend(self, **backend_args)
-        elif backend == BackendType.JAX:
-            self._backend = ModelBackend(self, **backend_args)
-        else:
-            msg = f"Invalid backend: {backend}"
-            raise ValueError(msg)
+        self._backend = ModelBackend(self, **backend_args)
 
     def _solve_ode(self, solver, solver_args: dict):
         """
@@ -1317,7 +1333,8 @@ class CompartmentalModel:
     def get_input_parameters(self):
         if not self._finalized:
             raise Exception("Cannot trace input parameters before model is finalized")
-        all_in_var = self.graph.get_input_variables()
+        all_in_var = set(self.graph.get_input_variables())
+        all_in_var = all_in_var.union(set(self._do_tracker_graph.get_input_variables()))
         return set([v.key for v in all_in_var if v.source == "parameters"])
 
     def query_compartments(self, query: dict = None, tags: List = None, as_idx=False):

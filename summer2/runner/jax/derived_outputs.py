@@ -99,7 +99,7 @@ def build_cumulative_output(request, name, times, baseline_offset=None):
 
         def get_indexed_cumsum(in_arr):
             output = jnp.zeros(len(times), dtype=jnp.float64)
-            output = output.at[start_idx:].set(jnp.cumsum(in_arr)[start_idx])
+            output = output.at[start_idx:].set(jnp.cumsum(in_arr[start_idx:]))
             return output
 
         return Function(get_indexed_cumsum, [local(source_name)])
@@ -141,6 +141,9 @@ def build_derived_outputs_runner(model):
             raise NotImplementedError(request)
         if request["save_results"]:
             out_keys.append(name)
+
+    if model._derived_outputs_whitelist:
+        out_keys = model._derived_outputs_whitelist
 
     cg = ComputeGraph(graph_dict)
     return cg.get_callable(targets=out_keys)

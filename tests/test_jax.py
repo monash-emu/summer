@@ -71,7 +71,7 @@ def test_model_multistrat_strains():
         return {"S": total - num_infected, "I": num_infected, "R": 0}
 
     def build_model(**kwargs):
-        model = CompartmentalModel((0, 100), ["S", "I", "R"], ["I"], takes_params=True)
+        model = CompartmentalModel((0, 100), ["S", "I", "R"], ["I"])
 
         model.set_initial_population(get_ipop_dist(1000.0, 0.4))
 
