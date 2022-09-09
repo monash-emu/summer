@@ -10,6 +10,8 @@ from typing import Union, Any
 from collections.abc import Iterable
 from numbers import Real
 
+import numpy as np
+
 # from pydantic import BaseModel
 # from pydantic.main import ModelMetaclass
 
@@ -114,10 +116,12 @@ class ModelBuilder:
         return self.model.get_input_parameters()
 
     def get_default_parameters(self) -> dict:
-        default_params = {
-            k: v for k, v in self._params_expanded.items() if k in self.get_input_parameters()
-        }
-        return default_params
+        iparams = self.get_input_parameters()
+        oparams = {}
+        for p in iparams:
+            obj = self.find_obj_from_key(p)
+            oparams[p] = obj.value
+        return oparams
 
 
 def label_parameters(pstruct: ParamStruct, pdict: dict, layer: list = None):
@@ -264,3 +268,36 @@ def parameter_class(constraint_func=is_real, desc: str = None, full_desc: str = 
             return cls(v)
 
     return ConcreteParameter
+
+
+def parameter_array_class(constraint_func=is_real, desc: str = None, full_desc: str = None):
+
+    _desc = desc
+    _full_desc = full_desc
+
+    class ConcreteArrayParameter(Parameter):
+
+        constraint = constraint_func
+        description = _desc
+        full_description = _full_desc
+
+        def __init__(self, value):
+            super().__init__(key=None)
+            self.value = np.array(value)
+
+        def __repr__(self):
+            pkey = self.key or self.description or "param"
+            return f"{pkey}({self.value})"
+
+        @classmethod
+        def __get_validators__(cls):
+            yield cls.validate
+
+        @classmethod
+        def validate(cls, v):
+            v = np.array(v)
+            if not all([cls.constraint(v_i) for v_i in v]):
+                raise ValueError(f"Constraint failed", cls.constraint, v)
+            return cls(v)
+
+    return ConcreteArrayParameter

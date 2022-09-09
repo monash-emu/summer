@@ -15,7 +15,7 @@ from jax import numpy as jnp
 import numpy as np
 
 from computegraph import ComputeGraph
-from computegraph.utils import get_relabelled_func
+from computegraph.utils import relabel_tree
 from computegraph.types import local
 
 from summer2.parameters import Function, ModelVariable
@@ -124,9 +124,7 @@ def build_derived_outputs_runner(model):
         if req_type == "comp":
             graph_dict[name] = build_compartment_output(request, name, model.compartments)
         elif req_type == "param_func":
-            graph_dict[name] = get_relabelled_func(
-                request["func"], "derived_outputs", "graph_locals"
-            )
+            graph_dict[name] = relabel_tree(request["func"], "derived_outputs", "graph_locals")
         elif req_type == "flow":
             graph_dict[name] = build_flow_output(request, name, model.times, model._flows)
         elif req_type == "agg":
@@ -146,4 +144,4 @@ def build_derived_outputs_runner(model):
         out_keys = model._derived_outputs_whitelist
 
     cg = ComputeGraph(graph_dict)
-    return cg.get_callable(targets=out_keys)
+    return cg, cg.get_callable(targets=out_keys)

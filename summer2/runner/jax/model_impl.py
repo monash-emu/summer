@@ -4,6 +4,7 @@ This is a mess right now!
 """
 
 from functools import partial
+import numpy as np
 
 from jax import jit, numpy as jnp
 from summer2.runner.jax import ode
@@ -46,11 +47,10 @@ def build_get_infectious_multipliers(runner):
     infect_proc_type = runner._infection_process_type
 
     if infect_proc_type == "both":
-        raise NotImplementedError(
-            "No support for mixed infection frequency/density"
-        )
+        raise NotImplementedError("No support for mixed infection frequency/density")
 
     # FIXME: This could desparately use a tidy-up - all the indexing is a nightmare
+
     def get_infectious_multipliers(
         time, compartment_values, cur_graph_outputs, compartment_infectiousness
     ):
@@ -79,7 +79,7 @@ def build_get_infectious_multipliers(runner):
             )
             infection_frequency[strain] = strain_values["infection_frequency"]
             infection_density[strain] = strain_values["infection_density"]
-            
+
             if infect_proc_type == "freq":
                 strain_ifect = strain_values["infection_frequency"]
             elif infect_proc_type == "dens":
@@ -159,15 +159,15 @@ def build_get_flow_rates(runner, ts_graph_func):
 
     # calc_computed_values = build_calc_computed_values(runner)
     get_flow_weights = build_get_flow_weights(runner)
-    
+
     infect_proc_type = runner._infection_process_type
     if infect_proc_type:
         get_infectious_multipliers = build_get_infectious_multipliers(runner)
 
     # flow_weights_base = jnp.array(runner.flow_weights)
 
-    population_idx = jnp.array(runner.population_idx)
-    infectious_flow_indices = jnp.array(runner.infectious_flow_indices)
+    population_idx = np.array(runner.population_idx)
+    infectious_flow_indices = np.array(runner.infectious_flow_indices)
 
     def get_flow_rates(compartment_values: jnp.array, time, static_graph_vals, model_data):
 
@@ -180,13 +180,13 @@ def build_get_flow_rates(runner, ts_graph_func):
             "static_inputs": static_graph_vals,
         }
 
-        cur_graph_outputs = ts_graph_func(**sources)
+        ts_graph_vals = ts_graph_func(**sources)
 
         # JITTED
         # computed_values = calc_computed_values(compartment_values, time, parameters)
 
         # JITTED
-        flow_weights = get_flow_weights(cur_graph_outputs, model_data["static_flow_weights"])
+        flow_weights = get_flow_weights(ts_graph_vals, model_data["static_flow_weights"])
 
         populations = compartment_values[population_idx]
 
@@ -202,18 +202,20 @@ def build_get_flow_rates(runner, ts_graph_func):
         # JITTED
         if infect_proc_type:
             infect_mul = get_infectious_multipliers(
-                time, compartment_values, cur_graph_outputs, model_data["compartment_infectiousness"]
+                time,
+                compartment_values,
+                ts_graph_vals,
+                model_data["compartment_infectiousness"],
             )
             flow_rates = flow_rates.at[infectious_flow_indices].mul(infect_mul)
 
-                # ReplacementBirthFlow depends on death flows already being calculated; update here
+            # ReplacementBirthFlow depends on death flows already being calculated; update here
         if runner._has_replacement:
             # Only calculate timestep_deaths if we use replacement, it's expensive...
             _timestep_deaths = flow_rates[runner.death_flow_indices].sum()
             flow_rates = flow_rates.at[runner._replacement_flow_idx].set(_timestep_deaths)
 
-
-        return flow_rates, cur_graph_outputs["computed_values"]
+        return flow_rates, ts_graph_vals["computed_values"]
 
     return get_flow_rates
 
@@ -261,7 +263,7 @@ def get_accumulation_maps(runner):
                 src_idx.append(src_flow)
             else:
                 remainder.append((src_flow, target))
-        return jnp.array(src_idx), jnp.array(targets), remainder
+        return np.array(src_idx), np.array(targets), remainder
 
     def recurse_unpeel(flow_map):
         remainder = flow_map
@@ -338,6 +340,12 @@ def build_run_model(runner, base_params=None, dyn_params=None, solver=None, solv
             f"parameters.{p}" if not p.startswith("parameters.") else p for p in dyn_params
         ]
 
+    # dyn_params may contain parameters only used in derived outputs, that do not show up
+    # in the main graph.  These need to be filtered out; they will be computed every time,
+    # but it's simpler than trying to squash the graphs together
+    model_graph_keys = set(runner.model.graph.dag)
+    dyn_params = [k for k in dyn_params if k in model_graph_keys]
+
     # Graph frozen for all non-calibration parameters
     if base_params is None:
         base_params = {}
@@ -356,6 +364,7 @@ def build_run_model(runner, base_params=None, dyn_params=None, solver=None, solv
     timestep_cg, static_cg = param_frozen_cg.freeze(ts_vars)
 
     timestep_graph_func = jit(timestep_cg.get_callable())
+    # timestep_graph_func = timestep_cg.get_callable()
     static_graph_func = static_cg.get_callable()
 
     rates_funcs = build_get_rates(runner, timestep_graph_func)
@@ -379,7 +388,6 @@ def build_run_model(runner, base_params=None, dyn_params=None, solver=None, solv
             # but accurate enough for our tests
             solver_args = SolverArgs.DEFAULT
 
-
         def get_ode_solution(initial_population, times, static_graph_vals, model_data):
             return ode.odeint(
                 get_comp_rates,
@@ -387,7 +395,7 @@ def build_run_model(runner, base_params=None, dyn_params=None, solver=None, solv
                 times,
                 static_graph_vals,
                 model_data,
-                **solver_args
+                **solver_args,
             )
 
     elif solver == SolverType.RUNGE_KUTTA:
@@ -412,7 +420,7 @@ def build_run_model(runner, base_params=None, dyn_params=None, solver=None, solv
     calc_initial_pop = get_calculate_initial_pop(runner.model)
     get_compartment_infectiousness = build_get_compartment_infectiousness(runner.model)
 
-    calc_derived_outputs = build_derived_outputs_runner(runner.model)
+    do_cg, calc_derived_outputs = build_derived_outputs_runner(runner.model)
 
     m = runner.model
     if "model_variables.time" in m.graph.dag:
@@ -454,7 +462,7 @@ def build_run_model(runner, base_params=None, dyn_params=None, solver=None, solv
             "derived_outputs": derived_outputs,
         }  # "model_data": model_data}
 
-    def one_step(parameters: dict=None):
+    def one_step(parameters: dict = None):
 
         static_graph_vals = static_graph_func(parameters=parameters)
         initial_population = calc_initial_pop(static_graph_vals)
@@ -470,13 +478,16 @@ def build_run_model(runner, base_params=None, dyn_params=None, solver=None, solv
             "static_flow_weights": static_flow_weights,
         }
 
-        flow_rates, comp_rates = get_rates(initial_population, runner.model.times[0], static_graph_vals, model_data)
+        flow_rates, comp_rates = get_rates(
+            initial_population, runner.model.times[0], static_graph_vals, model_data
+        )
 
         # return {"outputs": outputs, "model_data": model_data}
         return {
             "flow_rates": flow_rates,
             "comp_rates": comp_rates,
-            "initial_population": initial_population
+            "initial_population": initial_population,
+            "static_graph_vals": static_graph_vals,
         }  # "model_data": model_data}
 
     runner_dict = {
@@ -491,7 +502,8 @@ def build_run_model(runner, base_params=None, dyn_params=None, solver=None, solv
         "timestep_cg": timestep_cg,
         "static_cg": static_cg,
         "static_graph_func": static_graph_func,
-        "one_step": one_step
+        "one_step": one_step,
+        "derived_outputs_cg": do_cg,
     }
 
     return run_model, runner_dict

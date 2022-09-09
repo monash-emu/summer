@@ -110,7 +110,7 @@ class CompartmentalModel:
         self._update_compartment_name_map()
 
         self._infectious_compartments = [Compartment(n) for n in infectious_compartments]
-        self.initial_population = np.zeros_like(self.compartments, dtype=np.float)
+        self.initial_population = np.zeros_like(self.compartments, dtype=float)
         # Keeps track of original, pre-stratified compartment names.
         self._original_compartment_names = [Compartment.deserialize(n) for n in compartments]
         # Keeps track of Stratifications that have been applied.
@@ -548,8 +548,6 @@ class CompartmentalModel:
             find_infectious_multiplier=self._get_infection_density_multiplier,
         )
 
-
-
     def add_transition_flow(
         self,
         name: str,
@@ -585,7 +583,7 @@ class CompartmentalModel:
                 dest,
                 source_strata,
                 dest_strata,
-                expected_flow_count
+                expected_flow_count,
             )
         else:
             self._add_transition_flow(
@@ -865,7 +863,6 @@ class CompartmentalModel:
         msg = "Proportions must sum to 1.0"
         np.testing.assert_allclose(sum(proportions.values()), 1.0, err_msg=msg)
 
-
         # strat_comps = [c for c in self.compartments if strat in c.strata]
         # # Filter by only the subset we're setting in split_map
         # strat_comps = filter_by_strata(strat_comps, dest_filter)
@@ -891,7 +888,8 @@ class CompartmentalModel:
     """
     Running the model
     """
-    def _get_step_test(self, parameters: dict=None):
+
+    def _get_step_test(self, parameters: dict = None):
         self._update_compartment_indices()
         self.finalize()
 
@@ -901,9 +899,7 @@ class CompartmentalModel:
 
         from summer2.runner.jax.model_impl import build_run_model
 
-        jax_run_func, jax_runner_dict = build_run_model(
-            self._backend, base_params=parameters
-        )
+        jax_run_func, jax_runner_dict = build_run_model(self._backend, base_params=parameters)
 
         return jax_runner_dict["one_step"](parameters)
 
@@ -925,7 +921,7 @@ class CompartmentalModel:
 
             jax_run_func = jjit(jax_run_func)
 
-        return ModelResults(self, jax_run_func)
+        return ModelResults(self, jax_run_func, jax_runner_dict)
 
     def run(
         self,
@@ -1359,11 +1355,12 @@ class CompartmentalModel:
 
 
 class ModelResults:
-    def __init__(self, model, run_func):
+    def __init__(self, model, run_func, runner_dict=None):
         self.model = model
         self._run_func = run_func
         self._input_params = model.get_input_parameters()
         self._derived_outputs_idx_cache = None
+        self._runner_dict = runner_dict
 
     def get_outputs_df(self):
         return self.model.get_outputs_df()
@@ -1376,7 +1373,7 @@ class ModelResults:
             parameters = {k: v for k, v in parameters.items() if k in self._input_params}
 
         results = self._run_func(parameters=parameters)
-        
+
         self.outputs = np.array(results["outputs"])
         self.derived_outputs = {k: np.array(v) for k, v in results["derived_outputs"].items()}
         self.model.outputs = self.outputs

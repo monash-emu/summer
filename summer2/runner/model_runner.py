@@ -249,8 +249,8 @@ class ModelBackend:
             if f.dest:
                 f_pos_map.append((i, f.dest.idx))
 
-        self._pos_flow_map = np.array(f_pos_map, dtype=np.int)
-        self._neg_flow_map = np.array(f_neg_map, dtype=np.int)
+        self._pos_flow_map = np.array(f_pos_map, dtype=int)
+        self._neg_flow_map = np.array(f_neg_map, dtype=int)
 
     def _prepare_time_step(self, time: float, compartment_values: np.ndarray):
         """
