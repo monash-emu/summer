@@ -115,7 +115,9 @@ Releases are numbered using [Semantic Versioning](https://semver.org/)
 - 2.6.0
   - Merge 3.9/master branches
 - 2.7.0
-  - Include Python 3.10 support and update requirements 
+  - Include Python 3.10 support and update requirements
+- 3.6.0
+  - Summer 'classic' end-of-line release
 
 ## Release process
 

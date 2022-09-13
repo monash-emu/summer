@@ -5,7 +5,7 @@ from typing import Callable, Dict, List, Optional, Union
 
 import numpy as np
 
-from summer.adjust import Multiply, Overwrite
+from summer.adjust import Multiply, Overwrite, enforce_multiply
 from summer.compartment import Compartment
 
 Adjustment = Union[Multiply, Overwrite]
@@ -131,6 +131,8 @@ class Stratification:
         msg = "You must specify all strata when adding flow adjustments."
         assert set(adjustments.keys()) == set(self.strata), msg
 
+        adjustments = {k: enforce_multiply(v) for k, v in adjustments.items()}
+
         msg = "All flow adjustments must be Multiply, Overwrite or None."
         assert all(
             [
@@ -225,6 +227,8 @@ class Stratification:
         """
         msg = "You must specify all strata when adding infectiousness adjustments."
         assert set(adjustments.keys()) == set(self.strata), msg
+
+        adjustments = {k: enforce_multiply(v) for k, v in adjustments.items()}
 
         msg = "All infectiousness adjustments must be Multiply, Overwrite or None."
         assert all(

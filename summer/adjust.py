@@ -144,3 +144,22 @@ class AdjustmentSystem:
             computed_values ([type]): [description]
         """
         pass
+
+
+def enforce_wrapped(value, allowed, wrap):
+    if any([isinstance(value, t) for t in allowed]):
+        return value
+    else:
+        return wrap(value)
+
+
+def enforce_multiply(value):
+    """Allow adjustments to default to Multiply if adjustment type not specified
+
+    Args:
+        value: The value to wrap as a Multiply adjustment
+
+    Returns:
+        A valid Adjustment object
+    """
+    return enforce_wrapped(value, [Multiply, Overwrite, type(None)], Multiply)
