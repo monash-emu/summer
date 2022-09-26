@@ -1,12 +1,15 @@
 """
-This module presents classes which are used to define stratifications, which can be applied to the model.
+This module presents classes which are used to define stratifications,
+which can be applied to the model.
 """
 from typing import Callable, Dict, List, Optional, Union
 
 import numpy as np
+from computegraph.utils import is_var
 
 from summer.adjust import Multiply, Overwrite, enforce_multiply
 from summer.compartment import Compartment
+from summer.parameters import is_func, Parameter, get_static_param_value
 
 Adjustment = Union[Multiply, Overwrite]
 MixingMatrix = Union[np.ndarray, Callable[[float], np.ndarray]]
@@ -61,7 +64,8 @@ class Stratification:
         return f"Stratification: {self.name}"
 
     def is_ageing(self) -> bool:
-        """Returns ``True`` if this stratification represents a set of age groups with ageing dynamics"""
+        """Returns ``True`` if this stratification represents a set of age groups
+        with ageing dynamics"""
         return self._is_ageing
 
     def is_strain(self) -> bool:
@@ -82,12 +86,16 @@ class Stratification:
             - Sum to 1 +/- error defined above
 
         """
-        msg = f"All strata must be specified when setting population split: {proportions}"
-        assert set(list(proportions.keys())) == set(self.strata), msg
-        msg = f"All proportions must be >= 0 when setting population split: {proportions}"
-        assert all([v >= 0 for v in proportions.values()]), msg
-        msg = f"All proportions sum to 1+/-{COMP_SPLIT_REQUEST_ERROR} when setting population split: {proportions}"
-        assert abs(1 - sum(proportions.values())) < COMP_SPLIT_REQUEST_ERROR, msg
+        if is_var(proportions, "parameters"):
+            self.population_split = proportions
+        else:
+            msg = f"All strata must be specified when setting population split: {proportions}"
+            assert set(list(proportions.keys())) == set(self.strata), msg
+            msg = f"All proportions must be >= 0 when setting population split: {proportions}"
+            assert all([v >= 0 for v in proportions.values()]), msg
+            msg = f"All proportions sum to 1+/-{COMP_SPLIT_REQUEST_ERROR} when setting \
+                population split: {proportions}"
+            assert abs(1 - sum(proportions.values())) < COMP_SPLIT_REQUEST_ERROR, msg
         self.population_split = proportions
 
     def set_flow_adjustments(
@@ -102,14 +110,17 @@ class Stratification:
         Adjustments from previous stratifications will be applied before this.
         You can use time-varying functions for infectiousness adjustments.
 
-        It is possible to specify multiple flow adjustments for the same flow in a given Stratification.
+        It is possible to specify multiple flow adjustments for the same flow in a
+        given Stratification.
         In this case, only the last-created applicable adjustment will be applied.
 
         Args:
             flow_name: The name of the flow to adjust.
             adjustments: A dict of adjustments to apply to the flow.
-            source_strata (optional): A whitelist of strata to filter the target flow's source compartments.
-            dest_strata (optional): A whitelist of strata to filter the target flow's destination compartments.
+            source_strata (optional): A whitelist of strata to filter the target flow's
+            source compartments.
+            dest_strata (optional): A whitelist of strata to filter the target flow's
+            destination compartments.
 
         Example:
             Create an adjustment for the 'recovery' flow based on location::
@@ -147,15 +158,17 @@ class Stratification:
         if flow_name not in self.flow_adjustments:
             self.flow_adjustments[flow_name] = []
 
-        #FIXME Turn this into class or named tuple or something... we want to know what's going on
+        # FIXME Turn this into class or named tuple or something... we want to know what's going on
         self.flow_adjustments[flow_name].append((adjustments, source_strata, dest_strata))
 
     def get_flow_adjustment(self, flow) -> dict:
         """
-        Note that the loop structure implies that if the user has requested multiple adjustments that apply to a single
-        combination of strata (across multiple stratifications), then only the last one that is applicable will be used
-        - because the last request will over-write the earlier ones in the loop.
-        Therefore, the most recently added flow adjustment that matches a given flow will be returned.
+        Note that the loop structure implies that if the user has requested multiple adjustments
+        that apply to a single combination of strata (across multiple stratifications), then only
+        the last one that is applicable will be used - because the last request will over-write the
+        earlier ones in the loop.
+        Therefore, the most recently added flow adjustment that matches a given flow will be
+        returned.
 
         """
         flow_adjustments = self.flow_adjustments.get(flow.name, [])
@@ -165,8 +178,16 @@ class Stratification:
         if flow.name not in self._flow_adjustments_fs:
             self._flow_adjustments_fs[flow.name] = cur_fadj_fs = []
             for adjustment, source_strata, dest_strata in flow_adjustments:
-                cur_fadj_fs.append( (adjustment, source_strata, frozenset(source_strata.items()), dest_strata, frozenset(dest_strata.items())) )
-        
+                cur_fadj_fs.append(
+                    (
+                        adjustment,
+                        source_strata,
+                        frozenset(source_strata.items()),
+                        dest_strata,
+                        frozenset(dest_strata.items()),
+                    )
+                )
+
         flow_adj_fs = self._flow_adjustments_fs[flow.name]
 
         # Loop over all the requested adjustments.
@@ -175,14 +196,17 @@ class Stratification:
             # These are expensive assertions and can be disabled in multi-run situations
             if self._validate:
                 # For entry flows:
-                msg = f"Source strata requested in flow adjustment of {self.name}, but {flow.name} does not have a source"
+                msg = f"Source strata requested in flow adjustment of {self.name}, but {flow.name} \
+                    does not have a source"
                 assert not (source_strata and not flow.source), msg
 
                 # For exit flows:
-                msg = f"Dest strata requested in flow adjustment of {self.name}, but {flow.name} does not have a dest"
+                msg = f"Dest strata requested in flow adjustment of {self.name}, but {flow.name} \
+                    does not have a dest"
                 assert not (dest_strata and not flow.dest), msg
 
-            # Make sure that the source request applies to this flow because it has all of the requested strata.
+            # Make sure that the source request applies to this flow because it has all of the
+            # requested strata.
             # Note that these can be specified in the current or any previous stratifications.
             is_source_no_match = (
                 source_strata and flow.source and not flow.source._has_strata(_source_strata)
@@ -204,7 +228,8 @@ class Stratification:
         Add an adjustment of a compartment's infectiousness to the stratification.
         You cannot currently use time-varying functions for infectiousness adjustments.
         All strata in this stratification must be specified as keys in the adjustments argument,
-        if no adjustment required for a stratum, specify None as the value to the request for that stratum.
+        if no adjustment required for a stratum, specify None as the value to the request for
+        that stratum.
 
         Args:
             compartment_name: The name of the compartment to adjust.
@@ -235,9 +260,12 @@ class Stratification:
             [type(a) is Overwrite or type(a) is Multiply or a is None for a in adjustments.values()]
         ), msg
 
-        msg = f"An infectiousness adjustment for {compartment_name} already exists for strat {self.name}"
+        msg = f"An infectiousness adjustment for {compartment_name} \
+                already exists for strat {self.name}"
         assert compartment_name not in self.infectiousness_adjustments, msg
 
+        # FIXME: This should work for computegraph Functions that are not time dependant,
+        # (and fail for those that are), but it's tricky to check...
         msg = "Cannot use time varying functions for infectiousness adjustments."
         assert not any([callable(adj.param) for adj in adjustments.values() if adj]), msg
 
@@ -246,19 +274,23 @@ class Stratification:
     def set_mixing_matrix(self, mixing_matrix: MixingMatrix):
         """
         Sets the mixing matrix for the model.
-        Note that this must apply to all compartments, although this is checked at runtime rather than here.
+        Note that this must apply to all compartments, although this is checked at runtime rather
+        than here.
         """
         msg = "Strain stratifications cannot have a mixing matrix."
         assert not self.is_strain(), msg
 
-        mm = mixing_matrix(0) if callable(mixing_matrix) else mixing_matrix
-
         msg = "Mixing matrix must be a NumPy array, or return a NumPy array."
-        assert type(mm) is np.ndarray, msg
+        assert (
+            (isinstance(mixing_matrix, np.ndarray))
+            or isinstance(mixing_matrix, Parameter)
+            or is_func(mixing_matrix)
+        ), msg
 
-        num_strata = len(self.strata)
-        msg = f"Mixing matrix must have both {num_strata} rows and {num_strata} columns."
-        assert mm.shape == (num_strata, num_strata), msg
+        if isinstance(mixing_matrix, np.ndarray):
+            num_strata = len(self.strata)
+            msg = f"Mixing matrix must have both {num_strata} rows and {num_strata} columns."
+            assert mixing_matrix.shape == (num_strata, num_strata), msg
 
         self.mixing_matrix = mixing_matrix
 
@@ -268,6 +300,7 @@ class Stratification:
         Only compartments specified in the stratification's definition will be stratified.
         Returns the new compartments.
         """
+
         new_comps = []
         for old_comp in comps:
             should_stratify = old_comp.has_name_in_list(self.compartments)
@@ -281,7 +314,7 @@ class Stratification:
         return new_comps
 
     def _stratify_compartment_values(
-        self, comps: List[Compartment], comp_values: np.ndarray
+        self, comps: List[Compartment], comp_values: np.ndarray, parameters: dict = None
     ) -> np.ndarray:
         """
         Stratify the model compartments into sub-compartments, based on the strata names provided.
@@ -291,11 +324,14 @@ class Stratification:
         """
         assert len(comps) == len(comp_values)
         new_comp_values = []
+
+        population_split = get_static_param_value(self.population_split, parameters)
+
         for idx in range(len(comp_values)):
             should_stratify = comps[idx].has_name_in_list(self.compartments)
             if should_stratify:
                 for stratum in self.strata:
-                    new_value = comp_values[idx] * self.population_split[stratum]
+                    new_value = comp_values[idx] * population_split[stratum]
                     new_comp_values.append(new_value)
             else:
                 new_comp_values.append(comp_values[idx])
@@ -317,8 +353,9 @@ class AgeStratification(Stratification):
     [0, 10, 20, 30] will be interpreted as the age groups 0-9, 10-19, 20-29, 30+ respectively.
 
     Using this stratification will automatically add a set of ageing flows to the model,
-    where the exit rate is proportional to the age group's time span. For example, in the 0-9 strata,
-    there will be a flow created where 10% of occupants "age up" into the 10-19 strata each year.
+    where the exit rate is proportional to the age group's time span. For example, in the 0-9
+    strata, there will be a flow created where 10% of occupants "age up" into the 10-19 strata
+    each year.
     **Critically**, this feature assumes that each of the model's time steps represents a year.
 
     """
@@ -333,7 +370,7 @@ class AgeStratification(Stratification):
     ):
         try:
             _strata = sorted(map(int, strata))
-        except:
+        except Exception:
             raise AssertionError("Strata must be in an int-compatible format")
 
         assert _strata[0] == 0, "First age strata must be 0"
