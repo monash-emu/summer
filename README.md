@@ -116,22 +116,8 @@ Releases are numbered using [Semantic Versioning](https://semver.org/)
   - Merge 3.9/master branches
 - 2.7.0
   - Include Python 3.10 support and update requirements
-- 2.7.1
-  - Bugfix (source flows not counted correctly in _add_transition_flow)
-- 3.1.0
-  - Parameter aware summer using computegraph
-- 3.1.1
-  - Update computegraph and add additional param awareness
-- 3.1.2
-  - Initial population/stratification now param aware
-- 3.1.3
-  - More jax implementation (strain stratification)
-- 3.1.4
-  - Bugfix release (jax imported even though optional)
-- 3.1.5
-  - Bugfix and minor improvements search for parameters
-- 3.1.6
-  - Support lists of adjustments and flow params
+- 3.6.0
+  - Summer 'classic' end-of-line release
 
 ## Release process
 

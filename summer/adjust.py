@@ -121,4 +121,12 @@ def enforce_wrapped(value, allowed, wrap):
 
 
 def enforce_multiply(value):
+    """Allow adjustments to default to Multiply if adjustment type not specified
+
+    Args:
+        value: The value to wrap as a Multiply adjustment
+
+    Returns:
+        A valid Adjustment object
+    """
     return enforce_wrapped(value, [Multiply, Overwrite, type(None)], Multiply)

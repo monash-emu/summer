@@ -625,8 +625,10 @@ class CompartmentalModel:
 
         num_dest = len(dest_comps)
         num_source = len(source_comps)
+
         msg = f"Expected equal number of source and dest compartments, but got {num_source} source \
                 and {num_dest} dest."
+
         assert num_dest == num_source, msg
         new_flows = []
         for source_comp, dest_comp in zip(source_comps, dest_comps):
