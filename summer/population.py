@@ -5,9 +5,6 @@ from typing import NamedTuple
 
 import numpy as np
 
-from summer.parameters import get_static_param_value
-
-
 class CompartmentGroup(NamedTuple):
     """Hashable compartment groupings"""
 
@@ -57,8 +54,6 @@ def get_rebalanced_population(
     assert strat in [s.name for s in model._stratifications], msg
 
     model_strat = [s for s in model._stratifications if s.name == strat][0]
-
-    proportions = get_static_param_value(proportions, parameters)
 
     msg = "All strata must be specified in proportions"
     assert set(model_strat.strata) == set(proportions), msg

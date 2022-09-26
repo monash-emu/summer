@@ -9,7 +9,7 @@ import numpy as np
 
 from summer.adjust import BaseAdjustment, FlowParam, Multiply
 from summer.compartment import Compartment
-from summer.parameters import is_func, get_model_param_value
+from summer.utils import get_model_param_value
 from summer.stratification import Stratification
 from summer.compute import find_sum
 
@@ -81,7 +81,7 @@ class BaseFlow(ABC):
         Returns:
             bool: False if weight is time-varying, otherwise True
         """
-        is_time_varying = is_func(self.param) or sum([is_func(a.param) for a in self.adjustments])
+        is_time_varying = callable(self.param) or sum([callable(a.param) for a in self.adjustments])
         if not is_time_varying:
             return WeightType.STATIC
         else:
