@@ -11,7 +11,7 @@ from summer.compute import (
     find_sum,
 )
 
-from summer.parameters import get_model_param_value
+from summer.utils import get_model_param_value
 
 from .model_runner import ModelRunner
 

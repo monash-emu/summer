@@ -12,22 +12,17 @@ import networkx
 import numpy as np
 import pandas as pd
 
-from computegraph.utils import is_var
-
 import summer.flows as flows
 from summer import stochastic
 from summer.adjust import BaseAdjustment, FlowParam, Multiply
 from summer.compartment import Compartment
 from summer.compute import ComputedValueProcessor
 from summer.derived_outputs import DerivedOutputRequest, calculate_derived_outputs
-from summer.parameters import params
-from summer.parameters.params import find_all_parameters
 from summer.runner import ReferenceRunner, VectorizedRunner
 from summer.solver import SolverType, solve_ode
 from summer.stratification import Stratification
 from summer.utils import get_scenario_start_index, ref_times_to_dti
 from summer.population import get_unique_strat_groups, filter_by_strata
-from summer.tracker import ModelBuildTracker, ActionType
 
 logger = logging.getLogger()
 
@@ -148,15 +143,6 @@ class CompartmentalModel:
 
         self._update_compartment_indices()
 
-        # Track the actions we take building this model
-        self.tracker = ModelBuildTracker()
-
-        if takes_params:
-            self._defer_actions = True
-        else:
-            self._defer_actions = False
-        self._finalized = False
-
     def _update_compartment_indices(self):
         """
         Update the mapping of compartment name to idx for quicker lookups.
@@ -170,10 +156,6 @@ class CompartmentalModel:
         for flow in self._flows:
             flow.update_compartment_indices(compartment_idx_lookup)
 
-    def _assert_not_finalized(self):
-        error_msg = "Cannot make changes to model that is already finalized"
-        assert not self._finalized, error_msg
-
     def set_initial_population(self, distribution: Dict[str, float]):
         """
         Sets the initial population of the model, which is zero by default.
@@ -182,7 +164,6 @@ class CompartmentalModel:
             distribution: A map of populations to be assigned to compartments.
 
         """
-        self._assert_not_finalized()
 
         error_msg = "Cannot set initial population after the model has been stratified"
         assert not self._stratifications, error_msg
@@ -196,7 +177,7 @@ class CompartmentalModel:
 
             self._original_init_population = self.initial_population.copy()
 
-        elif not is_var(distribution, "parameters"):
+        else:
             raise TypeError("Initial population must be dict or Parameter", distribution)
 
     def set_validation_enabled(self, validate: bool):
@@ -350,7 +331,6 @@ class CompartmentalModel:
         expected_flow_count: Optional[int],
         adjustments: List[BaseAdjustment] = None,
     ):
-        self._assert_not_finalized()
         dest_strata = dest_strata or {}
         dest_comps = [c for c in self.compartments if c.is_match(dest, dest_strata)]
         new_flows = []
@@ -445,7 +425,6 @@ class CompartmentalModel:
         source_strata: Optional[Dict[str, str]],
         expected_flow_count: Optional[int],
     ):
-        self._assert_not_finalized()
         source_strata = source_strata or {}
         source_comps = [c for c in self.compartments if c.is_match(source, source_strata)]
         new_flows = []
@@ -616,7 +595,6 @@ class CompartmentalModel:
         expected_flow_count: Optional[int],
         find_infectious_multiplier=None,
     ):
-        self._assert_not_finalized()
         source_strata = source_strata or {}
         dest_strata = dest_strata or {}
 
@@ -705,7 +683,6 @@ class CompartmentalModel:
             strat: The stratification to apply.
 
         """
-        self._assert_not_finalized()
         # Enable/disable runtime assertions for strat
         strat._validate = self._should_validate
 
@@ -753,14 +730,10 @@ class CompartmentalModel:
         # Stratify compartments, split according to split_proportions
         prev_compartment_names = copy.copy(self.compartments)
         self.compartments = strat._stratify_compartments(self.compartments)
-        if not self._defer_actions or self._finalized:
-            try:
-                self.initial_population = strat._stratify_compartment_values(
-                    prev_compartment_names, self.initial_population
-                )
-            except Exception as e:
-                logger.critical("Parameterized models must set takes_params in constructor")
-                raise e
+
+        self.initial_population = strat._stratify_compartment_values(
+            prev_compartment_names, self.initial_population
+        )
 
         # Update the cache of compartment names; these need to correct whenever we add a new flow
         self._update_compartment_name_map()
@@ -808,8 +781,6 @@ class CompartmentalModel:
 
         self._stratifications.append(strat)
 
-        self.tracker.append_action(ActionType.STRATIFY, strat=strat)
-
     def _strata_exist(self, strata: dict):
         """
         Verify whether all the strata exist within the model
@@ -834,7 +805,6 @@ class CompartmentalModel:
             proportions (dict): Proportions of new split (must have all strata specified)
 
         """
-        self._assert_not_finalized()
 
         msg = f"No stratification {strat} found in model"
         assert strat in [s.name for s in self._stratifications], msg
@@ -861,13 +831,6 @@ class CompartmentalModel:
                 k = c.strata[strat]
                 target_prop = proportions[k]
                 self.initial_population[c.idx] = total * target_prop
-
-        self.tracker.append_action(
-            ActionType.ADJUST_POP_SPLIT,
-            strat=strat,
-            dest_filter=dest_filter,
-            proportions=proportions,
-        )
 
     """
     Running the model
@@ -903,8 +866,6 @@ class CompartmentalModel:
         # Ensure we call this before model runs, since it is now disabled inside individual
         # flow constructors
         self._update_compartment_indices()
-
-        self._finalized = True
 
         self._set_backend(backend, backend_args)
         # self._backend.prepare_to_run(parameters)
@@ -1307,34 +1268,6 @@ class CompartmentalModel:
             "save_results": save_results,
         }
 
-    def request_param_function_output(
-        self, name: str, func: params.Function, save_results: bool = True
-    ):
-        """Request a generic Function output
-
-        Args:
-            name (str): _description_
-            func (Function): The Function, whose args are Param
-            save_results (bool, optional): _description_. Defaults to True.
-        """
-
-        msg = f"A derived output named {name} already exists."
-        assert name not in self._derived_output_requests, msg
-        for k, v in func.kwargs.items():
-            if isinstance(v, params.DerivedOutput):
-                source = v.name
-                assert (
-                    source in self._derived_output_requests
-                ), f"Source {source} has not been requested."
-                self._derived_output_graph.add_edge(source, name)
-
-        self._derived_output_graph.add_node(name)
-        self._derived_output_requests[name] = {
-            "request_type": DerivedOutputRequest.PARAM_FUNCTION,
-            "func": func,
-            "save_results": save_results,
-        }
-
     def request_computed_value_output(self, name: str, save_results: bool = True):
         """
         Save a computed value process output to derived outputs
@@ -1364,19 +1297,7 @@ class CompartmentalModel:
             name (str): Name (key) of derived value (use this when referencing it in functions)
             processor (DerivedValueProcessor): Object providing implementation
         """
-        # FIXME: We might actually have to keep this for now, at least until modellers get sick of
-        # seeing it and change over all the code
-        warn(
-            "Deprecated feature - use model.add_computed_value_func instead",
-            DeprecationWarning,
-            stacklevel=2,
-        )
         self._computed_value_processors[name] = processor
-
-    def add_computed_value_func(self, name: str, func: params.Function):
-        if name in self._computed_values_graph_dict:
-            raise Exception(f"Computed value function with name {name} already exists")
-        self._computed_values_graph_dict[name] = func
 
     def get_computed_value_keys(self):
         return list(self._computed_value_processors) + list(self._computed_values_graph_dict)
@@ -1396,6 +1317,3 @@ class CompartmentalModel:
     def get_derived_outputs_df(self):
         idx = self._get_ref_idx()
         return pd.DataFrame(self.derived_outputs, index=idx)
-
-    def get_input_parameters(self):
-        return find_all_parameters(self)

@@ -2,9 +2,6 @@ from abc import ABC, abstractmethod
 from typing import Tuple
 
 import numpy as np
-from computegraph.graph import ComputeGraph
-
-from computegraph.utils import is_var
 
 import summer.flows as flows
 from summer.adjust import Overwrite
@@ -12,7 +9,7 @@ from summer.compute import binary_matrix_to_sparse_pairs, sparse_pairs_accum
 from summer.compartment import Compartment
 from summer.population import get_rebalanced_population
 
-from summer.parameters import get_model_param_value
+from summer.utils import get_model_param_value
 
 
 class ModelRunner(ABC):
@@ -117,10 +114,6 @@ class ModelRunner(ABC):
         for k, proc in self.model._computed_value_processors.items():
             proc.prepare_to_run(self.model.compartments, self.model._flows)
 
-        cvcg = ComputeGraph(self.model._computed_values_graph_dict, "computed_values")
-
-        self.computed_values_runner = cvcg.get_callable(nested_params=False)
-
         # Create a matrix that tracks which categories each compartment is in.
         # A matrix with size (num_cats x num_comps).
         # This is a very sparse static matrix, and there's almost certainly a much
@@ -141,7 +134,6 @@ class ModelRunner(ABC):
 
         # Calculate initial population based on possible parameterization
         self.parameters = parameters
-        self.model.initial_population = self.calculate_initial_population(self.parameters)
 
         """
         Pre-run calculations to help determine force of infection multiplier at runtime.
@@ -352,12 +344,6 @@ class ModelRunner(ABC):
         for k, proc in self.model._computed_value_processors.items():
             computed_values[k] = proc.process(compartment_vals, computed_values, time)
 
-        model_variables = {"compartment_values": compartment_vals, "time": time}
-
-        computed_values.update(
-            self.computed_values_runner(parameters=self.parameters, model_variables=model_variables)
-        )
-
         return computed_values
 
     def calculate_initial_population(self, parameters) -> np.ndarray:
@@ -370,9 +356,6 @@ class ModelRunner(ABC):
         # populations, but does not include population rebalances etc
         distribution = self.model._initial_population_distribution
         initial_population = np.zeros_like(self.model._original_compartment_names, dtype=float)
-
-        if is_var(distribution, "parameters"):
-            distribution = self.parameters[distribution.name]
 
         if isinstance(distribution, dict):
             for idx, comp in enumerate(self.model._original_compartment_names):

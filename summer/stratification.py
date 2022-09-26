@@ -5,11 +5,9 @@ which can be applied to the model.
 from typing import Callable, Dict, List, Optional, Union
 
 import numpy as np
-from computegraph.utils import is_var
 
 from summer.adjust import Multiply, Overwrite, enforce_multiply
 from summer.compartment import Compartment
-from summer.parameters import is_func, Parameter, get_static_param_value
 
 Adjustment = Union[Multiply, Overwrite]
 MixingMatrix = Union[np.ndarray, Callable[[float], np.ndarray]]
@@ -86,16 +84,15 @@ class Stratification:
             - Sum to 1 +/- error defined above
 
         """
-        if is_var(proportions, "parameters"):
-            self.population_split = proportions
-        else:
-            msg = f"All strata must be specified when setting population split: {proportions}"
-            assert set(list(proportions.keys())) == set(self.strata), msg
-            msg = f"All proportions must be >= 0 when setting population split: {proportions}"
-            assert all([v >= 0 for v in proportions.values()]), msg
-            msg = f"All proportions sum to 1+/-{COMP_SPLIT_REQUEST_ERROR} when setting \
-                population split: {proportions}"
-            assert abs(1 - sum(proportions.values())) < COMP_SPLIT_REQUEST_ERROR, msg
+
+        msg = f"All strata must be specified when setting population split: {proportions}"
+        assert set(list(proportions.keys())) == set(self.strata), msg
+        msg = f"All proportions must be >= 0 when setting population split: {proportions}"
+        assert all([v >= 0 for v in proportions.values()]), msg
+        msg = f"All proportions sum to 1+/-{COMP_SPLIT_REQUEST_ERROR} when setting \
+            population split: {proportions}"
+        assert abs(1 - sum(proportions.values())) < COMP_SPLIT_REQUEST_ERROR, msg
+
         self.population_split = proportions
 
     def set_flow_adjustments(
@@ -282,9 +279,8 @@ class Stratification:
 
         msg = "Mixing matrix must be a NumPy array, or return a NumPy array."
         assert (
-            (isinstance(mixing_matrix, np.ndarray))
-            or isinstance(mixing_matrix, Parameter)
-            or is_func(mixing_matrix)
+            isinstance(mixing_matrix, np.ndarray)
+            or callable(mixing_matrix)
         ), msg
 
         if isinstance(mixing_matrix, np.ndarray):
@@ -325,13 +321,11 @@ class Stratification:
         assert len(comps) == len(comp_values)
         new_comp_values = []
 
-        population_split = get_static_param_value(self.population_split, parameters)
-
         for idx in range(len(comp_values)):
             should_stratify = comps[idx].has_name_in_list(self.compartments)
             if should_stratify:
                 for stratum in self.strata:
-                    new_value = comp_values[idx] * population_split[stratum]
+                    new_value = comp_values[idx] * self.population_split[stratum]
                     new_comp_values.append(new_value)
             else:
                 new_comp_values.append(comp_values[idx])
