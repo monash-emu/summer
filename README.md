@@ -118,6 +118,8 @@ Releases are numbered using [Semantic Versioning](https://semver.org/)
   - Include Python 3.10 support and update requirements
 - 3.6.0
   - Summer 'classic' end-of-line release
+- 3.6.3
+  - Small compatibility fixed for numpy deprecations
 
 ## Release process
 

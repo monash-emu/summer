@@ -101,7 +101,7 @@ class CompartmentalModel:
         self._update_compartment_name_map()
 
         self._infectious_compartments = [Compartment(n) for n in infectious_compartments]
-        self.initial_population = np.zeros_like(self.compartments, dtype=np.float)
+        self.initial_population = np.zeros_like(self.compartments, dtype=float)
         # Keeps track of original, pre-stratified compartment names.
         self._original_compartment_names = [Compartment.deserialize(n) for n in compartments]
         # Keeps track of Stratifications that have been applied.
