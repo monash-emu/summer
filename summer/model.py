@@ -960,7 +960,7 @@ class CompartmentalModel:
             - 3. calculate and sample the probabilities given the flow rates
 
         """
-        self.outputs = np.zeros((len(self.times), len(self.initial_population)), dtype=np.int)
+        self.outputs = np.zeros((len(self.times), len(self.initial_population)), dtype=int)
         self.outputs[0] = self.initial_population
 
         # Create an array that maps flows to the source and destination compartments.

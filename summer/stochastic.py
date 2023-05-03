@@ -28,7 +28,7 @@ def build_flow_map(flows) -> np.ndarray:
         flow_map.append(flow_map_el)
 
     # Convert to a matrix because Numba likes matrices.
-    return np.array(flow_map, dtype=np.int)
+    return np.array(flow_map, dtype=int)
 
 
 def sample_transistion_flows(seed, flow_rates, flow_map, comp_vals, timestep):
