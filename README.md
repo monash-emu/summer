@@ -18,7 +18,7 @@ It provides a range of structures for easily implementing compartmental models, 
 Some helpful links to learn more:
 
 - [Rationale](http://summerepi.com/rationale.html) for why we are building Summer
-- **[Documentation](http://summerepi.com/)** with [code examples](http://summerepi.com/examples)
+- **[Documentation](https://summer.readthedocs.io/)** with [code examples](https://summer.readthedocs.io/en/latest/examples/)
 - [Available on PyPi](https://pypi.org/project/summerepi/) as `summerepi`.
 - [Performance benchmarks](https://monash-emu.github.io/summer/)
 
